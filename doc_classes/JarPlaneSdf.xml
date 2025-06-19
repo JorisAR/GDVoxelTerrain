@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="JarPlaneSdf" inherits="JarSignedDistanceField" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
+	<brief_description>
+	</brief_description>
+	<description>
+	</description>
+	<tutorials>
+	</tutorials>
+	<members>
+		<member name="d" type="float" setter="set_d" getter="get_d" default="0.0">
+		</member>
+		<member name="normal" type="Vector3" setter="set_normal" getter="get_normal" default="Vector3(0, 1, 0)">
+		</member>
+	</members>
+</class>

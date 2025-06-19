@@ -30,6 +30,13 @@ sources = Glob("src/*.cpp") + Glob("src/utility/*.cpp") + Glob("src/sdf/*.cpp") 
             Glob("src/voxel_terrain/population/*.cpp") + Glob("src/voxel_terrain/population/details/*.cpp") + \
             Glob("src/voxel_terrain/population/features/*.cpp")
 
+if env["target"] != "template_release":
+	try:
+		doc_data = env.GodotCPPDocData("src/gen/doc_data.gen.cpp", source=Glob("doc_classes/*.xml"))
+		sources.append(doc_data)
+	except AttributeError:
+		print("Not including class reference as we're targeting a pre-4.3 baseline.")
+
 #compiler flags
 if env['PLATFORM'] == 'windows':
     if env['CXX'] == 'x86_64-w64-mingw32-g++':

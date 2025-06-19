@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="JarBoxSdf" inherits="JarSignedDistanceField" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
+	<brief_description>
+	</brief_description>
+	<description>
+	</description>
+	<tutorials>
+	</tutorials>
+	<members>
+		<member name="center" type="Vector3" setter="set_center" getter="get_center" default="Vector3(0, 0, 0)">
+		</member>
+		<member name="extent" type="Vector3" setter="set_extent" getter="get_extent" default="Vector3(1, 1, 1)">
+		</member>
+	</members>
+</class>

@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="JarSphericalWorld" inherits="JarWorld" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
+	<brief_description>
+	</brief_description>
+	<description>
+	</description>
+	<tutorials>
+	</tutorials>
+	<members>
+		<member name="sphere_radius" type="float" setter="set_sphere_radius" getter="get_sphere_radius" default="100.0">
+		</member>
+	</members>
+</class>

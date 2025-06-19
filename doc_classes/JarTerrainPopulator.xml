@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="JarTerrainPopulator" inherits="Resource" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
+	<brief_description>
+	</brief_description>
+	<description>
+	</description>
+	<tutorials>
+	</tutorials>
+	<methods>
+		<method name="build_transform" qualifiers="const">
+			<return type="Transform3D" />
+			<param index="0" name="origin" type="Vector3" />
+			<param index="1" name="up" type="Vector3" />
+			<param index="2" name="rotation" type="float" />
+			<param index="3" name="scale" type="float" />
+			<description>
+			</description>
+		</method>
+	</methods>
+	<members>
+		<member name="align_with_normal" type="bool" setter="set_align_with_normal" getter="get_align_with_normal" default="false">
+		</member>
+		<member name="maximum_height" type="float" setter="set_maximum_height" getter="get_maximum_height" default="0.0">
+		</member>
+		<member name="maximum_scale" type="float" setter="set_maximum_scale" getter="get_maximum_scale" default="1.0">
+		</member>
+		<member name="minimum_height" type="float" setter="set_minimum_height" getter="get_minimum_height" default="0.0">
+		</member>
+		<member name="minimum_scale" type="float" setter="set_minimum_scale" getter="get_minimum_scale" default="1.0">
+		</member>
+		<member name="minimum_slope" type="float" setter="set_minimum_slope" getter="get_minimum_slope" default="0.0">
+		</member>
+	</members>
+</class>

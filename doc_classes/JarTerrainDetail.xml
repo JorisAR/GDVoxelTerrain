@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="JarTerrainDetail" inherits="JarTerrainPopulator" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
+	<brief_description>
+	</brief_description>
+	<description>
+	</description>
+	<tutorials>
+	</tutorials>
+	<members>
+		<member name="density" type="float" setter="set_density" getter="get_density" default="1.0">
+		</member>
+		<member name="material" type="Material" setter="set_material" getter="get_material">
+		</member>
+		<member name="max_lod" type="int" setter="set_max_lod" getter="get_max_lod" default="0">
+		</member>
+		<member name="mesh" type="Mesh" setter="set_mesh" getter="get_mesh">
+		</member>
+		<member name="shadows_enabled" type="bool" setter="set_shadows_enabled" getter="get_shadows_enabled" default="false">
+		</member>
+	</members>
+</class>

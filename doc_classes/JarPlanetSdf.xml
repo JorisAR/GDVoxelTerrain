@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="JarPlanetSdf" inherits="JarSignedDistanceField" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
+	<brief_description>
+	</brief_description>
+	<description>
+	</description>
+	<tutorials>
+	</tutorials>
+	<members>
+		<member name="center" type="Vector3" setter="set_center" getter="get_center" default="Vector3(0, 0, 0)">
+		</member>
+		<member name="noise" type="FastNoiseLite" setter="set_noise" getter="get_noise">
+		</member>
+		<member name="noise_scale" type="float" setter="set_noise_scale" getter="get_noise_scale" default="50.0">
+		</member>
+		<member name="radius" type="float" setter="set_radius" getter="get_radius" default="1000.0">
+		</member>
+	</members>
+</class>
