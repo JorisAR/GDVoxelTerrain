@@ -1,10 +1,10 @@
 [gd_resource type="JarTerrainSdf" load_steps=2 format=3 uid="uid://3jlwgf5biu2x"]
 
 [sub_resource type="FastNoiseLite" id="FastNoiseLite_8043g"]
-frequency = 0.001
-fractal_octaves = 9
-fractal_weighted_strength = 0.39
+frequency = 0.0029
+fractal_octaves = 6
+fractal_weighted_strength = 0.19
 
 [resource]
 noise = SubResource("FastNoiseLite_8043g")
-height_scale = 128.0
+height_scale = 64.0

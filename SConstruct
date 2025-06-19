@@ -1,9 +1,8 @@
 #!/usr/bin/env python
 import os
 import sys
-# from scons_compiledb import compile_db # Import the compile_db function # Call the compile_db function to enable compile_commands.json generation 
+# from scons_compiledb import compile_db # Import the compile_db function # Call the compile_db function to enable compile_commands.json generation
 # compile_db()
-
 
 # Import the SConstruct from godot-cpp
 env = SConscript("godot-cpp/SConstruct")
@@ -42,7 +41,7 @@ if env['PLATFORM'] == 'windows':
 # Handle different platforms
 if env["platform"] == "macos":
     library = env.SharedLibrary(
-        "project/addons/jar_voxel_terrain/bin/jar_voxel_terrain.{}.{}.framework/jar_voxel_terrain.{}.{}".format(
+        "demo/addons/jar_voxel_terrain/bin/jar_voxel_terrain.{}.{}.framework/jar_voxel_terrain.{}.{}".format(
             env["platform"], env["target"], env["platform"], env["target"]
         ),
         source=sources,
@@ -50,17 +49,17 @@ if env["platform"] == "macos":
 elif env["platform"] == "ios":
     if env["ios_simulator"]:
         library = env.StaticLibrary(
-            "project/addons/jar_voxel_terrain/bin/jar_voxel_terrain.{}.{}.simulator.a".format(env["platform"], env["target"]),
+            "demo/addons/jar_voxel_terrain/bin/jar_voxel_terrain.{}.{}.simulator.a".format(env["platform"], env["target"]),
             source=sources,
         )
     else:
         library = env.StaticLibrary(
-            "project/addons/jar_voxel_terrain/bin/jar_voxel_terrain.{}.{}.a".format(env["platform"], env["target"]),
+            "demo/addons/jar_voxel_terrain/bin/jar_voxel_terrain.{}.{}.a".format(env["platform"], env["target"]),
             source=sources,
         )
 else:
     library = env.SharedLibrary(
-        "project/addons/jar_voxel_terrain/bin/jar_voxel_terrain{}{}".format(env["suffix"], env["SHLIBSUFFIX"]),
+        "demo/addons/jar_voxel_terrain/bin/jar_voxel_terrain{}{}".format(env["suffix"], env["SHLIBSUFFIX"]),
         source=sources,
     )
 

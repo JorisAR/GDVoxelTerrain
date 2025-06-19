@@ -28,9 +28,7 @@ player_node = NodePath("../../Camera3D")
 world_node = NodePath("..")
 chunk_scene = ExtResource("1_jj1wd")
 sdf = ExtResource("2_o85ls")
-performance_updated_colliders_per_second = 256
-lod_automatic_update = false
-lod_automatic_update_distance = 32.0
+lod_level_count = 10
 population_terrain_details = Array[JarTerrainDetail]([ExtResource("3_ter6h")])
 
 [node name="Camera3D" type="Camera3D" parent="." node_paths=PackedStringArray("terrain")]
@@ -53,7 +51,6 @@ transform = Transform3D(1, 0, 0, 0, 0.699925, 0.714216, 0, -0.714216, 0.699925, 
 shadow_enabled = true
 
 [node name="Label" type="Label" parent="."]
-visible = false
 offset_right = 40.0
 offset_bottom = 23.0
 script = ExtResource("9_5crk8")
