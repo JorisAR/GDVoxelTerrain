@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="JarSphereSdf" inherits="JarSignedDistanceField" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
+	<brief_description>
+		A signed distance field (SDF) sphere primitive.
+	</brief_description>
+	<description>
+		Represents a sphere as a signed distance field (SDF). Defined by a center point and a radius. Can be used as a basic volumetric primitive for constructive solid geometry (CSG), rendering, or physics.
+	</description>
+	<tutorials>
+	</tutorials>
+	<members>
+		<member name="center" type="Vector3" setter="set_center" getter="get_center" default="Vector3(0, 0, 0)">
+			The origin point of the sphere in 3D space.
+		</member>
+		<member name="radius" type="float" setter="set_radius" getter="get_radius" default="1.0">
+			The radius of the sphere, determining its size.
+		</member>
+	</members>
+</class>

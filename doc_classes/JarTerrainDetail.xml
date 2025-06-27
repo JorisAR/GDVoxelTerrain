@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="JarTerrainDetail" inherits="JarTerrainPopulator" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
+	<brief_description>
+		Defines specific decorative details placed on terrain, such as rocks or plants.
+	</brief_description>
+	<description>
+		Extends [JarTerrainPopulator] to specify individual terrain decorations with their appearance and behavior,
+		including density, mesh, material, and shadow properties.
+	</description>
+	<tutorials>
+	</tutorials>
+	<members>
+		<member name="density" type="float" setter="set_density" getter="get_density" default="1.0">
+			Controls how densely this detail is placed on the terrain. Higher values mean more instances.
+		</member>
+		<member name="material" type="Material" setter="set_material" getter="get_material">
+			Material applied to the detail's mesh for rendering.
+		</member>
+		<member name="max_lod" type="int" setter="set_max_lod" getter="get_max_lod" default="0">
+			Maximum level of detail at which this detail will be rendered. Higher values allow rendering at farther distances.
+		</member>
+		<member name="mesh" type="Mesh" setter="set_mesh" getter="get_mesh">
+			Mesh used to render the detail object.
+		</member>
+		<member name="shadows_enabled" type="bool" setter="set_shadows_enabled" getter="get_shadows_enabled" default="false">
+			Determines whether shadows are cast by this detail object.
+		</member>
+	</members>
+</class>

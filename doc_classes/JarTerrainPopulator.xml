@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="JarTerrainPopulator" inherits="Resource" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
+	<brief_description>
+		Abstract class defining objects generated as decorations for the terrain (like grass or rocks).
+	</brief_description>
+	<description>
+		Abstract class defining terrain decoration objects such as grass or rocks.
+		It specifies important parameters controlling placement, scale, and alignment of decorations.
+	</description>
+	<tutorials>
+	</tutorials>
+	<methods>
+		<method name="build_transform" qualifiers="const">
+			<return type="Transform3D" />
+			<param index="0" name="origin" type="Vector3" />
+			<param index="1" name="up" type="Vector3" />
+			<param index="2" name="rotation" type="float" />
+			<param index="3" name="scale" type="float" />
+			<description>
+				Builds a transformation matrix for placing a decoration instance in the world,
+				using the specified origin point, up vector, rotation angle, and uniform scale.
+			</description>
+		</method>
+	</methods>
+	<members>
+		<member name="align_with_normal" type="bool" setter="set_align_with_normal" getter="get_align_with_normal" default="false">
+			If true, aligns the decoration to the surface normal when placing it.
+		</member>
+		<member name="maximum_height" type="float" setter="set_maximum_height" getter="get_maximum_height" default="0.0">
+			Maximum terrain height at which this decoration will be placed.
+		</member>
+		<member name="maximum_scale" type="float" setter="set_maximum_scale" getter="get_maximum_scale" default="1.0">
+			Maximum scale factor applied to the decoration instances.
+		</member>
+		<member name="minimum_height" type="float" setter="set_minimum_height" getter="get_minimum_height" default="0.0">
+			Minimum terrain height at which this decoration will be placed.
+		</member>
+		<member name="minimum_scale" type="float" setter="set_minimum_scale" getter="get_minimum_scale" default="1.0">
+			Minimum scale factor applied to the decoration instances.
+		</member>
+		<member name="minimum_slope" type="float" setter="set_minimum_slope" getter="get_minimum_slope" default="0.0">
+			Minimum slope angle (in degrees or radians) of the terrain surface where decoration can be placed.
+		</member>
+	</members>
+</class>

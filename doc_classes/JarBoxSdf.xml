@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="JarBoxSdf" inherits="JarSignedDistanceField" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
+	<brief_description>
+		A 3D signed distance field (SDF) box primitive.
+	</brief_description>
+	<description>
+		This is a basic SDF box object, defined by its center point and extent.
+		The extent determines the box's half-dimensions along each axis.
+	</description>
+	<tutorials>
+	</tutorials>
+	<members>
+		<member name="center" type="Vector3" setter="set_center" getter="get_center" default="Vector3(0, 0, 0)">
+			Center position for the box.
+		</member>
+		<member name="extent" type="Vector3" setter="set_extent" getter="get_extent" default="Vector3(1, 1, 1)">
+			Extent defines the size of the bounding box in relation to center. In other words, it's the distance from center to side.
+		</member>
+	</members>
+</class>

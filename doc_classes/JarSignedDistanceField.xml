@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="JarSignedDistanceField" inherits="Resource" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
+	<brief_description>
+		Abstract base class for all signed distance field (SDF) primitives.
+	</brief_description>
+	<description>
+		This is an abstract [Resource]-derived class that defines the interface and shared behavior for SDF (signed distance field) primitives.
+		All concrete SDF types such as boxes, spheres, planes, and procedural shapes like planets should inherit from this class.
+		It cannot be used directly.
+	</description>
+	<tutorials>
+	</tutorials>
+</class>

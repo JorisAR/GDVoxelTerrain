@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="JarSphericalWorld" inherits="JarWorld" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
+	<brief_description>
+		Defines world as a spherical (planet-like) terrain.
+	</brief_description>
+	<description>
+		Defines a spherical world, simulating a planet-like environment.
+		This is used in conjunction with [JarVoxelTerrain] to determine whether the terrain is rendered as a flat plane or a sphere.
+		The size of the sphere is controlled by the [code]sphere_radius[/code] property, which sets the distance from the center to the planet's surface (considered the 0-level height).
+	</description>
+
+	<tutorials>
+	</tutorials>
+	<members>
+		<member name="sphere_radius" type="float" setter="set_sphere_radius" getter="get_sphere_radius" default="100.0">
+			Sets the radius of the planet forming the world. This value defines the distance from the center of the sphere to the surface, which is treated as the 0-level elevation in world space.
+		</member>
+	</members>
+</class>

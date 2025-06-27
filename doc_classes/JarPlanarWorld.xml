@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="JarPlanarWorld" inherits="JarWorld" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
+	<brief_description>
+		Represents a flat (planar) world.
+	</brief_description>
+	<description>
+		Represents a flat (planar) world. The base height (level 0) of the plane can be adjusted using the [code]surface_height[/code] parameter.
+		Generated terrain might extend below this height.
+	</description>
+	<tutorials>
+	</tutorials>
+	<members>
+		<member name="normal" type="Vector3" setter="set_normal" getter="get_normal" default="Vector3(0, 1, 0)">
+			The normal vector defining the orientation of the base plane.
+		</member>
+		<member name="surface_height" type="float" setter="set_surface_height" getter="get_surface_height" default="0.0">
+			The height value of the base plane (level 0) in world units.
+		</member>
+	</members>
+</class>

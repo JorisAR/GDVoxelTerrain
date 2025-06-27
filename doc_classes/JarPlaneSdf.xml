@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="JarPlaneSdf" inherits="JarSignedDistanceField" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
+	<brief_description>
+		An infinite signed distance field (SDF) plane.
+	</brief_description>
+	<description>
+		Represents an infinite SDF plane defined by a normal vector and a distance from the origin.
+		Commonly used as a ground or clipping surface in SDF-based modeling or rendering.
+	</description>
+	<tutorials>
+	</tutorials>
+	<members>
+		<member name="d" type="float" setter="set_d" getter="get_d" default="0.0">
+			Distance from the origin to the plane along the normal vector. Positive values move the plane in the direction of the normal.
+		</member>
+		<member name="normal" type="Vector3" setter="set_normal" getter="get_normal" default="Vector3(0, 1, 0)">
+			Unit vector representing the plane’s orientation. Defaults to [code]Vector3(0, 1, 0)[/code], which corresponds to a horizontal plane.
+		</member>
+	</members>
+</class>

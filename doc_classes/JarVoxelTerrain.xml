@@ -1,0 +1,114 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="JarVoxelTerrain" inherits="Node3D" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
+	<brief_description>
+		Terrain generator for JAR worlds based on signed distance fields (SDF).
+	</brief_description>
+
+	<description>
+		JarVoxelTerrain generates terrain using signed distance fields (SDF) within a world defined by a [JarWorld] node.
+		It supports dynamic editing via functions like [code]sphere_edit()[/code] and [code]modify()[/code], allowing procedural or manual terrain deformation.
+		The terrain is rendered in chunks, and supports level-of-detail (LOD) with automatic updating based on the player’s position.
+	</description>
+
+	<tutorials>
+	</tutorials>
+	<methods>
+		<method name="force_update_lod">
+			<return type="void" />
+			<description>
+				Force updates LODs to chunks.
+			</description>
+		</method>
+		<method name="modify">
+			<return type="void" />
+			<param index="0" name="sdf" type="JarSignedDistanceField" />
+			<param index="1" name="operation" type="int" enum="SDF.Operation" />
+			<param index="2" name="position" type="Vector3" />
+			<param index="3" name="radius" type="float" />
+			<description>
+				Modifies the terrain using another [JarSignedDistanceField] instance at a given [code]position[/code], with the specified [code]operation[/code].
+				The [code]radius[/code] determines the affected area.
+			</description>
+		</method>
+		<method name="spawn_debug_spheres_in_bounds">
+			<return type="void" />
+			<param index="0" name="position" type="Vector3" />
+			<param index="1" name="range" type="float" />
+			<description>
+				Spawns debug spheres within the specified [code]range[/code] around [code]position[/code] to visualize terrain bounds or other metrics.
+			</description>
+		</method>
+		<method name="sphere_edit">
+			<return type="void" />
+			<param index="0" name="position" type="Vector3" />
+			<param index="1" name="radius" type="float" />
+			<param index="2" name="union" type="bool" />
+			<description>
+				Adds or subtracts a spherical volume from the terrain.
+				The center is defined by [code]position[/code], and [code]radius[/code] defines its size.
+				Set [code]union[/code] to [code]true[/code] to add, or [code]false[/code] to subtract.
+			</description>
+		</method>
+	</methods>
+	<members>
+		<member name="chunk_scene" type="PackedScene" setter="set_chunk_scene" getter="get_chunk_scene">
+			Scene used for singular chunk. Will be duplicated once for each rendered chunk.
+		</member>
+		<member name="cubic_voxels" type="bool" setter="set_cubic_voxels" getter="get_cubic_voxels" default="false">
+			Renders voxels as cubes.
+		</member>
+		<member name="lod_automatic_update" type="bool" setter="set_lod_automatic_update" getter="get_lod_automatic_update" default="true">
+			Enables/Disabled automatic updating of LOD based on player position.
+		</member>
+		<member name="lod_automatic_update_distance" type="float" setter="set_lod_automatic_update_distance" getter="get_lod_automatic_update_distance" default="64.0">
+			Distance in world units used to determine whether LODs need to be updated based on player movement.
+		</member>
+		<member name="lod_level_count" type="int" setter="set_lod_level_count" getter="get_lod_level_count" default="20">
+			Determines number of different LOD levels. Higher number means smoother transition between close and far LODs.
+		</member>
+		<member name="lod_shell_size" type="int" setter="set_lod_shell_size" getter="get_lod_shell_size" default="2">
+			Number of LOD rings (shells) around the player. Affects how much terrain is loaded based on proximity.
+		</member>
+		<member name="min_chunk_size" type="int" setter="set_min_chunk_size" getter="get_min_chunk_size" default="4">
+			Number of vertices in the smallest subdivision of the chunk.
+		</member>
+		<member name="octree_scale" type="float" setter="set_octree_scale" getter="get_octree_scale" default="1.0">
+			Scaling factor for the octree used in terrain chunk management and LOD computation.
+		</member>
+		<member name="performance_max_concurrent_tasks" type="int" setter="set_max_concurrent_tasks" getter="get_max_concurrent_tasks" default="12">
+			Limits how many concurrent tasks (e.g. chunk loading, LOD updates) can run simultaneously. Helps manage CPU load.
+		</member>
+		<member name="performance_updated_colliders_per_second" type="int" setter="set_updated_colliders_per_second" getter="get_updated_colliders_per_second" default="128">
+			Limits the number of colliders that can be updated per second to balance performance.
+		</member>
+		<member name="player_node" type="Node3D" setter="set_player_node" getter="get_player_node">
+			Player node to track for position, if [code]lod_automatic_update[/code] is set to [code]True[/code].
+		</member>
+		<member name="population_terrain_details" type="JarTerrainDetail[]" setter="set_terrain_details" getter="get_terrain_details" default="[]">
+			Defines additional objects or modifications applied to the terrain, such as grass, rocks, or decorations.
+		</member>
+		<member name="sdf" type="JarSignedDistanceField" setter="set_sdf" getter="get_sdf">
+			The signed distance field ([JarSignedDistanceField]) used to define terrain shape.
+		</member>
+		<member name="size" type="int" setter="set_size" getter="get_size" default="14">
+			Size of the terrain grid in chunks. Increasing this value expands the rendered area.
+		</member>
+		<member name="world_node" type="JarWorld" setter="set_world_node" getter="get_world_node">
+			[code]JarWorld[/code] node defining shape of the world (plane or spherical).
+		</member>
+	</members>
+	<constants>
+		<constant name="SDF::SDF_OPERATION_UNION" value="0" enum="Operation">
+		</constant>
+		<constant name="SDF::SDF_OPERATION_SUBTRACTION" value="1" enum="Operation">
+		</constant>
+		<constant name="SDF::SDF_OPERATION_INTERSECTION" value="2" enum="Operation">
+		</constant>
+		<constant name="SDF::SDF_OPERATION_SMOOTH_UNION" value="3" enum="Operation">
+		</constant>
+		<constant name="SDF::SDF_OPERATION_SMOOTH_SUBTRACTION" value="4" enum="Operation">
+		</constant>
+		<constant name="SDF::SDF_OPERATION_SMOOTH_INTERSECTION" value="5" enum="Operation">
+		</constant>
+	</constants>
+</class>

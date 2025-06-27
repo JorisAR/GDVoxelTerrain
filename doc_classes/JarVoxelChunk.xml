@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="JarVoxelChunk" inherits="Node3D" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
+	<brief_description>
+		A single terrain chunk.
+	</brief_description>
+	<description>
+		Represents a single chunk of the terrain. Instances of this class are duplicated by [JarVoxelTerrain] for each chunk generated.
+		It manages the [CollisionShape3D] and [MeshInstance3D] nodes for collision and rendering. The main node structure is based on a [StaticBody3D], with these elements as children.
+	</description>
+	<tutorials>
+	</tutorials>
+	<members>
+		<member name="collider_lod_threshold" type="int" setter="set_collider_lod_threshold" getter="get_collider_lod_threshold" default="1">
+			LOD level at which the [CollisionShape3D] is active.
+		</member>
+		<member name="collision_shape" type="CollisionShape3D" setter="set_collision_shape" getter="get_collision_shape">
+			The [CollisionShape3D] instance used by the chunk.
+		</member>
+		<member name="mesh_instance" type="MeshInstance3D" setter="set_mesh_instance" getter="get_mesh_instance">
+			The [MeshInstance3D] instance used by the chunk.
+		</member>
+		<member name="static_body" type="StaticBody3D" setter="set_static_body" getter="get_static_body">
+			The [StaticBody3D] instance serving as the root node for the chunk.
+		</member>
+	</members>
+</class>

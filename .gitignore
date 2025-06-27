@@ -1,7 +1,6 @@
 # Ignore Godot-specific files
 .export/
 .import/
-*.godot
 
 # Ignore build and output directories
 bin/

@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="JarTerrainSdf" inherits="JarSignedDistanceField" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
+	<brief_description>
+		SDF Terrain object.
+	</brief_description>
+	<description>
+		Represents terrain as a signed distance field generated using [FastNoiseLite] noise.
+		This class describes the terrain shape based on noise values.
+	</description>
+	<tutorials>
+	</tutorials>
+	<members>
+		<member name="height_scale" type="float" setter="set_height_scale" getter="get_height_scale" default="256.0">
+			Vertical scaling factor applied to the noise values.
+		</member>
+		<member name="noise" type="FastNoiseLite" setter="set_noise" getter="get_noise">
+			Instance of [FastNoiseLite] used to generate terrain noise.
+		</member>
+	</members>
+</class>

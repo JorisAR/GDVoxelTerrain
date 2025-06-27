@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="JarWorld" inherits="Node3D" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
+	<brief_description>
+		Abstract base class for world types such as [JarPlanarWorld] and [JarSphericalWorld].
+	</brief_description>
+	<description>
+		This is an abstract class that serves as the base for specific world types such as [JarPlanarWorld] and [JarSphericalWorld].
+		It provides shared properties like gravity and mass references, but is not meant to be used directly in scenes.
+	</description>
+	<tutorials>
+	</tutorials>
+	<members>
+		<member name="gravity_strength" type="float" setter="set_gravity_strength" getter="get_gravity_strength" default="9.8">
+			Base gravitational acceleration for this world.
+			This value does not directly affect physics or object behavior. It is intended as a reference for use by custom gameplay or simulation systems.
+		</member>
+		<member name="mass" type="float" setter="set_mass" getter="get_mass" default="1.0" deprecated="Was never really used">
+			Deprecated. Previously intended for mass-related calculations but is unused.
+		</member>
+	</members>
+</class>

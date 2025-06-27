@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="JarPlanetSdf" inherits="JarSignedDistanceField" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
+	<brief_description>
+		A procedurally generated signed distance field (SDF) planet.
+	</brief_description>
+	<description>
+		A signed distance field (SDF) sphere that simulates a planet. Unlike a regular sphere, the planet's surface is procedurally varied using [code]noise[/code], an instance of [FastNoiseLite], which generates terrain-like features such as mountains and valleys.
+	</description>
+	<tutorials>
+	</tutorials>
+	<members>
+		<member name="center" type="Vector3" setter="set_center" getter="get_center" default="Vector3(0, 0, 0)">
+			The origin point of the planet in 3D space.
+		</member>
+		<member name="noise" type="FastNoiseLite" setter="set_noise" getter="get_noise">
+			The [code]FastNoiseLite[/code] instance used to deform the surface of the planet, creating features like mountains and valleys.
+		</member>
+		<member name="noise_scale" type="float" setter="set_noise_scale" getter="get_noise_scale" default="50.0">
+			Controls the scale of the noise used for surface deformation. Higher values result in larger terrain features.
+		</member>
+		<member name="radius" type="float" setter="set_radius" getter="get_radius" default="1000.0">
+			The base radius of the planet before applying noise-based deformation.
+		</member>
+	</members>
+</class>
