@@ -107,6 +107,13 @@ void JarVoxelTerrain::_bind_methods()
                                   ":JarTerrainDetail"),
                  "set_terrain_details", "get_terrain_details");
 
+    ClassDB::bind_method(D_METHOD("get_terrain_features"), &JarVoxelTerrain::get_terrain_features);
+    ClassDB::bind_method(D_METHOD("set_terrain_features", "value"), &JarVoxelTerrain::set_terrain_features);
+    ADD_PROPERTY(PropertyInfo(Variant::ARRAY, "population_terrain_features", PROPERTY_HINT_TYPE_STRING,
+                              String::num(Variant::OBJECT) + "/" + String::num(PROPERTY_HINT_RESOURCE_TYPE) +
+                                  ":JarTerrainFeature"),
+                 "set_terrain_features", "get_terrain_features");
+
     ClassDB::bind_method(D_METHOD("modify_using_sdf", "sdf_modification"), &JarVoxelTerrain::modify_using_sdf);
 
     ClassDB::bind_method(D_METHOD("spawn_debug_spheres_in_bounds", "position", "range"),
@@ -568,11 +575,6 @@ glm::vec3 JarVoxelTerrain::get_camera_position() const
     return _voxelLod.get_camera_position();
 }
 
-int JarVoxelTerrain::desired_lod(const VoxelOctreeNode &node)
-{
-    return _voxelLod.desired_lod(node);
-}
-
 int JarVoxelTerrain::lod_at(const glm::vec3 &position) const
 {
     return _voxelLod.lod_at(position);
@@ -586,4 +588,14 @@ void JarVoxelTerrain::set_terrain_details(const TypedArray<JarTerrainDetail> &de
 TypedArray<JarTerrainDetail> JarVoxelTerrain::get_terrain_details() const
 {
     return _terrainDetails;
+}
+
+void godot::JarVoxelTerrain::set_terrain_features(const TypedArray<JarTerrainFeature> &features)
+{
+    _terrainFeatures = features;
+}
+
+TypedArray<JarTerrainFeature> godot::JarVoxelTerrain::get_terrain_features() const
+{
+    return _terrainFeatures;
 }

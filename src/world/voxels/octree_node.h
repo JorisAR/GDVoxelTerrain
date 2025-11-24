@@ -3,6 +3,7 @@
 
 #include "bounds.h"
 #include <array>
+#include <optional>
 #include <glm/glm.hpp>
 #include <memory>
 
@@ -83,7 +84,7 @@ template <typename TNode> class OctreeNode
         return _children;
     }
 
-    inline const uint32_t get_size_log2() const
+    inline uint32_t get_size_log2() const
     {
         return _sizeLog2;
     }

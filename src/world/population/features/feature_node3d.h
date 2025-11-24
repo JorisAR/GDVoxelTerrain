@@ -33,18 +33,15 @@ public:
     FeatureNode3D() = default;
     ~FeatureNode3D() = default;
 
-    void enter_range() {
-        if (_active) return;
-        _active = true;
-        apply_toggles(true);
-        emit_signal("entered_range");
-    }
-
-    void exit_range() {
-        if (!_active) return;
-        _active = false;
-        apply_toggles(false);
-        emit_signal("exited_range");
+    void toggle(bool enable) {
+        if (enable == _active) return;
+        _active = enable;
+        apply_toggles(enable);
+        if( enable ) {
+            emit_signal("entered_range");
+        } else {
+            emit_signal("exited_range");
+        }
     }
 
     bool is_active() const { return _active; }

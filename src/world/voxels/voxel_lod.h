@@ -11,7 +11,8 @@
 #include <godot_cpp/variant/vector3.hpp>
 #include <vector>
 
-namespace godot {
+namespace godot
+{
 
 class JarVoxelTerrain;
 
@@ -29,29 +30,59 @@ class JarVoxelLoD
     float _autoMeshCoolDown;
     glm::vec3 _cameraPosition;
 
-    inline float lod_to_grid_size(const int lod) const;
-    inline glm::vec3 snap_to_grid(const glm::vec3 pos, const float grid_size) const;
-    inline bool is_in_lod_shell(int lod, glm::vec3 pos, glm::vec3 cam_pos) const;
+    inline float lod_to_grid_size(const int lod) const
+    {
+        return (1 << (long)(lod + 1)) * _octreeScale; // should be times octreescale?
+    }
+
+    inline glm::vec3 snap_to_grid(const glm::vec3 pos, const float grid_size) const
+    {
+        return floor(pos / grid_size) * grid_size;
+    }
+
+    inline bool is_in_lod_shell(int lod, glm::vec3 pos, glm::vec3 cam_pos) const
+    {
+        float grid_size = lod_to_grid_size(lod) * 2.0;
+        glm::vec3 lod_cam_pos = snap_to_grid(cam_pos, grid_size);
+        glm::vec3 delta = abs(pos - lod_cam_pos);
+        float dist = glm::max(delta.x, glm::max(delta.y, delta.z));
+        return dist < (grid_size * _shellSize);
+    }
 
   protected:
-    
     static void _bind_methods();
 
   public:
     JarVoxelLoD();
-    JarVoxelLoD(const bool automaticUpdate, const float automaticUpdateDistance, const int lodLevelCount, const int shellSize, const float octreeScale, const int chunk_size);
+    JarVoxelLoD(const bool automaticUpdate, const float automaticUpdateDistance, const int lodLevelCount,
+                const int shellSize, const float octreeScale, const int chunk_size);
 
     glm::vec3 get_camera_position() const;
 
     bool process(const JarVoxelTerrain &terrain, double delta);
     bool update_camera_position(const JarVoxelTerrain &terrain, const bool force);
 
-    int desired_lod(const VoxelOctreeNode &node);
-    int lod_at(const glm::vec3 &position) const;
+    inline int lod_at(const glm::vec3 &position) const
+    {
+        glm::vec3 pos = position * _rChunkSize;
+        glm::vec3 cam_pos = _cameraPosition * _rChunkSize;
 
+        glm::vec3 delta = glm::abs(pos - cam_pos) / (2.0f * _shellSize);
+        int lod = glm::max(0, int(floor(glm::log2(glm::max(1.0f, glm::max(delta.x, glm::max(delta.y, delta.z)))))));
+
+        if (!is_in_lod_shell(lod, pos, cam_pos))
+            return lod + 1;
+        if (lod <= 0 || !is_in_lod_shell(lod - 1, pos, cam_pos))
+            return lod;
+        return lod - 1;
+    }
+
+    template <typename TNode> inline int desired_lod(const OctreeNode<TNode> &node)
+    {
+        auto l = node.get_size_log2() > _maxChunkSize ? 0 : lod_at(node.get_center());
+        return l;
+    }
 };
-}
+} // namespace godot
 
 #endif // LEVEL_OF_DETAIL_H
-
-

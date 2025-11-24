@@ -1,11 +1,12 @@
 #!/usr/bin/env python
 import os
 import sys
-# from scons_compiledb import compile_db # Import the compile_db function # Call the compile_db function to enable compile_commands.json generation
-# compile_db()
+import scons_compiledb
 
 # Import the SConstruct from godot-cpp
 env = SConscript("godot-cpp/SConstruct")
+# scons_compiledb.enable_with_cmdline(env)
+
 
 # Add necessary include directories
 env.Append(CPPPATH=[
@@ -22,11 +23,16 @@ env.Append(CPPPATH=[
     "src/world/population/features",
 ])
 
-## Add main source files
-sources = Glob("src/*.cpp") + Glob("src/utility/*.cpp") + Glob("src/sdf/*.cpp") + \
-    Glob("src/world/*.cpp") + Glob("src/world/storage/*.cpp") + Glob("src/world/voxels/*.cpp") + Glob("src/world/voxels/meshing/*.cpp") + \
-    Glob("src/world/population/*.cpp") + Glob("src/world/population/details/*.cpp") + \
-    Glob("src/world/population/features/*.cpp")
+sources = Glob("src/*.cpp") \
+        + Glob("src/utility/*.cpp") \
+        + Glob("src/sdf/*.cpp") \
+        + Glob("src/world/*.cpp") \
+        + Glob("src/world/storage/*.cpp") \
+        + Glob("src/world/voxels/*.cpp") \
+        + Glob("src/world/voxels/meshing/*.cpp") \
+        + Glob("src/world/population/*.cpp") \
+        + Glob("src/world/population/details/*.cpp") \
+        + Glob("src/world/population/features/*.cpp")
 
 if env["target"] != "template_release":
 	try:

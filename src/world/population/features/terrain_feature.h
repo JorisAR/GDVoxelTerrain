@@ -21,20 +21,19 @@ class JarTerrainFeature : public JarTerrainPopulator
 
   private:
     Ref<PackedScene> feature_scene;
-    float density = 1.0f;
+    float weight = 1.0f;
     int max_lod = 0;
-
 
   public:
     virtual ~JarTerrainFeature() = default;
 
     Ref<PackedScene> get_feature_scene() const { return feature_scene; }
-    float get_density() const { return density; }
+    float get_weight() const { return weight; }
     int get_max_lod() const { return max_lod; }
 
 
     void set_feature_scene(const Ref<PackedScene> &value) { feature_scene = value; }
-    void set_density(float value) { density = value; }
+    void set_weight(float value) { weight = value; }
     void set_max_lod(int value) { max_lod = value; }
 
   protected:
@@ -44,9 +43,9 @@ class JarTerrainFeature : public JarTerrainPopulator
         ADD_PROPERTY(PropertyInfo(Variant::OBJECT, "feature_scene", PROPERTY_HINT_RESOURCE_TYPE, "Mesh"), "set_feature_scene", "get_feature_scene");
 
 
-        ClassDB::bind_method(D_METHOD("get_density"), &JarTerrainFeature::get_density);
-        ClassDB::bind_method(D_METHOD("set_density", "value"), &JarTerrainFeature::set_density);
-        ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "density"), "set_density", "get_density");
+        ClassDB::bind_method(D_METHOD("get_weight"), &JarTerrainFeature::get_weight);
+        ClassDB::bind_method(D_METHOD("set_weight", "value"), &JarTerrainFeature::set_weight);
+        ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "weight"), "set_weight", "get_weight");
 
         ClassDB::bind_method(D_METHOD("get_max_lod"), &JarTerrainFeature::get_max_lod);
         ClassDB::bind_method(D_METHOD("set_max_lod", "value"), &JarTerrainFeature::set_max_lod);

@@ -19,7 +19,7 @@ class VoxelOctreeNode : public OctreeNode<VoxelOctreeNode>
 {
   private:
     float _value = 0;
-    int LoD = 0;
+    int _lod = 0;
     bool _isGenerated = false; // if true, already generated from SDF.
     bool _isModified = false; // if true, modified, so should not be deleted.
     bool _isDirty = false; // if true, needs to recalculate value from children
@@ -67,7 +67,7 @@ class VoxelOctreeNode : public OctreeNode<VoxelOctreeNode>
 
     inline bool has_surface(const JarVoxelTerrain &terrain, const float value);
     void queue_update(JarVoxelTerrain &terrain);
-    void modify_sdf_in_bounds(JarVoxelTerrain &terrain, const ModifySettings &sdf);
+    void modify_sdf_in_bounds(JarVoxelTerrain &terrain, const ModifySettings &settings);
     void update_chunk(JarVoxelTerrain &terrain, ExtractedMeshData *chunkMeshData);
 
     void delete_chunk();

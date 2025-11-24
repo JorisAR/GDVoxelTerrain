@@ -5,6 +5,7 @@
 #include "sdf_modification.h"
 #include "signed_distance_field.h"
 #include "terrain_detail.h"
+#include "terrain_feature.h"
 #include "voxel_lod.h"
 #include "voxel_octree_node.h"
 #include <godot_cpp/classes/engine.hpp>
@@ -79,6 +80,7 @@ class JarVoxelTerrain : public Node3D
 
     // POPULATION
     TypedArray<JarTerrainDetail> _terrainDetails;
+    TypedArray<JarTerrainFeature> _terrainFeatures;
 
     // TERRAIN DESTRUCTION
     bool _destruction_enable_separating_loose_chunks = true;
@@ -183,13 +185,20 @@ class JarVoxelTerrain : public Node3D
 
     // LOD
     glm::vec3 get_camera_position() const;
-    int desired_lod(const VoxelOctreeNode &node);
+
+    template <typename TNode>
+    inline int desired_lod(const OctreeNode<TNode> &node) {
+        return _voxelLod.desired_lod(node);
+    }
     int lod_at(const glm::vec3 &position) const;
 
 
     // POPULATION
     void set_terrain_details(const TypedArray<JarTerrainDetail> &details);
     TypedArray<JarTerrainDetail> get_terrain_details() const;
+
+    void set_terrain_features(const TypedArray<JarTerrainFeature> &features);
+    TypedArray<JarTerrainFeature> get_terrain_features() const;
 };
 }
 

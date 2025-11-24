@@ -75,6 +75,16 @@ class Utils : public Object
     {
         return godot::String(("{" + glm::to_string(v) + "}").c_str());
     }
+
+    static glm::vec3 to_vec3(const godot::Vector3 &v)
+    {
+        return glm::vec3(v.x, v.y, v.z);
+    }
+
+    static godot::Vector3 to_vector3(const glm::vec3 &v)
+    {
+        return godot::Vector3(v.x, v.y, v.z);
+    }
 };
 
 } // namespace godot
