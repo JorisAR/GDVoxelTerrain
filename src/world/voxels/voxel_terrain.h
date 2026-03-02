@@ -18,16 +18,19 @@
 #include <godot_cpp/classes/standard_material3d.hpp>
 #include <godot_cpp/variant/utility_functions.hpp>
 #include <godot_cpp/variant/typed_array.hpp>
+#include <atomic>
 #include <queue>
+#include <thread>
 #include <vector>
 #include "voxel_terrain_material.h"
 
-namespace godot {
-
-class JarWorld;
-
-class JarVoxelTerrain : public Node3D
+namespace godot
 {
+
+  class JarWorld;
+
+  class JarVoxelTerrain : public Node3D
+  {
     GDCLASS(JarVoxelTerrain, Node3D);
 
   private:
@@ -40,10 +43,10 @@ class JarVoxelTerrain : public Node3D
 
     struct ChunkComparator
     {
-        bool operator()(const VoxelOctreeNode *a, const VoxelOctreeNode *b) const
-        {
-            return a->get_lod() > b->get_lod();
-        }
+      bool operator()(const VoxelOctreeNode *a, const VoxelOctreeNode *b) const
+      {
+        return a->get_lod() > b->get_lod();
+      }
     };
 
     std::queue<ModifySettings> _modifySettingsQueue;
@@ -58,7 +61,8 @@ class JarVoxelTerrain : public Node3D
 
     Ref<PackedScene> _chunkScene;
 
-    bool _isBuilding = false;
+    std::atomic<bool> _isBuilding{false};
+    std::thread _buildThread;
     bool _cubicVoxels = false;
 
     // MATERIALS
@@ -100,6 +104,7 @@ class JarVoxelTerrain : public Node3D
 
   public:
     JarVoxelTerrain();
+    ~JarVoxelTerrain() override;
 
     void modify_using_sdf(const Ref<JarSdfModification> sdf);
 
@@ -115,7 +120,7 @@ class JarVoxelTerrain : public Node3D
     bool is_building() const;
     // MeshComputeScheduler *get_mesh_scheduler() const;
 
-    bool need_normals() const { return false; } //for dual contouring
+    bool need_normals() const { return false; } // for dual contouring
 
     // properties
     Node3D *get_player_node() const;
@@ -186,11 +191,10 @@ class JarVoxelTerrain : public Node3D
     int desired_lod(const VoxelOctreeNode &node);
     int lod_at(const glm::vec3 &position) const;
 
-
     // POPULATION
     void set_terrain_details(const TypedArray<JarTerrainDetail> &details);
     TypedArray<JarTerrainDetail> get_terrain_details() const;
-};
+  };
 }
 
 #endif // VOXEL_TERRAIN_H

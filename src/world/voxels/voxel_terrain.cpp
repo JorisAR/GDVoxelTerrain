@@ -119,6 +119,15 @@ JarVoxelTerrain::JarVoxelTerrain() : _octreeScale(1.0f), _size(14), _playerNode(
     _chunkSize = (1 << _chunk_size_log2);
 }
 
+JarVoxelTerrain::~JarVoxelTerrain()
+{
+    if (_buildThread.joinable())
+    {
+        _buildThread.join();
+    }
+    _meshComputeScheduler.reset();
+}
+
 void JarVoxelTerrain::modify_using_sdf(const Ref<JarSdfModification> sdf)
 {
     if (!sdf.is_valid())
@@ -165,7 +174,7 @@ void JarVoxelTerrain::set_world_node(JarWorld *worldNode)
 
 bool JarVoxelTerrain::is_building() const
 {
-    return _isBuilding;
+    return _isBuilding.load(std::memory_order_acquire);
 }
 
 Ref<JarSignedDistanceField> JarVoxelTerrain::get_sdf() const
@@ -333,19 +342,28 @@ void JarVoxelTerrain::_notification(int p_what)
     }
     switch (p_what)
     {
-    case NOTIFICATION_ENTER_TREE: {
+    case NOTIFICATION_ENTER_TREE:
+    {
         initialize();
         set_process_internal(true);
         break;
     }
-    case NOTIFICATION_READY: {
+    case NOTIFICATION_READY:
+    {
         break;
     }
-    case NOTIFICATION_EXIT_TREE: {
+    case NOTIFICATION_EXIT_TREE:
+    {
         set_process_internal(false);
+        if (_buildThread.joinable())
+        {
+            _buildThread.join();
+        }
+        _isBuilding.store(false, std::memory_order_release);
         break;
     }
-    case NOTIFICATION_INTERNAL_PROCESS: {
+    case NOTIFICATION_INTERNAL_PROCESS:
+    {
         process();
         break;
     }
@@ -379,7 +397,7 @@ void JarVoxelTerrain::process()
     if (!_meshComputeScheduler)
         return;
 
-    if (!_isBuilding && !_meshComputeScheduler->is_meshing() && _voxelLod.process(*this, false))
+    if (!is_building() && !_meshComputeScheduler->is_meshing() && _voxelLod.process(*this, false))
         build();
     _meshComputeScheduler->process(*this);
 
@@ -410,18 +428,19 @@ void printUniqueLoDValues(const std::vector<int> &lodValues)
 
 void JarVoxelTerrain::build()
 {
-    if (_isBuilding || _meshComputeScheduler->is_meshing())
+    if (is_building() || _meshComputeScheduler->is_meshing())
         return;
 
-    std::thread([this]() {
-        // UtilityFunctions::print("start building");
-        _isBuilding = true;
+    if (_buildThread.joinable())
+    {
+        _buildThread.join();
+    }
 
-        //_meshComputeScheduler->clear_queue();
+    _isBuilding.store(true, std::memory_order_release);
+    _buildThread = std::thread([this]()
+                               {
         _voxelRoot->build(*this);
-        _isBuilding = false;
-        // UtilityFunctions::print("Stop Building");
-    }).detach();
+        _isBuilding.store(false, std::memory_order_release); });
 
     // std::thread([this]() { _worldBiomes->update_texture(_levelOfDetail->get_camera_position()); }).detach();
     // UtilityFunctions::print("Done Building.");
@@ -480,9 +499,9 @@ void JarVoxelTerrain::generate_epsilons()
 
 void JarVoxelTerrain::process_modify_queue()
 {
-    if (_isBuilding)
+    if (is_building())
         return;
-    _isBuilding = true;
+    _isBuilding.store(true, std::memory_order_release);
     // std::thread([this]() {
     if (!_modifySettingsQueue.empty())
     {
@@ -491,7 +510,7 @@ void JarVoxelTerrain::process_modify_queue()
         _voxelRoot->modify_sdf_in_bounds(*this, settings);
         //_populationRoot->remove_population(settings);
     }
-    _isBuilding = false;
+    _isBuilding.store(false, std::memory_order_release);
     // }).detach();
 }
 

@@ -11,12 +11,13 @@
 #include <godot_cpp/variant/vector3.hpp>
 #include <vector>
 
-namespace godot {
-
-class JarVoxelTerrain;
-
-class JarVoxelLoD
+namespace godot
 {
+
+  class JarVoxelTerrain;
+
+  class JarVoxelLoD
+  {
   private:
     float _automaticUpdateDistance = 64;
     float _octreeScale = 1.0f;
@@ -25,7 +26,7 @@ class JarVoxelLoD
     int _shellSize = 2;
     bool _automaticUpdate = true;
 
-    int _maxChunkSize;
+    int _maxChunkSize = 4;
     float _autoMeshCoolDown;
     glm::vec3 _cameraPosition;
 
@@ -34,7 +35,6 @@ class JarVoxelLoD
     inline bool is_in_lod_shell(int lod, glm::vec3 pos, glm::vec3 cam_pos) const;
 
   protected:
-    
     static void _bind_methods();
 
   public:
@@ -48,10 +48,7 @@ class JarVoxelLoD
 
     int desired_lod(const VoxelOctreeNode &node);
     int lod_at(const glm::vec3 &position) const;
-
-};
+  };
 }
 
 #endif // LEVEL_OF_DETAIL_H
-
-

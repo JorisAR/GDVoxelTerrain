@@ -6,6 +6,12 @@
 bin/
 build/
 
+# SCons generates machine‑specific object/cache files with a .os suffix
+# (and sometimes .d, .pyc etc.); we don't want those in the repo.
+**/*.os
+**/*.d
+**/*.pyc
+
 # Ignore user-specific files
 *.sconsign.dblite
 *.sconsign

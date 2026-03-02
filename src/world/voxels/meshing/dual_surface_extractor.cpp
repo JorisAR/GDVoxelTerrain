@@ -93,7 +93,7 @@ void DualSurfaceExtractor::create_vertex(const JarVoxelTerrain &terrain, const i
 ExtractedMeshData *DualSurfaceExtractor::generate_mesh_data(const JarVoxelTerrain &terrain,
                                                             const VoxelOctreeNode &chunk)
 {
-    _meshChunk = new MeshChunk(terrain, chunk); // TODO: make sure we overwrite existing memory
+    _meshChunk = std::make_unique<MeshChunk>(terrain, chunk);
     _chunk = const_cast<VoxelOctreeNode *>(&chunk);
 
     for (size_t node_id = 0; node_id < _meshChunk->innerNodeCount; node_id++)
@@ -327,7 +327,8 @@ std::vector<std::vector<int>> DualSurfaceExtractor::find_ring_nodes(const glm::i
     //     {glm::ivec3(1, 0, 0), glm::ivec3(-1, 0, 0), glm::ivec3(0, 0, 1), glm::ivec3(0, 0, -1)},
     //     {glm::ivec3(1, 0, 0), glm::ivec3(-1, 0, 0), glm::ivec3(0, 1, 0), glm::ivec3(0, -1, 0)}};
     // function to go from inner coordinates to ring coordinates
-    auto get_ring_node = [this](const glm::ivec3 pos) {
+    auto get_ring_node = [this](const glm::ivec3 pos)
+    {
         glm::ivec3 ring_pos = glm::floor((glm::vec3(pos)) / 2.0f);
 
         auto it = _ringEdgeNodes.find(ring_pos);

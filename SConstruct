@@ -42,11 +42,14 @@ if env["target"] != "template_release":
 #     elif env['CXX'] == 'cl':
 #         env.Append(CXXFLAGS=['/EHsc'])  # Apply /EHsc for MSVC
 
-env.Append(CXXFLAGS=['/std:c++17'])
+if env.get("is_msvc", False):
+    env.Append(CXXFLAGS=['/std:c++17'])
 
 # Handle different platforms
 if env["platform"] == "macos":
-    library = env.SharedLibrary(
+    mac_env = env.Clone()
+    mac_env["SHLIBPREFIX"] = ""
+    library = mac_env.SharedLibrary(
         "demo/addons/jar_voxel_terrain/bin/jar_voxel_terrain.{}.{}.framework/jar_voxel_terrain.{}.{}".format(
             env["platform"], env["target"], env["platform"], env["target"]
         ),
