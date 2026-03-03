@@ -93,14 +93,17 @@ void DualSurfaceExtractor::create_vertex(const JarVoxelTerrain &terrain, const i
 ExtractedMeshData *DualSurfaceExtractor::generate_mesh_data(const JarVoxelTerrain &terrain,
                                                             const VoxelOctreeNode &chunk)
 {
-    _meshChunk = new MeshChunk(terrain, chunk); // TODO: make sure we overwrite existing memory
+    _meshChunk = std::make_unique<MeshChunk>(terrain, chunk);
     _chunk = const_cast<VoxelOctreeNode *>(&chunk);
+
+    std::vector<int> neighbours;
+    neighbours.reserve(8);
 
     for (size_t node_id = 0; node_id < _meshChunk->innerNodeCount; node_id++)
     {
         if (_meshChunk->vertexIndices[node_id] <= -2)
             continue;
-        auto neighbours = std::vector<int>();
+        neighbours.clear();
         glm::ivec3 grid_position = _meshChunk->positions[node_id];
 
         if (!_meshChunk->get_neighbours(grid_position, neighbours))
@@ -117,7 +120,7 @@ ExtractedMeshData *DualSurfaceExtractor::generate_mesh_data(const JarVoxelTerrai
     {
         if (_meshChunk->vertexIndices[node_id] <= -2)
             continue;
-        auto neighbours = std::vector<int>();
+        neighbours.clear();
         glm::ivec3 grid_position = _meshChunk->positions[node_id];
 
         if (!_meshChunk->get_ring_neighbours(grid_position, neighbours))
@@ -157,6 +160,9 @@ ExtractedMeshData *DualSurfaceExtractor::generate_mesh_data(const JarVoxelTerrai
 
 void DualSurfaceExtractor::stitch_inner_faces()
 {
+    std::vector<int> neighbours;
+    neighbours.reserve(4);
+
     for (size_t node_id = 0; node_id < _meshChunk->innerNodeCount; ++node_id)
     {
         if (_meshChunk->vertexIndices[node_id] <= -1)
@@ -172,7 +178,7 @@ void DualSurfaceExtractor::stitch_inner_faces()
             if (flipFace == 0 || !_meshChunk->should_have_quad(pos, i))
                 continue;
 
-            std::vector<int> neighbours;
+            neighbours.clear();
             if (_meshChunk->get_unique_neighbouring_vertices(pos, MeshChunk::FaceOffsets[i], neighbours) &&
                 neighbours.size() == 4)
             {
@@ -327,7 +333,8 @@ std::vector<std::vector<int>> DualSurfaceExtractor::find_ring_nodes(const glm::i
     //     {glm::ivec3(1, 0, 0), glm::ivec3(-1, 0, 0), glm::ivec3(0, 0, 1), glm::ivec3(0, 0, -1)},
     //     {glm::ivec3(1, 0, 0), glm::ivec3(-1, 0, 0), glm::ivec3(0, 1, 0), glm::ivec3(0, -1, 0)}};
     // function to go from inner coordinates to ring coordinates
-    auto get_ring_node = [this](const glm::ivec3 pos) {
+    auto get_ring_node = [this](const glm::ivec3 pos)
+    {
         glm::ivec3 ring_pos = glm::floor((glm::vec3(pos)) / 2.0f);
 
         auto it = _ringEdgeNodes.find(ring_pos);
@@ -338,6 +345,7 @@ std::vector<std::vector<int>> DualSurfaceExtractor::find_ring_nodes(const glm::i
     };
 
     std::vector<std::vector<int>> result;
+    result.reserve(24);
     for (size_t i = 0; i < 3; i++) // check all directions?
     {
         for (auto dir : ring_offsets[i])

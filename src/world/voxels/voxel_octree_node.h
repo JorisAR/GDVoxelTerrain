@@ -13,10 +13,10 @@
 
 namespace godot {
 
-class JarVoxelTerrain;
+  class JarVoxelTerrain;
 
-class VoxelOctreeNode : public OctreeNode<VoxelOctreeNode>
-{
+  class VoxelOctreeNode : public OctreeNode<VoxelOctreeNode>
+  {
   private:
     float _value = 0;
     int LoD = 0;
@@ -26,7 +26,7 @@ class VoxelOctreeNode : public OctreeNode<VoxelOctreeNode>
     bool _isEnqueued = false; // if true, is enqueued for meshing
     uint8_t _isMaterialized;
 
-    JarVoxelChunk *_chunk = nullptr;   
+    JarVoxelChunk *_chunk = nullptr;
 
     uint32_t _material_index = 0;
     glm::vec3 _normal{0, 0, 0};
@@ -37,12 +37,12 @@ class VoxelOctreeNode : public OctreeNode<VoxelOctreeNode>
 
     // idea to not explore the whole tree, but only the children that are not materialized
     void mark_materialized();
-    inline bool is_materialized();
+    bool is_materialized();
 
-    inline bool is_one_above_chunk(const JarVoxelTerrain &terrain) const;
+    bool is_one_above_chunk(const JarVoxelTerrain &terrain) const;
     void populateUniqueLoDValues(std::vector<int> &lodValues) const;
 
-    inline bool should_delete_chunk(const JarVoxelTerrain &terrain) const;
+    bool should_delete_chunk(const JarVoxelTerrain &terrain) const;
 
     void update_if_dirty();
 
@@ -55,9 +55,9 @@ class VoxelOctreeNode : public OctreeNode<VoxelOctreeNode>
     uint16_t compute_boundaries(const JarVoxelTerrain &terrain) const;
 
     JarVoxelChunk *get_chunk() const;
-    inline bool is_chunk(const JarVoxelTerrain &terrain) const;
-    inline bool is_above_chunk(const JarVoxelTerrain &terrain) const;
-    inline bool is_above_min_chunk(const JarVoxelTerrain &terrain) const;
+    bool is_chunk(const JarVoxelTerrain &terrain) const;
+    bool is_above_chunk(const JarVoxelTerrain &terrain) const;
+    bool is_above_min_chunk(const JarVoxelTerrain &terrain) const;
     bool is_enqueued() const;
     void finished_meshing_notify_parent_and_children() const;
     bool is_parent_enqueued() const;
@@ -83,14 +83,14 @@ class VoxelOctreeNode : public OctreeNode<VoxelOctreeNode>
     bool is_modified() const;
     uint32_t get_lod() const;
     float get_value();
-    glm::vec3 get_normal();    
+    glm::vec3 get_normal();
     uint32_t get_material_index();
 
     // private:
 
   protected:
     inline virtual std::unique_ptr<VoxelOctreeNode> create_child_node(const glm::vec3 &center, uint32_t size) override;
-};
+  };
 }
 
 #endif // VOXEL_OCTREE_NODE_H

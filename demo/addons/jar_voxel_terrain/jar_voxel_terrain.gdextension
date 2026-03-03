@@ -7,7 +7,11 @@ reloadable = true
 [libraries]
 
 macos.debug = "res://addons/jar_voxel_terrain/bin/jar_voxel_terrain.macos.template_debug.framework"
+macos.debug.arm64 = "res://addons/jar_voxel_terrain/bin/jar_voxel_terrain.macos.template_debug.framework"
+macos.debug.x86_64 = "res://addons/jar_voxel_terrain/bin/jar_voxel_terrain.macos.template_debug.framework"
 macos.release = "res://addons/jar_voxel_terrain/bin/jar_voxel_terrain.macos.template_release.framework"
+macos.release.arm64 = "res://addons/jar_voxel_terrain/bin/jar_voxel_terrain.macos.template_release.framework"
+macos.release.x86_64 = "res://addons/jar_voxel_terrain/bin/jar_voxel_terrain.macos.template_release.framework"
 ios.debug = "res://addons/jar_voxel_terrain/bin/jar_voxel_terrain.ios.template_debug.xcframework"
 ios.release = "res://addons/jar_voxel_terrain/bin/jar_voxel_terrain.ios.template_release.xcframework"
 windows.debug.x86_32 = "res://addons/jar_voxel_terrain/bin/jar_voxel_terrain.windows.template_debug.x86_32.dll"

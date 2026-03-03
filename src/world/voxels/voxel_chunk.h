@@ -13,14 +13,14 @@
 #include <godot_cpp/classes/static_body3d.hpp>
 #include <vector>
 
-namespace godot {
-
-
-class JarVoxelTerrain;
-class VoxelOctreeNode;
-
-class JarVoxelChunk : public StaticBody3D
+namespace godot
 {
+
+  class JarVoxelTerrain;
+  class VoxelOctreeNode;
+
+  class JarVoxelChunk : public StaticBody3D
+  {
     GDCLASS(JarVoxelChunk, StaticBody3D);
 
   private:
@@ -30,17 +30,17 @@ class JarVoxelChunk : public StaticBody3D
     Bounds bounds;
 
     // node references
-    ExtractedMeshData* _chunk_mesh_data = nullptr;
-    JarVoxelTerrain* _terrain = nullptr;
-    MeshInstance3D* mesh_instance = nullptr;
-    CollisionShape3D* collision_shape = nullptr;
+    JarVoxelTerrain *_terrain = nullptr;
+    MeshInstance3D *mesh_instance = nullptr;
+    CollisionShape3D *collision_shape = nullptr;
+    PackedVector3Array _collision_mesh_faces;
 
     // data containers
     Ref<ArrayMesh> array_mesh;
     Ref<ConcavePolygonShape3D> concave_polygon_shape;
     Ref<ShaderMaterial> material;
 
-    std::vector<MultiMeshInstance3D*> multi_mesh_instances;
+    std::vector<MultiMeshInstance3D *> multi_mesh_instances;
 
     // std::vector<Ref<MultiMeshInstance3D>> multi_mesh_instance;
     //  Add references for grass and biome textures if necessary
@@ -58,17 +58,17 @@ class JarVoxelChunk : public StaticBody3D
     int get_lod() const;
     void set_lod(int p_lod);
 
-    uint8_t get_boundaries() const;
-    void set_boundaries(uint8_t p_boundaries);
+    uint16_t get_boundaries() const;
+    void set_boundaries(uint16_t p_boundaries);
 
     bool is_edge_chunk() const;
     void set_edge_chunk(bool p_edge_chunk);
 
-    MeshInstance3D* get_mesh_instance() const;
-    void set_mesh_instance(MeshInstance3D* p_mesh_instance);
+    MeshInstance3D *get_mesh_instance() const;
+    void set_mesh_instance(MeshInstance3D *p_mesh_instance);
 
-    CollisionShape3D* get_collision_shape() const;
-    void set_collision_shape(CollisionShape3D* p_collision_shape);
+    CollisionShape3D *get_collision_shape() const;
+    void set_collision_shape(CollisionShape3D *p_collision_shape);
 
     Ref<ArrayMesh> get_array_mesh() const;
     void set_array_mesh(Ref<ArrayMesh> p_array_mesh);
@@ -79,12 +79,12 @@ class JarVoxelChunk : public StaticBody3D
     Ref<ShaderMaterial> get_material() const;
     void set_material(Ref<ShaderMaterial> p_material);
 
-    JarVoxelTerrain* get_terrain() const { return _terrain; }
+    JarVoxelTerrain *get_terrain() const { return _terrain; }
 
     void update_chunk(JarVoxelTerrain &terrain, VoxelOctreeNode *node, ExtractedMeshData *chunk_mesh_data);
     void update_collision_mesh();
     void delete_chunk();
-};
+  };
 }
 
 #endif // JAR_VOXEL_CHUNK_H

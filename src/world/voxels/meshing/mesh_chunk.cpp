@@ -27,21 +27,21 @@ const std::vector<glm::ivec4> MeshChunk::RingQuadChecks = {
 };
 
 const std::vector<glm::vec3> MeshChunk::CheckLodOffsets = {glm::vec3(1, 0, 0), glm::vec3(-1, 0, 0),
-                                                                   glm::vec3(0, 1, 0), glm::vec3(0, -1, 0),
-                                                                   glm::vec3(0, 0, 1), glm::vec3(0, 0, -1)};
+                                                           glm::vec3(0, 1, 0), glm::vec3(0, -1, 0),
+                                                           glm::vec3(0, 0, 1), glm::vec3(0, 0, -1)};
 
 const std::vector<glm::ivec2> MeshChunk::Edges = {
     glm::ivec2(0, 1), glm::ivec2(2, 3), glm::ivec2(4, 5), glm::ivec2(6, 7), glm::ivec2(0, 2), glm::ivec2(1, 3),
     glm::ivec2(4, 6), glm::ivec2(5, 7), glm::ivec2(0, 4), glm::ivec2(1, 5), glm::ivec2(2, 6), glm::ivec2(3, 7)};
 
 const std::vector<glm::ivec3> MeshChunk::YzOffsets = {glm::ivec3(0, 0, 0), glm::ivec3(0, 1, 0),
-                                                              glm::ivec3(0, 0, 1), glm::ivec3(0, 1, 1)};
+                                                      glm::ivec3(0, 0, 1), glm::ivec3(0, 1, 1)};
 
 const std::vector<glm::ivec3> MeshChunk::XzOffsets = {glm::ivec3(0, 0, 0), glm::ivec3(1, 0, 0),
-                                                              glm::ivec3(0, 0, 1), glm::ivec3(1, 0, 1)};
+                                                      glm::ivec3(0, 0, 1), glm::ivec3(1, 0, 1)};
 
 const std::vector<glm::ivec3> MeshChunk::XyOffsets = {glm::ivec3(0, 0, 0), glm::ivec3(1, 0, 0),
-                                                              glm::ivec3(0, 1, 0), glm::ivec3(1, 1, 0)};
+                                                      glm::ivec3(0, 1, 0), glm::ivec3(1, 1, 0)};
 
 const std::vector<std::vector<glm::ivec3>> MeshChunk::FaceOffsets = {YzOffsets, XzOffsets, XyOffsets};
 
@@ -51,12 +51,11 @@ MeshChunk::MeshChunk(const JarVoxelTerrain &terrain, const VoxelOctreeNode &chun
     LargestPos = ChunkRes - 1;
     RingBounds = {
         Bounds(glm::vec3(0, -0.5f, -0.5f) + glm::vec3(-2.0f / leaf_count),
-               glm::vec3(0,  0.5f,  0.5f) + glm::vec3( 2.0f / leaf_count)),
+               glm::vec3(0, 0.5f, 0.5f) + glm::vec3(2.0f / leaf_count)),
         Bounds(glm::vec3(-0.5f, 0, -0.5f) + glm::vec3(-2.0f / leaf_count),
-               glm::vec3( 0.5f, 0,  0.5f) + glm::vec3( 2.0f / leaf_count)),
+               glm::vec3(0.5f, 0, 0.5f) + glm::vec3(2.0f / leaf_count)),
         Bounds(glm::vec3(-0.5f, -0.5f, 0) + glm::vec3(-2.0f / leaf_count),
-               glm::vec3( 0.5f,  0.5f, 0) + glm::vec3( 2.0f / leaf_count))
-    };
+               glm::vec3(0.5f, 0.5f, 0) + glm::vec3(2.0f / leaf_count))};
 
     glm::vec3 chunkCenter = chunk.get_center();
     auto cameraPosition = terrain.get_camera_position();
@@ -211,8 +210,11 @@ inline int MeshChunk::get_node_index_at(const glm::ivec3 &pos) const
 }
 
 bool MeshChunk::get_unique_neighbouring_vertices(const glm::ivec3 &pos, const std::vector<glm::ivec3> &offsets,
-                                                         std::vector<int> &result) const
+                                                 std::vector<int> &result) const
 {
+    result.clear();
+    result.reserve(offsets.size());
+
     for (const auto &o : offsets)
     {
         auto n = get_node_index_at(pos + o);
@@ -220,7 +222,17 @@ bool MeshChunk::get_unique_neighbouring_vertices(const glm::ivec3 &pos, const st
         {
             return false;
         }
-        if (std::find(result.begin(), result.end(), n) == result.end())
+        bool duplicate = false;
+        for (int existing : result)
+        {
+            if (existing == n)
+            {
+                duplicate = true;
+                break;
+            }
+        }
+
+        if (!duplicate)
             result.push_back(n);
     }
     return true;
@@ -228,28 +240,30 @@ bool MeshChunk::get_unique_neighbouring_vertices(const glm::ivec3 &pos, const st
 
 bool MeshChunk::get_neighbours(const glm::ivec3 &pos, std::vector<int> &result) const
 {
-    for (const auto &o : MeshChunk::Offsets)
+    result.resize(MeshChunk::Offsets.size());
+    for (size_t i = 0; i < MeshChunk::Offsets.size(); ++i)
     {
-        auto n = get_node_index_at(pos + o);
+        auto n = get_node_index_at(pos + MeshChunk::Offsets[i]);
         if (n < 0)
         {
             return false;
         }
-        result.push_back(n);
+        result[i] = n;
     }
     return true;
 }
 
 bool MeshChunk::get_ring_neighbours(const glm::ivec3 &pos, std::vector<int> &result) const
 {
-    for (const auto &o : MeshChunk::Offsets)
+    result.resize(MeshChunk::Offsets.size());
+    for (size_t i = 0; i < MeshChunk::Offsets.size(); ++i)
     {
-        auto it = _ringLut.find(pos + o); // Use find method
+        auto it = _ringLut.find(pos + MeshChunk::Offsets[i]); // Use find method
         if (it == _ringLut.end() || it->second < 0)
         {
             return false; // Value does not exist or is invalid
         }
-        result.push_back(it->second);
+        result[i] = it->second;
     }
     return true;
 }

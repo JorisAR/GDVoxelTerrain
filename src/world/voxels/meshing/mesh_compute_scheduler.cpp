@@ -5,6 +5,7 @@
 #include "dual_surface_extractor.h"
 // #include "stitched_dual_contouring.h"
 #include "voxel_octree_node.h"
+#include <memory>
 
 using namespace godot;
 
@@ -32,6 +33,9 @@ void MeshComputeScheduler::process(JarVoxelTerrain &terrain)
         if (ChunksToProcess.try_pop(tuple))
         {
             auto [node, chunkMeshData] = tuple;
+            std::unique_ptr<ExtractedMeshData> chunk_mesh_data_guard(chunkMeshData);
+            if (node == nullptr)
+                continue;
             node->update_chunk(terrain, chunkMeshData);
         }
     }
@@ -39,7 +43,7 @@ void MeshComputeScheduler::process(JarVoxelTerrain &terrain)
 
 void MeshComputeScheduler::process_queue(JarVoxelTerrain &terrain)
 {
-    while (!ChunksToAdd.empty())
+    while (_activeTasks.load(std::memory_order_relaxed) < _maxConcurrentTasks && !ChunksToAdd.empty())
     {
         VoxelOctreeNode *chunk;
         if (ChunksToAdd.try_pop(chunk))
@@ -55,29 +59,34 @@ void MeshComputeScheduler::run_task(const JarVoxelTerrain &terrain, VoxelOctreeN
 {
     if (!chunk.is_chunk(terrain))
         return;
-    threadPool.enqueue([this, &terrain, &chunk]() {
-        // auto meshCompute = AdaptiveSurfaceNets(terrain, chunk);
-        MeshExtractor* meshCompute;
+
+    _activeTasks.fetch_add(1, std::memory_order_relaxed);
+
+    threadPool.enqueue([this, &terrain, &chunk]()
+                       {
+        std::unique_ptr<MeshExtractor> meshCompute;
         switch (_meshAlgorithm)
         {
         case MeshAlgorithm::STITCHED_DUAL_CONTOURING:
             // meshCompute = new StitchedDualContouring(terrain);
             break;
+        case MeshAlgorithm::STITCHED_SURFACE_NETS:
         default:
-        case MeshAlgorithm::STITCHED_SURFACE_NETS:            
-            meshCompute = new DualSurfaceExtractor(terrain);
+            meshCompute = std::make_unique<DualSurfaceExtractor>(terrain);
             break;
         }
-        auto chunkMeshData = meshCompute->generate_mesh_data(terrain, chunk);
+
+        ExtractedMeshData *chunkMeshData = nullptr;
+        if (meshCompute)
+            chunkMeshData = meshCompute->generate_mesh_data(terrain, chunk);
+
         ChunksToProcess.push(std::make_pair(&(chunk), chunkMeshData));
-        _activeTasks--;
-        delete meshCompute;
-    });
+        _activeTasks.fetch_sub(1, std::memory_order_relaxed); });
 }
 
 void MeshComputeScheduler::clear_queue()
 {
-    //if we readd this, ensure to unenqueue all nodes!
-    // ChunksToAdd.clear();
-    // ChunksToProcess.clear();
+    // if we readd this, ensure to unenqueue all nodes!
+    //  ChunksToAdd.clear();
+    //  ChunksToProcess.clear();
 }

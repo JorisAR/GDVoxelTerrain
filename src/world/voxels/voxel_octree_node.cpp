@@ -58,10 +58,10 @@ void VoxelOctreeNode::update_if_dirty()
         int alternative_material_index = 0;
         int solid_count = 0;
 
-        for (const auto &child : *_children) {       
+        for (const auto &child : *_children) {
             auto childValue = child->get_value();
             _value += childValue;
-            
+
             if (childValue < 0) {
                 solid_count++;
                 auto child_material_index = child->get_material_index();
@@ -71,7 +71,7 @@ void VoxelOctreeNode::update_if_dirty()
                     alternative_material_index = child_material_index;
             }
 
-            
+
             _normal += child->get_normal();
         }
 
@@ -145,7 +145,7 @@ void VoxelOctreeNode::mark_materialized()
     }
 }
 
-inline bool VoxelOctreeNode::is_materialized()
+bool VoxelOctreeNode::is_materialized()
 {
     // return false;
     return _isMaterialized == 0b11111111;
@@ -156,22 +156,22 @@ JarVoxelChunk *VoxelOctreeNode::get_chunk() const
     return _chunk;
 }
 
-inline bool VoxelOctreeNode::is_chunk(const JarVoxelTerrain &terrain) const
+bool VoxelOctreeNode::is_chunk(const JarVoxelTerrain &terrain) const
 {
     return _sizeLog2 == (LoD + terrain.get_chunk_size_log2());
 }
 
-inline bool VoxelOctreeNode::is_above_chunk(const JarVoxelTerrain &terrain) const
+bool VoxelOctreeNode::is_above_chunk(const JarVoxelTerrain &terrain) const
 {
     return _sizeLog2 > (LoD + terrain.get_chunk_size_log2());
 }
 
-inline bool VoxelOctreeNode::is_above_min_chunk(const JarVoxelTerrain &terrain) const
+bool VoxelOctreeNode::is_above_min_chunk(const JarVoxelTerrain &terrain) const
 {
     return _sizeLog2 > (terrain.get_chunk_size_log2());
 }
 
-inline bool VoxelOctreeNode::is_one_above_chunk(const JarVoxelTerrain &terrain) const
+bool VoxelOctreeNode::is_one_above_chunk(const JarVoxelTerrain &terrain) const
 {
     return _sizeLog2 == (LoD + terrain.get_chunk_size_log2() + 1);
 }
@@ -227,15 +227,15 @@ bool VoxelOctreeNode::is_any_children_enqueued() const
     return false;
 }
 
-inline bool VoxelOctreeNode::should_delete_chunk(const JarVoxelTerrain &terrain) const
+bool VoxelOctreeNode::should_delete_chunk(const JarVoxelTerrain &terrain) const
 {
     return false;
 }
 
 inline uint16_t VoxelOctreeNode::compute_boundaries(const JarVoxelTerrain &terrain) const
 {
-    static const std::vector<glm::vec3> offsets = {glm::vec3(1, 0, 0),  glm::vec3(-1, 0, 0), glm::vec3(0, 1, 0),
-                                                   glm::vec3(0, -1, 0), glm::vec3(0, 0, 1),  glm::vec3(0, 0, -1)};
+    static const std::vector<glm::vec3> offsets = {glm::vec3(1, 0, 0), glm::vec3(-1, 0, 0), glm::vec3(0, 1, 0),
+                                                   glm::vec3(0, -1, 0), glm::vec3(0, 0, 1), glm::vec3(0, 0, -1)};
 
     uint16_t boundaries = 0;
     const float el = edge_length(terrain.get_octree_scale());
@@ -321,7 +321,7 @@ void VoxelOctreeNode::modify_sdf_in_bounds(JarVoxelTerrain &terrain, const Modif
         glm::vec3 old_normal = get_normal();
         glm::vec3 sdf_normal = settings.sdf->normal(settings.to_local(_center));
         new_value = SDF::apply_operation(settings.operation, old_value, old_normal, sdf_value, sdf_normal,
-                             settings.smooth_k, new_normal, blend_factor);
+                                         settings.smooth_k, new_normal, blend_factor);
     }
     else
     {

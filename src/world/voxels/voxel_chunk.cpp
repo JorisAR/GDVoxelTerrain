@@ -71,12 +71,12 @@ void JarVoxelChunk::set_lod(int p_lod)
     lod = p_lod;
 }
 
-uint8_t JarVoxelChunk::get_boundaries() const
+uint16_t JarVoxelChunk::get_boundaries() const
 {
     return boundaries;
 }
 
-void JarVoxelChunk::set_boundaries(uint8_t p_h2lboundaries)
+void JarVoxelChunk::set_boundaries(uint16_t p_h2lboundaries)
 {
     boundaries = p_h2lboundaries;
 }
@@ -144,7 +144,6 @@ void JarVoxelChunk::set_material(Ref<ShaderMaterial> p_material)
 void JarVoxelChunk::update_chunk(JarVoxelTerrain &terrain, VoxelOctreeNode *node, ExtractedMeshData *chunk_mesh_data)
 {
     _terrain = &terrain;
-    _chunk_mesh_data = chunk_mesh_data;
     array_mesh = Ref<ArrayMesh>(Object::cast_to<ArrayMesh>(*mesh_instance->get_mesh()));
     concave_polygon_shape =
         Ref<ConcavePolygonShape3D>(Object::cast_to<ConcavePolygonShape3D>(*collision_shape->get_shape()));
@@ -171,9 +170,11 @@ void JarVoxelChunk::update_chunk(JarVoxelTerrain &terrain, VoxelOctreeNode *node
             {
                 mesh_instance->set_surface_override_material(i, terrain.get_materials()[material_index]);
             }
-            else use_materials = false;
+            else
+                use_materials = false;
         }
-        else use_materials = false;        
+        else
+            use_materials = false;
     }
     if (use_materials) // if so, clear override
         mesh_instance->set_material_override(nullptr);
@@ -182,13 +183,20 @@ void JarVoxelChunk::update_chunk(JarVoxelTerrain &terrain, VoxelOctreeNode *node
 
     if (generate_collider)
     {
-        // collision_shape->set_disabled(!chunk_mesh_data->has_collision_mesh());
-        // concave_polygon_shape->set_faces(chunk_mesh_data.create_collision_mesh());
-        terrain.enqueue_chunk_collider(node);
+        _collision_mesh_faces = chunk_mesh_data->create_collision_mesh();
+        if (_collision_mesh_faces.is_empty())
+        {
+            collision_shape->set_disabled(true);
+        }
+        else
+        {
+            terrain.enqueue_chunk_collider(node);
+        }
     }
     else
     {
         collision_shape->set_disabled(true);
+        _collision_mesh_faces = PackedVector3Array();
     }
 
     // generate details
@@ -233,9 +241,13 @@ void JarVoxelChunk::update_chunk(JarVoxelTerrain &terrain, VoxelOctreeNode *node
 
 void JarVoxelChunk::update_collision_mesh()
 {
-    // if(is_queued_for_deletion()) return;
+    if (_collision_mesh_faces.is_empty())
+    {
+        collision_shape->set_disabled(true);
+        return;
+    }
     collision_shape->set_disabled(false);
-    concave_polygon_shape->set_faces(_chunk_mesh_data->create_collision_mesh());
+    concave_polygon_shape->set_faces(_collision_mesh_faces);
 }
 
 void JarVoxelChunk::delete_chunk()
