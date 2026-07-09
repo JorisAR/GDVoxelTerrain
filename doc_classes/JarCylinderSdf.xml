@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="JarCylinderSdf" inherits="JarSignedDistanceField" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
+	<brief_description>
+		A signed distance field (SDF) capped cylinder primitive.
+	</brief_description>
+	<description>
+		Represents a capped cylinder as a signed distance field, standing along the Y axis. Defined by a center, a radius, and a full height (centered on [member center]). Combine with [JarTransformSdf] to orient it differently, or subtract it with [JarOperationSdf] to bore straight shafts and tunnels.
+	</description>
+	<tutorials>
+	</tutorials>
+	<members>
+		<member name="center" type="Vector3" setter="set_center" getter="get_center" default="Vector3(0, 0, 0)">
+			The origin point of the cylinder in 3D space.
+		</member>
+		<member name="radius" type="float" setter="set_radius" getter="get_radius" default="1.0">
+			The radius of the cylinder.
+		</member>
+		<member name="height" type="float" setter="set_height" getter="get_height" default="2.0">
+			The full height of the cylinder along the Y axis, centered on [member center].
+		</member>
+	</members>
+</class>

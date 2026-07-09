@@ -47,11 +47,17 @@ class JarSignedDistanceField : public Resource
 
     virtual float distance(const glm::vec3 &pos) const = 0;
 
+    // GDScript-friendly wrapper: query the field at a world position.
+    // Negative = inside the surface, positive = outside, 0 = on it.
+    float sample(const Vector3 &pos) const
+    {
+        return distance(glm::vec3(pos.x, pos.y, pos.z));
+    }
+
   protected:
     static void _bind_methods()
     {
-        // Binding methods for Godot        
-
+        ClassDB::bind_method(D_METHOD("sample", "position"), &JarSignedDistanceField::sample);
     }
 };
 

@@ -52,15 +52,15 @@ int JarVoxelLoD::desired_lod(const VoxelOctreeNode &node)
 }
 
 
-inline float JarVoxelLoD::lod_to_grid_size(const int lod) const {
+float JarVoxelLoD::lod_to_grid_size(const int lod) const {
     return (1 << (long)(lod + 1)) * _octreeScale; // should be times octreescale?
 }
 
-inline glm::vec3 JarVoxelLoD::snap_to_grid(const glm::vec3 pos, const float grid_size) const {
+glm::vec3 JarVoxelLoD::snap_to_grid(const glm::vec3 pos, const float grid_size) const {
     return floor(pos / grid_size) * grid_size;
 }
 
-inline bool JarVoxelLoD::is_in_lod_shell(int lod, glm::vec3 pos, glm::vec3 cam_pos) const
+bool JarVoxelLoD::is_in_lod_shell(int lod, glm::vec3 pos, glm::vec3 cam_pos) const
 {
     float grid_size = lod_to_grid_size(lod) * 2.0;
     glm::vec3 lod_cam_pos = snap_to_grid(cam_pos, grid_size);
@@ -69,7 +69,7 @@ inline bool JarVoxelLoD::is_in_lod_shell(int lod, glm::vec3 pos, glm::vec3 cam_p
     return dist < (grid_size * _shellSize);
 }
 
-inline int JarVoxelLoD::lod_at(const glm::vec3 &position) const {
+int JarVoxelLoD::lod_at(const glm::vec3 &position) const {
     constexpr float rChunksize = 1.0f / 16.0f;
     glm::vec3 pos = position * rChunksize;
     glm::vec3 cam_pos = _cameraPosition * rChunksize;

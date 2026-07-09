@@ -2,6 +2,7 @@
 #include "modify_settings.h"
 #include "plane_sdf.h"
 #include "sphere_sdf.h"
+#include "voxel_chunk.h"
 
 void JarVoxelTerrain::_bind_methods()
 {
@@ -55,6 +56,11 @@ void JarVoxelTerrain::_bind_methods()
     ADD_PROPERTY(PropertyInfo(Variant::INT, "performance_updated_colliders_per_second"),
                  "set_updated_colliders_per_second", "get_updated_colliders_per_second");
 
+    ClassDB::bind_method(D_METHOD("get_collider_distance"), &JarVoxelTerrain::get_collider_distance);
+    ClassDB::bind_method(D_METHOD("set_collider_distance", "value"), &JarVoxelTerrain::set_collider_distance);
+    ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "performance_collider_distance", PROPERTY_HINT_RANGE, "0,4096,1,or_greater"),
+                 "set_collider_distance", "get_collider_distance");
+
     // -------------------------------------------------- LOD --------------------------------------------------
     ADD_GROUP("Level Of Detail", "lod_");
     ClassDB::bind_method(D_METHOD("get_lod_level_count"), &JarVoxelTerrain::get_lod_level_count);
@@ -102,6 +108,85 @@ void JarVoxelTerrain::_bind_methods()
 JarVoxelTerrain::JarVoxelTerrain() : _octreeScale(1.0f), _size(14), _playerNode(nullptr)
 {
     _chunkSize = (1 << _minChunkSize);
+}
+
+JarVoxelTerrain::~JarVoxelTerrain()
+{
+    stop_build_worker();
+}
+
+// Persistent worker: sleeps until a build is requested, runs one octree build,
+// then sleeps again. One thread for the terrain's whole lifetime instead of a
+// fresh detached thread per build.
+void JarVoxelTerrain::build_worker()
+{
+    for (;;)
+    {
+        {
+            std::unique_lock<std::mutex> lock(_buildMutex);
+            _buildCv.wait(lock, [this] { return _buildRequested || _buildShutdown; });
+            if (_buildShutdown)
+                return;
+            _buildRequested = false;
+        }
+        if (_voxelRoot)
+            _voxelRoot->build(*this);
+        _isBuilding = false;
+    }
+}
+
+// Signal the worker to stop and JOIN it, so no build is in flight once the
+// terrain (and its octree) start being destroyed. Fixes the shutdown SIGSEGV.
+void JarVoxelTerrain::stop_build_worker()
+{
+    {
+        std::lock_guard<std::mutex> lock(_buildMutex);
+        _buildShutdown = true;
+    }
+    _buildCv.notify_all();
+    if (_buildThread.joinable())
+        _buildThread.join();
+}
+
+// --- chunk object pool ------------------------------------------------------
+// Main thread: reuse a parked chunk if one is free, else instantiate a new one.
+JarVoxelChunk *JarVoxelTerrain::pool_acquire()
+{
+    if (!_freeChunks.empty())
+    {
+        JarVoxelChunk *c = _freeChunks.back();
+        _freeChunks.pop_back();
+        c->reactivate();
+        return c;
+    }
+    JarVoxelChunk *c = static_cast<JarVoxelChunk *>(_chunkScene->instantiate());
+    add_child(c);
+    return c;
+}
+
+// Thread-safe (called from the build worker): just queue the chunk. The actual
+// scene-tree work (hide/disable) happens on the main thread in process_pool().
+void JarVoxelTerrain::pool_release(JarVoxelChunk *chunk)
+{
+    if (chunk == nullptr)
+        return;
+    std::lock_guard<std::mutex> lock(_poolMutex);
+    _releasedChunks.push_back(chunk);
+}
+
+// Main thread: park released chunks (hide + collision off) and pool them.
+void JarVoxelTerrain::process_pool()
+{
+    std::vector<JarVoxelChunk *> released;
+    {
+        std::lock_guard<std::mutex> lock(_poolMutex);
+        released.swap(_releasedChunks);
+    }
+    for (JarVoxelChunk *c : released)
+    {
+        c->deactivate();
+        _freeChunks.push_back(c);
+    }
 }
 
 void JarVoxelTerrain::modify(const Ref<JarSignedDistanceField> sdf, const SDF::Operation operation,
@@ -256,6 +341,20 @@ void JarVoxelTerrain::set_updated_colliders_per_second(int value)
 {
     _updatedCollidersPerSecond = value;
 }
+float JarVoxelTerrain::get_collider_distance() const
+{
+    return _colliderDistance;
+}
+void JarVoxelTerrain::set_collider_distance(float value)
+{
+    _colliderDistance = value;
+}
+bool JarVoxelTerrain::is_in_collider_range(const glm::vec3 &pos) const
+{
+    if (_colliderDistance <= 0.0f)
+        return true; // disabled -> original behaviour (collider on every near-LOD chunk)
+    return glm::distance(pos, _voxelLod.get_camera_position()) <= _colliderDistance;
+}
 
 int JarVoxelTerrain::get_lod_level_count() const
 {
@@ -342,14 +441,27 @@ void JarVoxelTerrain::initialize()
     _meshComputeScheduler = std::make_unique<MeshComputeScheduler>(_maxConcurrentTasks);
     _voxelRoot = std::make_unique<VoxelOctreeNode>(_size);
     //_populationRoot = memnew(PopulationOctreeNode(_size));
+    if (!_buildThread.joinable())
+        _buildThread = std::thread([this] { build_worker(); });
     build();
 }
 
 void JarVoxelTerrain::process()
 {
+    // While a build thread owns the octree (_isBuilding), NO main-thread tree
+    // access may run — meshing dispatch, modify queue, and chunk queue all touch
+    // the same nodes the worker is mutating. Letting any of them run concurrently
+    // was the heap-corruption / nondeterministic-SIGSEGV race. So bail the whole
+    // frame until the build finishes.
+    if (_isBuilding)
+        return;
+    process_pool(); // reclaim chunks the last build released, ready for reuse
     float delta = get_process_delta_time();
-    if (!_isBuilding && !_meshComputeScheduler->is_meshing() && _voxelLod.process(*this, false))
-        build();
+    if (!_meshComputeScheduler->is_meshing() && _voxelLod.process(*this, false))
+    {
+        build();  // spawns the build worker (sets _isBuilding); resume next frame
+        return;
+    }
     _meshComputeScheduler->process(*this);
 
     if (!_modifySettingsQueue.empty())
@@ -377,17 +489,27 @@ void printUniqueLoDValues(const std::vector<int> &lodValues)
 
 void JarVoxelTerrain::build()
 {
-    if (_isBuilding || _meshComputeScheduler->is_meshing())
+    // The octree build walks/mutates the shared tree on a worker thread. It must
+    // NOT overlap (a) another build, or (b) the meshing pool that reads the same
+    // nodes -> otherwise: heap corruption / nondeterministic SIGSEGV.
+    //  - (a) is prevented by claiming _isBuilding atomically BEFORE spawning
+    //        (was set inside the thread => TOCTOU window => 2nd racing build).
+    //  - (b) is prevented by gating _meshComputeScheduler->process() on
+    //        !_isBuilding in process(), so meshing only runs once a build is done.
+    if (_meshComputeScheduler->is_meshing())
         return;
-    std::thread([this]() {
-        // UtilityFunctions::print("start building");
-        _isBuilding = true;
+    bool expected = false;
+    if (!_isBuilding.compare_exchange_strong(expected, true))
+        return; // a build is already in flight
 
-        //_meshComputeScheduler->clear_queue();
-        _voxelRoot->build(*this);
-        _isBuilding = false;
-        // UtilityFunctions::print("Stop Building");
-    }).detach();
+    // Hand the work to the persistent build worker (see build_worker()). It is
+    // joined on destruction, so unlike the old detach()ed thread it can't be left
+    // running while the terrain is torn down.
+    {
+        std::lock_guard<std::mutex> lock(_buildMutex);
+        _buildRequested = true;
+    }
+    _buildCv.notify_one();
 
     // std::thread([this]() { _worldBiomes->update_texture(_levelOfDetail->get_camera_position()); }).detach();
     // UtilityFunctions::print("Done Building.");

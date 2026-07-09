@@ -10,4 +10,13 @@
 	</description>
 	<tutorials>
 	</tutorials>
+	<methods>
+		<method name="sample" qualifiers="const">
+			<return type="float" />
+			<param index="0" name="position" type="Vector3" />
+			<description>
+				Evaluates the signed distance field at [param position]. Returns a negative value inside the surface, a positive value outside, and [code]0.0[/code] on the surface — useful from scripts, e.g. to check whether a point is underground.
+			</description>
+		</method>
+	</methods>
 </class>

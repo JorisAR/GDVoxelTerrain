@@ -292,13 +292,13 @@ std::vector<std::vector<int>> StitchedSurfaceNets::find_ring_nodes(const glm::iv
 }
 
 //I'd rather not base the winding order on the normal, but it works for now. Only required for the edge chunk.
-inline void StitchedSurfaceNets::add_tri_fix_normal(int n0, int n1, int n2)
+void StitchedSurfaceNets::add_tri_fix_normal(int n0, int n1, int n2)
 {
     godot::Vector3 normal = (_verts[n1] - _verts[n0]).cross(_verts[n2] - _verts[n0]);
     add_tri(n0, n1, n2, normal.dot(_normals[n0]) > 0);
 }
 
-inline void StitchedSurfaceNets::add_tri(int n0, int n1, int n2, bool flip)
+void StitchedSurfaceNets::add_tri(int n0, int n1, int n2, bool flip)
 {
     if (!flip)
     {

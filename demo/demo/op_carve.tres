@@ -1,0 +1,13 @@
+[gd_resource type="JarOperationSdf" load_steps=3 format=3]
+
+[ext_resource type="JarSignedDistanceField" path="res://demo/terrain_sdf.tres" id="1_base"]
+
+[sub_resource type="JarSphereSdf" id="carve"]
+center = Vector3(0, 30, 0)
+radius = 80.0
+
+[resource]
+sdf_a = ExtResource("1_base")
+sdf_b = SubResource("carve")
+operation = 1
+smoothness = 1.0

@@ -75,6 +75,9 @@
 		<member name="octree_scale" type="float" setter="set_octree_scale" getter="get_octree_scale" default="1.0">
 			Scaling factor for the octree used in terrain chunk management and LOD computation.
 		</member>
+		<member name="performance_collider_distance" type="float" setter="set_collider_distance" getter="get_collider_distance" default="0.0">
+			When greater than [code]0.0[/code], physics colliders are only generated for chunks within this distance of the camera, on top of the usual LOD-based collider rules. Since collider generation is one of the most expensive parts of chunk updates, this can be a large performance win. Set it comfortably larger than the range at which physics interactions are needed. [code]0.0[/code] disables the distance cull (original behaviour).
+		</member>
 		<member name="performance_max_concurrent_tasks" type="int" setter="set_max_concurrent_tasks" getter="get_max_concurrent_tasks" default="12">
 			Limits how many concurrent tasks (e.g. chunk loading, LOD updates) can run simultaneously. Helps manage CPU load.
 		</member>

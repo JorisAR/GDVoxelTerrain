@@ -52,3 +52,10 @@ Thumbs.db
 desktop.ini
 vc140.pdb
 src/**/*.obj
+
+# SCons object files and generated sources
+*.os
+src/gen/
+
+# Godot 4 per-project cache
+demo/.godot/

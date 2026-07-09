@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="JarCapsuleSdf" inherits="JarSignedDistanceField" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
+	<brief_description>
+		A signed distance field (SDF) capsule primitive.
+	</brief_description>
+	<description>
+		Represents a capsule (a cylinder with rounded ends) as a signed distance field, defined by two endpoints and a radius. Because the endpoints can be placed freely, no extra transform is needed to orient it — useful for pillars, pipes, or carving rounded tunnels between two points with [JarOperationSdf].
+	</description>
+	<tutorials>
+	</tutorials>
+	<members>
+		<member name="point_a" type="Vector3" setter="set_point_a" getter="get_point_a" default="Vector3(0, -1, 0)">
+			The first endpoint of the capsule's axis.
+		</member>
+		<member name="point_b" type="Vector3" setter="set_point_b" getter="get_point_b" default="Vector3(0, 1, 0)">
+			The second endpoint of the capsule's axis.
+		</member>
+		<member name="radius" type="float" setter="set_radius" getter="get_radius" default="0.5">
+			The radius of the capsule around its axis.
+		</member>
+	</members>
+</class>

@@ -1,5 +1,10 @@
 #include "register_types.h"
 #include "box_sdf.h"
+#include "capsule_sdf.h"
+#include "cylinder_sdf.h"
+#include "operation_sdf.h"
+#include "torus_sdf.h"
+#include "transform_sdf.h"
 #include "planar_world.h"
 #include "plane_sdf.h"
 #include "planet_sdf.h"
@@ -24,6 +29,11 @@ void initialize_jar_voxel_terrain_module(ModuleInitializationLevel p_level)
         GDREGISTER_CLASS(JarPlaneSdf);
         GDREGISTER_CLASS(JarTerrainSdf);
         GDREGISTER_CLASS(JarPlanetSdf);
+        GDREGISTER_CLASS(JarOperationSdf);
+        GDREGISTER_CLASS(JarTorusSdf);
+        GDREGISTER_CLASS(JarCylinderSdf);
+        GDREGISTER_CLASS(JarCapsuleSdf);
+        GDREGISTER_CLASS(JarTransformSdf);
 
         // WORLD
         GDREGISTER_ABSTRACT_CLASS(JarWorld);

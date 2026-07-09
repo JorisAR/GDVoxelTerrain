@@ -103,7 +103,7 @@ void VoxelOctreeNode::mark_materialized()
     }
 }
 
-inline bool VoxelOctreeNode::is_materialized()
+bool VoxelOctreeNode::is_materialized()
 {
     // return false;
     return _isMaterialized == 0b11111111;
@@ -114,22 +114,22 @@ JarVoxelChunk *VoxelOctreeNode::get_chunk() const
     return _chunk;
 }
 
-inline bool VoxelOctreeNode::is_chunk(const JarVoxelTerrain &terrain) const
+bool VoxelOctreeNode::is_chunk(const JarVoxelTerrain &terrain) const
 {
     return _size == (LoD + terrain.get_min_chunk_size());
 }
 
-inline bool VoxelOctreeNode::is_above_chunk(const JarVoxelTerrain &terrain) const
+bool VoxelOctreeNode::is_above_chunk(const JarVoxelTerrain &terrain) const
 {
     return _size > (LoD + terrain.get_min_chunk_size());
 }
 
-inline bool VoxelOctreeNode::is_above_min_chunk(const JarVoxelTerrain &terrain) const
+bool VoxelOctreeNode::is_above_min_chunk(const JarVoxelTerrain &terrain) const
 {
     return _size > (terrain.get_min_chunk_size());
 }
 
-inline bool VoxelOctreeNode::is_one_above_chunk(const JarVoxelTerrain &terrain) const
+bool VoxelOctreeNode::is_one_above_chunk(const JarVoxelTerrain &terrain) const
 {
     return _size == (LoD + terrain.get_min_chunk_size() + 1);
 }
@@ -185,12 +185,12 @@ bool VoxelOctreeNode::is_any_children_enqueued() const
     return false;
 }
 
-inline bool VoxelOctreeNode::should_delete_chunk(const JarVoxelTerrain &terrain) const
+bool VoxelOctreeNode::should_delete_chunk(const JarVoxelTerrain &terrain) const
 {
     return false;
 }
 
-inline uint16_t VoxelOctreeNode::compute_boundaries(const JarVoxelTerrain &terrain) const
+uint16_t VoxelOctreeNode::compute_boundaries(const JarVoxelTerrain &terrain) const
 {
     static const std::vector<glm::vec3> offsets = {glm::vec3(1, 0, 0), glm::vec3(-1, 0, 0),
         glm::vec3(0, 1, 0), glm::vec3(0, -1, 0),
@@ -307,8 +307,7 @@ void VoxelOctreeNode::update_chunk(JarVoxelTerrain &terrain, ChunkMeshData *chun
 
     if (_chunk == nullptr)
     {
-        _chunk = static_cast<JarVoxelChunk *>(terrain.get_chunk_scene()->instantiate());
-        terrain.add_child(_chunk);
+        _chunk = terrain.pool_acquire(); // reuse a pooled chunk, or instantiate one
     }
 
     _chunk->update_chunk(terrain, this, chunkMeshData);
@@ -329,8 +328,13 @@ void VoxelOctreeNode::delete_chunk()
 
     if (_chunk != nullptr)
     {
-        // JarVoxelTerrain::RemoveChunk(_chunk);
-        _chunk->queue_free();
+        // Return the chunk to its owning terrain's pool for reuse instead of
+        // freeing it (thread-safe; called from the build worker). The chunk's
+        // parent is always the terrain that acquired it.
+        if (JarVoxelTerrain *t = Object::cast_to<JarVoxelTerrain>(_chunk->get_parent()))
+            t->pool_release(_chunk);
+        else
+            _chunk->queue_free();
     }
     _chunk = nullptr;
 }
@@ -393,7 +397,7 @@ void VoxelOctreeNode::get_voxel_leaves_in_bounds_excluding_bounds(const JarVoxel
         child->get_voxel_leaves_in_bounds_excluding_bounds(terrain, acceptance_bounds, rejection_bounds, LOD, result);
 }
 
-inline std::unique_ptr<VoxelOctreeNode> VoxelOctreeNode::create_child_node(const glm::vec3 &center, int size)
+std::unique_ptr<VoxelOctreeNode> VoxelOctreeNode::create_child_node(const glm::vec3 &center, int size)
 {
     return std::make_unique<VoxelOctreeNode>(this, center, size);
 }
