@@ -20,10 +20,10 @@ linux.debug.arm64 = "res://addons/jar_voxel_terrain/bin/libjar_voxel_terrain.lin
 linux.release.arm64 = "res://addons/jar_voxel_terrain/bin/libjar_voxel_terrain.linux.template_release.arm64.so"
 linux.debug.rv64 = "res://addons/jar_voxel_terrain/bin/libjar_voxel_terrain.linux.template_debug.rv64.so"
 linux.release.rv64 = "res://addons/jar_voxel_terrain/bin/libjar_voxel_terrain.linux.template_release.rv64.so"
-android.debug.x86_64 = "res://addons/jar_voxel_terrain/bin/jar_voxel_terrain.android.template_debug.x86_64.so"
-android.release.x86_64 = "res://addons/jar_voxel_terrain/bin/jar_voxel_terrain.android.template_release.x86_64.so"
-android.debug.arm64 = "res://addons/jar_voxel_terrain/bin/jar_voxel_terrain.android.template_debug.arm64.so"
-android.release.arm64 = "res://addons/jar_voxel_terrain/bin/jar_voxel_terrain.android.template_release.arm64.so"
+android.debug.x86_64 = "res://addons/jar_voxel_terrain/bin/libjar_voxel_terrain.android.template_debug.x86_64.so"
+android.release.x86_64 = "res://addons/jar_voxel_terrain/bin/libjar_voxel_terrain.android.template_release.x86_64.so"
+android.debug.arm64 = "res://addons/jar_voxel_terrain/bin/libjar_voxel_terrain.android.template_debug.arm64.so"
+android.release.arm64 = "res://addons/jar_voxel_terrain/bin/libjar_voxel_terrain.android.template_release.arm64.so"
 
 [icons]
 JarVoxelTerrain = "res://addons/jar_voxel_terrain/icons/terrain.svg"
