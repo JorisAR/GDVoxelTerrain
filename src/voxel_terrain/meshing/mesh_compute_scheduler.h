@@ -3,7 +3,10 @@
 
 #include "voxel_octree_node.h"
 #include <atomic>
-#ifdef _WIN32
+// <concurrent_queue.h> ships with the MSVC ConcRT/PPL runtime only. Key the
+// guard on the *compiler* (_MSC_VER), not the OS: mingw defines _WIN32 but is
+// GCC and has no such header, so it must take the portable path too.
+#ifdef _MSC_VER
 #include <concurrent_queue.h>
 #include <concurrent_priority_queue.h>
 #else
