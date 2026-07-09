@@ -24,13 +24,16 @@ class JarVoxelLoD
     int _shellSize = 2;
     bool _automaticUpdate = true;
 
-    int _maxChunkSize;
-    float _autoMeshCoolDown;
-    glm::vec3 _cameraPosition;
+    int _maxChunkSize = 10; // was UNINITIALISED and never assigned anywhere ->
+                            // garbage made desired_lod() force LOD 0 on every node,
+                            // subdividing the whole tree to max detail => the
+                            // "infinite" build / nondeterministic crash on Linux.
+    float _autoMeshCoolDown = 0.0f;
+    glm::vec3 _cameraPosition = glm::vec3(0.0f);
 
-    inline float lod_to_grid_size(const int lod) const;
-    inline glm::vec3 snap_to_grid(const glm::vec3 pos, const float grid_size) const;
-    inline bool is_in_lod_shell(int lod, glm::vec3 pos, glm::vec3 cam_pos) const;
+    float lod_to_grid_size(const int lod) const;
+    glm::vec3 snap_to_grid(const glm::vec3 pos, const float grid_size) const;
+    bool is_in_lod_shell(int lod, glm::vec3 pos, glm::vec3 cam_pos) const;
 
   protected:
     

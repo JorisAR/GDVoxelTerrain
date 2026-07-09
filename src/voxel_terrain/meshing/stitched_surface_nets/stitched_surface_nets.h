@@ -34,8 +34,8 @@ class StitchedSurfaceNets
     const bool _cubicVoxels;
     StitchedMeshChunk _meshChunk;
 
-    inline void add_tri(int n0, int n1, int n2, bool flip);
-    inline void add_tri_fix_normal(int n0, int n1, int n2);
+    void add_tri(int n0, int n1, int n2, bool flip);
+    void add_tri_fix_normal(int n0, int n1, int n2);
     void create_vertex(const int node_id, const std::vector<int> &neighbours, const bool on_ring);
     std::vector<std::vector<int>> find_ring_nodes(const glm::ivec3 &pos, const int face) const;    
 

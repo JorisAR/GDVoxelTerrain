@@ -1,10 +1,20 @@
 name: 🛠️ Builds
+
 on:
+  push:
+    branches: [main, master]
+  pull_request:
   release:
     types: [created]
+  workflow_dispatch:
 
 permissions:
   contents: write
+
+# Cancel superseded runs on the same ref.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   build:
@@ -27,60 +37,68 @@ jobs:
             platform: linux
             arch: x86_64
           - identifier: windows-debug-x86_64
-            name: Windows Debug x86_64
+            name: Windows Debug x86_64 (mingw)
             runner: ubuntu-22.04
             target: template_debug
             platform: windows
             arch: x86_64
           - identifier: windows-release-x86_64
-            name: Windows Release x86_64
+            name: Windows Release x86_64 (mingw)
             runner: ubuntu-22.04
             target: template_release
             platform: windows
             arch: x86_64
-          - identifier: android-debug-arm64v8
-            name: Android Debug arm64v8
+          - identifier: macos-debug
+            name: macOS Debug (universal)
+            runner: macos-latest
+            target: template_debug
+            platform: macos
+            arch: universal
+          - identifier: macos-release
+            name: macOS Release (universal)
+            runner: macos-latest
+            target: template_release
+            platform: macos
+            arch: universal
+          - identifier: android-debug-arm64
+            name: Android Debug arm64
             runner: ubuntu-22.04
             target: template_debug
             platform: android
-            arch: arm64v8
-          - identifier: android-release-arm64v8
-            name: Android Release arm64v8
+            arch: arm64
+          - identifier: android-release-arm64
+            name: Android Release arm64
             runner: ubuntu-22.04
             target: template_release
             platform: android
-            arch: arm64v8
+            arch: arm64
 
     steps:
       - name: Checkout project
         uses: actions/checkout@v4
         with:
           submodules: recursive
-          fetch-depth: 0
 
-
-      - name: Install dependencies
+      - name: Install mingw (windows cross-compile)
+        if: ${{ matrix.platform == 'windows' }}
         run: |
           sudo apt-get update
-          sudo apt-get install -y zip
-      - name: Install mingw64
-        if: ${{ startsWith(matrix.identifier, 'windows-') }}
-        run: |
           sudo apt-get install -y mingw-w64
           sudo update-alternatives --set x86_64-w64-mingw32-gcc /usr/bin/x86_64-w64-mingw32-gcc-posix
           sudo update-alternatives --set x86_64-w64-mingw32-g++ /usr/bin/x86_64-w64-mingw32-g++-posix
-      - name: Install JDK 17
-        if: ${{ startsWith(matrix.identifier, 'android-') }}
-        uses: actions/setup-java@v3
+
+      - name: Install JDK 17 (android)
+        if: ${{ matrix.platform == 'android' }}
+        uses: actions/setup-java@v4
         with:
           java-version: 17
           distribution: temurin
 
       - name: Install Android SDK
-        if: ${{ startsWith(matrix.identifier, 'android-') }}
+        if: ${{ matrix.platform == 'android' }}
         uses: android-actions/setup-android@v3
 
-      - name: Install NDK r23c
+      - name: Install NDK r23c (android)
         if: ${{ matrix.platform == 'android' }}
         uses: nttld/setup-ndk@v1
         with:
@@ -88,14 +106,14 @@ jobs:
           link-to-sdk: true
 
       - name: Install Python and SCons
-        uses: actions/setup-python@v2
-
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
       - name: Install SCons
-        run: |
-          python -m pip install --upgrade pip
-          python -m pip install scons
+        run: python -m pip install scons
+
       - name: Set up SCons cache
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: |
             ${{ github.workspace }}/.scons-cache/
@@ -105,6 +123,7 @@ jobs:
           restore-keys: |
             ${{ matrix.identifier }}-${{ github.ref }}-
             ${{ matrix.identifier }}-
+
       - name: Compile extension
         shell: bash
         env:
@@ -112,31 +131,27 @@ jobs:
           SCONS_CACHE_LIMIT: 4096
         run: |
           scons target='${{ matrix.target }}' platform='${{ matrix.platform }}' arch='${{ matrix.arch }}' -j2
-          ls -l project/addons/*/bin/
+          echo "--- build output ---"
+          ls -l demo/addons/jar_voxel_terrain/bin/
 
-      - name: Prepare artifacts with project files
+      # Package + release only run for actual releases; push/PR just verify it compiles.
+      - name: Package addon
+        if: ${{ github.event_name == 'release' }}
         shell: bash
         run: |
-          PROJECT_DIR="${{ github.workspace }}/project"
-          ARTIFACT_DIR="${{ github.workspace }}/artifacts"
-          
-          # Copy root documentation to project directory
-          cp -v "${{ github.workspace }}/README.md" "$PROJECT_DIR/"
-          cp -v "${{ github.workspace }}/LICENSE" "$PROJECT_DIR/"
-
-          # Create platform-specific zip
-          mkdir -p "$ARTIFACT_DIR"
-          ZIP_NAME="${{ matrix.identifier }}.zip"
-          cd "$PROJECT_DIR"
-          zip -r "$ARTIFACT_DIR/$ZIP_NAME" .
+          mkdir -p artifacts
+          cp -v README.md LICENSE demo/addons/jar_voxel_terrain/ 2>/dev/null || true
+          ( cd demo && zip -r "${{ github.workspace }}/artifacts/${{ matrix.identifier }}.zip" addons/jar_voxel_terrain )
 
       - name: Upload artifact
+        if: ${{ github.event_name == 'release' }}
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.identifier }}
           path: ${{ github.workspace }}/artifacts/${{ matrix.identifier }}.zip
 
   release:
+    if: ${{ github.event_name == 'release' }}
     runs-on: ubuntu-22.04
     needs: build
     steps:
@@ -145,11 +160,10 @@ jobs:
         with:
           path: artifacts
 
-      - name: Create GitHub Release
+      - name: Attach binaries to the release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ github.ref_name }}  # Use existing tag from release creation
-          files: |
-            artifacts/*.zip
+          tag_name: ${{ github.ref_name }}
+          files: artifacts/**/*.zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

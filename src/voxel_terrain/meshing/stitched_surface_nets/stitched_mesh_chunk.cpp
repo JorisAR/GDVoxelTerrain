@@ -191,7 +191,7 @@ bool StitchedMeshChunk::on_positive_edge(const glm::ivec3 &position) const
            2;
 }
 
-inline int StitchedMeshChunk::get_node_index_at(const glm::ivec3 &pos) const
+int StitchedMeshChunk::get_node_index_at(const glm::ivec3 &pos) const
 {
     if (pos.x < 0 || pos.x >= ChunkRes || pos.y < 0 || pos.y >= ChunkRes || pos.z < 0 || pos.z >= ChunkRes)
         return -1;

@@ -26,7 +26,7 @@ class StitchedMeshChunk
 
     bool should_have_quad(const glm::ivec3 &position, const int face) const;
     bool on_positive_edge(const glm::ivec3 &position) const;
-    inline int get_node_index_at(const glm::ivec3 &pos) const;
+    int get_node_index_at(const glm::ivec3 &pos) const;
     bool get_unique_neighbouring_vertices(const glm::ivec3 &pos, const std::vector<glm::ivec3> &offsets,
                                           std::vector<int> &result) const;
 
@@ -41,7 +41,7 @@ class StitchedMeshChunk
         return _lodH2LBoundaries != 0 || _lodL2HBoundaries != 0;
     }
 
-    inline bool is_on_any_boundary(const glm::ivec3 &position) const
+    bool is_on_any_boundary(const glm::ivec3 &position) const
     {
         // return is_on_boundary(_lodL2HBoundaries, position);
         // // return is_on_boundary(_lodL2HBoundaries | _lodH2LBoundaries, position);
@@ -54,7 +54,7 @@ class StitchedMeshChunk
                                           position.z == 1 && (_lodH2LBoundaries & 0b100000) > 0);
     }
 
-    inline bool is_on_boundary(const uint8_t boundaries, const glm::ivec3 &position) const
+    bool is_on_boundary(const uint8_t boundaries, const glm::ivec3 &position) const
     {
         return boundaries != 0 &&
                (position.x == LargestPos && (boundaries & 0b1) > 0 || position.x == 0 && (boundaries & 0b10) > 0 ||

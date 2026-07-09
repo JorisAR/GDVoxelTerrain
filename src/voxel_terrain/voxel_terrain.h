@@ -8,6 +8,10 @@
 #include "voxel_lod.h"
 #include "world.h"
 #include "voxel_octree_node.h"
+#include <atomic>
+#include <condition_variable>
+#include <mutex>
+#include <thread>
 #include <godot_cpp/classes/engine.hpp>
 #include <godot_cpp/classes/fast_noise_lite.hpp>
 #include <godot_cpp/classes/mesh.hpp>
@@ -23,6 +27,8 @@
 #include <vector>
 
 using namespace godot;
+
+class JarVoxelChunk;
 
 class JarVoxelTerrain : public Node3D
 {
@@ -55,13 +61,37 @@ class JarVoxelTerrain : public Node3D
 
     Ref<PackedScene> _chunkScene;
 
-    bool _isBuilding = false;
+    std::atomic<bool> _isBuilding{false};
     int _chunkSize = 0;
     bool _cubicVoxels = false;
+
+    // One persistent, managed build worker (replaces per-build detached threads,
+    // which could not be joined and were still walking the octree at shutdown
+    // -> SIGSEGV on exit). Cleanly stopped + joined in the destructor.
+    std::thread _buildThread;
+    std::mutex _buildMutex;
+    std::condition_variable _buildCv;
+    bool _buildRequested = false; // guarded by _buildMutex
+    bool _buildShutdown = false;  // guarded by _buildMutex
+    void build_worker();
+    void stop_build_worker();
+
+    // Chunk object pool: reuse chunk nodes instead of instantiate()/free() for the
+    // thousands of chunks that stream in/out. Chunks are released on the build
+    // worker thread (thread-safe queue) and reclaimed/reused on the main thread.
+    std::vector<JarVoxelChunk *> _freeChunks;     // main-thread pool of reusable chunks
+    std::vector<JarVoxelChunk *> _releasedChunks; // worker pushes here; main drains
+    std::mutex _poolMutex;                        // guards _releasedChunks
+    void process_pool();                          // main thread: released -> deactivate -> free pool
 
     // PERFORMANCE
     int _maxConcurrentTasks = 12;
     int _updatedCollidersPerSecond = 128;
+    // Only generate physics colliders for chunks within this distance of the
+    // camera (0 = unlimited = original behaviour). Colliders are already LOD-
+    // limited; this further culls the ones the player can never touch, which is
+    // the expensive part. Set it a bit larger than lod_automatic_update_distance.
+    float _colliderDistance = 0.0f;
 
     // LOD
     JarVoxelLoD _voxelLod;
@@ -91,10 +121,16 @@ class JarVoxelTerrain : public Node3D
 
   public:
     JarVoxelTerrain();
+    ~JarVoxelTerrain();
+
+    // Chunk pool API (used by VoxelOctreeNode). acquire() runs on the main thread;
+    // release() is thread-safe (called from the build worker).
+    JarVoxelChunk *pool_acquire();
+    void pool_release(JarVoxelChunk *chunk);
 
     void modify(const Ref<JarSignedDistanceField> sdf, const SDF::Operation operation, const Vector3 &position,
-                const float radius);
-    void sphere_edit(const Vector3 &position, const float radius, bool operation_union);
+                const float radius, const int material = 0);
+    void sphere_edit(const Vector3 &position, const float radius, bool operation_union, const int material = 0);
 
     void spawn_debug_spheres_in_bounds(const Vector3 &position, const float range);
 
@@ -141,6 +177,11 @@ class JarVoxelTerrain : public Node3D
 
     int get_updated_colliders_per_second() const;
     void set_updated_colliders_per_second(int value);
+
+    float get_collider_distance() const;
+    void set_collider_distance(float value);
+    // True if a chunk at `pos` should get a collider under the distance cull.
+    bool is_in_collider_range(const glm::vec3 &pos) const;
 
     // LOD
 

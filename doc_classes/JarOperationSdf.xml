@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="JarOperationSdf" inherits="JarSignedDistanceField" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
+	<brief_description>
+		Combines two SDFs with a boolean operation (CSG).
+	</brief_description>
+	<description>
+		Evaluates two child SDFs and combines their distances with a constructive solid geometry (CSG) operation: union, subtraction, intersection, or their smooth variants.
+		This allows complex volumes to be authored purely as data — for example, subtracting a [JarSphereSdf] from a [JarTerrainSdf] carves a crater into the terrain, while a union merges shapes together. Operation SDFs can be nested (an operand may itself be another [JarOperationSdf]) to build arbitrarily complex shapes from simple primitives.
+		If only one operand is set, its distance is passed through unchanged. If neither is set, empty space is returned.
+	</description>
+	<tutorials>
+	</tutorials>
+	<members>
+		<member name="sdf_a" type="JarSignedDistanceField" setter="set_sdf_a" getter="get_sdf_a">
+			The first operand (the base shape).
+		</member>
+		<member name="sdf_b" type="JarSignedDistanceField" setter="set_sdf_b" getter="get_sdf_b">
+			The second operand. For subtraction, this is the shape that gets removed from [member sdf_a].
+		</member>
+		<member name="operation" type="int" setter="set_operation" getter="get_operation" default="0">
+			The boolean operation used to combine the operands: [code]0[/code] Union, [code]1[/code] Subtraction ([member sdf_a] minus [member sdf_b]), [code]2[/code] Intersection, [code]3[/code] Smooth Union, [code]4[/code] Smooth Subtraction, [code]5[/code] Smooth Intersection.
+		</member>
+		<member name="smoothness" type="float" setter="set_smoothness" getter="get_smoothness" default="1.0">
+			Blend radius [code]k[/code] used by the smooth operations. Larger values produce softer, more organic transitions between the two shapes. Ignored by the non-smooth operations.
+		</member>
+	</members>
+</class>

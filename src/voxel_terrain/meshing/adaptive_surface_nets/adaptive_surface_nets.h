@@ -36,7 +36,7 @@ class AdaptiveSurfaceNets
     AdaptiveMeshChunk _meshChunk;
     glm::vec3 _tempPoints[12];
 
-    inline void add_tri(int n0, int n1, int n2, bool flip);
+    void add_tri(int n0, int n1, int n2, bool flip);
 
   public:
     AdaptiveSurfaceNets(const JarVoxelTerrain &terrain, const VoxelOctreeNode &chunk);

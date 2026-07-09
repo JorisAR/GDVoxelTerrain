@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="JarTorusSdf" inherits="JarSignedDistanceField" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
+	<brief_description>
+		A signed distance field (SDF) torus primitive.
+	</brief_description>
+	<description>
+		Represents a torus (ring) as a signed distance field, lying in the XZ plane around the Y axis. Defined by a center, a major radius (distance from the center to the middle of the tube) and a minor radius (the tube thickness). Combine with [JarTransformSdf] to orient it differently.
+	</description>
+	<tutorials>
+	</tutorials>
+	<members>
+		<member name="center" type="Vector3" setter="set_center" getter="get_center" default="Vector3(0, 0, 0)">
+			The origin point of the torus in 3D space.
+		</member>
+		<member name="major_radius" type="float" setter="set_major_radius" getter="get_major_radius" default="2.0">
+			Distance from the center to the middle of the tube (the ring radius).
+		</member>
+		<member name="minor_radius" type="float" setter="set_minor_radius" getter="get_minor_radius" default="0.5">
+			Radius of the tube itself (the ring thickness).
+		</member>
+	</members>
+</class>

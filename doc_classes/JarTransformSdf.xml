@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="JarTransformSdf" inherits="JarSignedDistanceField" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
+	<brief_description>
+		Positions, rotates and scales a child SDF.
+	</brief_description>
+	<description>
+		Applies a [Transform3D] to any child SDF: the query point is mapped into the child's local space, the child is evaluated there, and the resulting distance is rescaled by the transform's scale.
+		Together with [JarOperationSdf] this forms a complete CSG toolkit — for example, a rotated [JarCylinderSdf] subtracted from terrain carves a slanted tunnel.
+		[b]Note:[/b] non-uniform scale is approximated using the average of the three scale factors, which is a conservative bound commonly used with SDFs.
+	</description>
+	<tutorials>
+	</tutorials>
+	<members>
+		<member name="sdf" type="JarSignedDistanceField" setter="set_sdf" getter="get_sdf">
+			The child SDF to transform. If unset, empty space is returned.
+		</member>
+		<member name="transform" type="Transform3D" setter="set_transform" getter="get_transform" default="Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0)">
+			The transform applied to the child SDF (its local-to-world transform).
+		</member>
+	</members>
+</class>

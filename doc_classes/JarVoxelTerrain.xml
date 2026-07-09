@@ -19,15 +19,23 @@
 				Force updates LODs to chunks.
 			</description>
 		</method>
+		<method name="is_building">
+			<return type="bool" />
+			<description>
+				Returns [code]true[/code] while the terrain octree is being (re)built on the background worker. Edits made while building are ignored, so scripts that edit terrain right after startup should wait until this returns [code]false[/code].
+			</description>
+		</method>
 		<method name="modify">
 			<return type="void" />
 			<param index="0" name="sdf" type="JarSignedDistanceField" />
 			<param index="1" name="operation" type="int" enum="SDF.Operation" />
 			<param index="2" name="position" type="Vector3" />
 			<param index="3" name="radius" type="float" />
+			<param index="4" name="material" type="int" default="0" />
 			<description>
 				Modifies the terrain using another [JarSignedDistanceField] instance at a given [code]position[/code], with the specified [code]operation[/code].
-				The [code]radius[/code] determines the affected area.
+				The [code]radius[/code] determines the affected area. If [code]sdf[/code] is [code]null[/code], a sphere of [code]radius[/code] is used.
+				[code]material[/code] (0-3) is painted onto the affected voxels as a one-hot weight in the vertex color, which the chunk shader blends as materials; pass [code]-1[/code] to keep the existing material weights.
 			</description>
 		</method>
 		<method name="spawn_debug_spheres_in_bounds">
@@ -43,10 +51,12 @@
 			<param index="0" name="position" type="Vector3" />
 			<param index="1" name="radius" type="float" />
 			<param index="2" name="union" type="bool" />
+			<param index="3" name="material" type="int" default="0" />
 			<description>
 				Adds or subtracts a spherical volume from the terrain.
 				The center is defined by [code]position[/code], and [code]radius[/code] defines its size.
 				Set [code]union[/code] to [code]true[/code] to add, or [code]false[/code] to subtract.
+				[code]material[/code] (0-3) selects the material painted onto the edited voxels (see [method modify]); pass [code]-1[/code] to keep the existing material.
 			</description>
 		</method>
 	</methods>
@@ -74,6 +84,9 @@
 		</member>
 		<member name="octree_scale" type="float" setter="set_octree_scale" getter="get_octree_scale" default="1.0">
 			Scaling factor for the octree used in terrain chunk management and LOD computation.
+		</member>
+		<member name="performance_collider_distance" type="float" setter="set_collider_distance" getter="get_collider_distance" default="0.0">
+			When greater than [code]0.0[/code], physics colliders are only generated for chunks within this distance of the camera, on top of the usual LOD-based collider rules. Since collider generation is one of the most expensive parts of chunk updates, this can be a large performance win. Set it comfortably larger than the range at which physics interactions are needed. [code]0.0[/code] disables the distance cull (original behaviour).
 		</member>
 		<member name="performance_max_concurrent_tasks" type="int" setter="set_max_concurrent_tasks" getter="get_max_concurrent_tasks" default="12">
 			Limits how many concurrent tasks (e.g. chunk loading, LOD updates) can run simultaneously. Helps manage CPU load.

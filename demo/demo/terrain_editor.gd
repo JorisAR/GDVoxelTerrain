@@ -2,6 +2,10 @@ extends Node3D
 
 @export var terrain: JarVoxelTerrain
 @export var sdf: JarSphereSdf
+@export var edit_radius: float = 50.0
+
+# Material painted by edits: 0 dirt, 1 stone, 2 ore, 3 crystal (keys 1-4).
+var material := 0
 
 var edit_timer = 0.0
 func _physics_process(delta: float) -> void:
@@ -9,9 +13,16 @@ func _physics_process(delta: float) -> void:
 		_edit(false);
 	if Input.is_action_pressed("right_click"):
 		_edit(true)
-		
+
 	edit_timer -= delta
-					   
+
+func _unhandled_key_input(event: InputEvent) -> void:
+	if event is InputEventKey and event.pressed and not event.echo:
+		var idx: int = event.keycode - KEY_1
+		if idx >= 0 and idx <= 3:
+			material = idx
+			print("Edit material: ", ["dirt", "stone", "ore", "crystal"][idx])
+
 func _edit(union : bool):
 	if(edit_timer > 0):
 		return;
@@ -22,8 +33,4 @@ func _edit(union : bool):
 	var query = PhysicsRayQueryParameters3D.create(origin, origin + direction * 1000)
 	var result = space_state.intersect_ray(query)
 	if result:
-		#terrain.modify(sdf, )
-		#terrain.modify(sdf, 0, result.position, 10)
-	#OPERATION
-		terrain.sphere_edit(result.position, 50, union)
-		#terrain.spawn_debug_spheres_in_bounds(result.position, 16)
+		terrain.sphere_edit(result.position, edit_radius, union, material)

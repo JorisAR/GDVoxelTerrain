@@ -192,7 +192,7 @@ ChunkMeshData *AdaptiveSurfaceNets::generate_mesh_data(const JarVoxelTerrain &te
                              _chunk->get_bounds(terrain.get_octree_scale()));
 }
 
-inline void AdaptiveSurfaceNets::add_tri(int n0, int n1, int n2, bool flip)
+void AdaptiveSurfaceNets::add_tri(int n0, int n1, int n2, bool flip)
 {
     // if (_meshChunk.is_edge_chunk()) {
         // For each vertex in the triangle, only accumulate from good neighbors

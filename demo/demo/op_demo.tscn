@@ -1,0 +1,57 @@
+[gd_scene load_steps=12 format=3]
+
+[ext_resource type="PackedScene" uid="uid://c7kqgl1k10x14" path="res://addons/jar_voxel_terrain/src/chunk.tscn" id="1_jj1wd"]
+[ext_resource type="JarTerrainSdf" uid="uid://3jlwgf5biu2x" path="res://demo/terrain_sdf.tres" id="2_o85ls"]
+[ext_resource type="JarOperationSdf" path="res://demo/op_carve.tres" id="op_carve"]
+[ext_resource type="JarTerrainDetail" uid="uid://d0oay8xwjjuf3" path="res://demo/assets/population/details/grass_detail.tres" id="3_ter6h"]
+[ext_resource type="Script" uid="uid://c0626baj7yc8l" path="res://demo/movable_camera.gd" id="6_tuhf2"]
+[ext_resource type="Script" uid="uid://02ob37nu5at8" path="res://demo/terrain_editor.gd" id="7_0d654"]
+[ext_resource type="Script" uid="uid://bhjsuh0weeh6j" path="res://demo/label.gd" id="9_5crk8"]
+
+[sub_resource type="Resource" id="JarSphereSdf_0ru4y"]
+
+[sub_resource type="ProceduralSkyMaterial" id="ProceduralSkyMaterial_67j7s"]
+
+[sub_resource type="Sky" id="Sky_jj1wd"]
+sky_material = SubResource("ProceduralSkyMaterial_67j7s")
+
+[sub_resource type="Environment" id="Environment_tkqw2"]
+background_mode = 2
+sky = SubResource("Sky_jj1wd")
+tonemap_mode = 3
+
+[node name="Demo" type="Node3D"]
+
+[node name="JarPlanarWorld" type="JarPlanarWorld" parent="."]
+
+[node name="JarVoxelTerrain" type="JarVoxelTerrain" parent="JarPlanarWorld" node_paths=PackedStringArray("player_node", "world_node")]
+player_node = NodePath("../../Camera3D")
+world_node = NodePath("..")
+chunk_scene = ExtResource("1_jj1wd")
+sdf = ExtResource("op_carve")
+lod_level_count = 10
+population_terrain_details = Array[JarTerrainDetail]([ExtResource("3_ter6h")])
+
+[node name="Camera3D" type="Camera3D" parent="." node_paths=PackedStringArray("terrain")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -77.2203, 63.1099, -7.18996)
+far = 32000.0
+script = ExtResource("6_tuhf2")
+terrain = NodePath("../JarPlanarWorld/JarVoxelTerrain")
+move_speed = 64.0
+
+[node name="TerrainEditor" type="Node3D" parent="Camera3D" node_paths=PackedStringArray("terrain")]
+script = ExtResource("7_0d654")
+terrain = NodePath("../../JarPlanarWorld/JarVoxelTerrain")
+sdf = SubResource("JarSphereSdf_0ru4y")
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
+environment = SubResource("Environment_tkqw2")
+
+[node name="DirectionalLight3D" type="DirectionalLight3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 0.699925, 0.714216, 0, -0.714216, 0.699925, 0, 3.92238, 0)
+shadow_enabled = true
+
+[node name="Label" type="Label" parent="."]
+offset_right = 40.0
+offset_bottom = 23.0
+script = ExtResource("9_5crk8")

@@ -20,7 +20,7 @@ class AdaptiveMeshChunk
     static const std::vector<std::vector<glm::ivec3>> FaceOffsets;
 
     bool should_have_quad(const glm::ivec3 &position, const int face, const bool isSmall) const;
-    inline int get_node_index_at(const glm::ivec3 &pos) const;
+    int get_node_index_at(const glm::ivec3 &pos) const;
     bool get_unique_neighbouring_vertices(const glm::ivec3 &pos, const std::vector<glm::ivec3> &offsets,
                                           std::vector<int> &result) const;
 

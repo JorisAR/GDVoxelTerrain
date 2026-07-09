@@ -88,6 +88,22 @@ class JarVoxelChunk : public Node3D
     void update_chunk(JarVoxelTerrain &terrain, VoxelOctreeNode *node, ChunkMeshData *chunk_mesh_data);
     void update_collision_mesh();
     void delete_chunk();
+
+    // Object-pool support: instead of freeing a chunk, park it (hidden + collision
+    // off, still attached to the terrain) so it can be reused. Avoids the
+    // instantiate()/free() churn across thousands of chunks. Both run on main thread.
+    void deactivate()
+    {
+        set_visible(false);
+        if (collision_shape)
+            collision_shape->set_disabled(true);
+    }
+    void reactivate()
+    {
+        set_visible(true);
+        if (collision_shape)
+            collision_shape->set_disabled(false);
+    }
 };
 
 #endif // JAR_VOXEL_CHUNK_H
