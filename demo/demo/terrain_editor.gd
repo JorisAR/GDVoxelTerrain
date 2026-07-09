@@ -18,7 +18,7 @@ func _physics_process(delta: float) -> void:
 
 func _unhandled_key_input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and not event.echo:
-		var idx := event.keycode - KEY_1
+		var idx: int = event.keycode - KEY_1
 		if idx >= 0 and idx <= 3:
 			material = idx
 			print("Edit material: ", ["dirt", "stone", "ore", "crystal"][idx])
