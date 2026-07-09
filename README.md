@@ -70,7 +70,7 @@ Contributions are welcome! Please fork the repository and submit a pull request.
 
 In particular, here are some areas of interest, in no particular order of importance:
 - Optimizing LOD connections, i.e. remove the overdraw/duplicate triangle generation.
-- Multi-material support.
+- Multi-material support: painting materials (4-way weight blend) is in — see `sphere_edit`/`modify`'s `material` argument. Texture-array/triplanar materials and more than 4 slots remain open.
 - Multithreaded octree generation (the octree build currently runs on a single managed worker thread).
 - Add more interesting SDF options:
     - Better noise based SDFs for more realistic terrain.

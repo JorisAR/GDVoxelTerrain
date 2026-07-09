@@ -129,8 +129,8 @@ class JarVoxelTerrain : public Node3D
     void pool_release(JarVoxelChunk *chunk);
 
     void modify(const Ref<JarSignedDistanceField> sdf, const SDF::Operation operation, const Vector3 &position,
-                const float radius);
-    void sphere_edit(const Vector3 &position, const float radius, bool operation_union);
+                const float radius, const int material = 0);
+    void sphere_edit(const Vector3 &position, const float radius, bool operation_union, const int material = 0);
 
     void spawn_debug_spheres_in_bounds(const Vector3 &position, const float range);
 

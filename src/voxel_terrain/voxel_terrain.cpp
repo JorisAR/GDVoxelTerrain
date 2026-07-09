@@ -98,11 +98,14 @@ void JarVoxelTerrain::_bind_methods()
     BIND_ENUM_CONSTANT(SDF::SDF_OPERATION_SMOOTH_UNION);
     BIND_ENUM_CONSTANT(SDF::SDF_OPERATION_SMOOTH_SUBTRACTION);
     BIND_ENUM_CONSTANT(SDF::SDF_OPERATION_SMOOTH_INTERSECTION);
-    ClassDB::bind_method(D_METHOD("modify", "sdf", "operation", "position", "radius"), &JarVoxelTerrain::modify);
-    ClassDB::bind_method(D_METHOD("sphere_edit", "position", "radius", "union"), &JarVoxelTerrain::sphere_edit);
+    ClassDB::bind_method(D_METHOD("modify", "sdf", "operation", "position", "radius", "material"),
+                         &JarVoxelTerrain::modify, DEFVAL(0));
+    ClassDB::bind_method(D_METHOD("sphere_edit", "position", "radius", "union", "material"),
+                         &JarVoxelTerrain::sphere_edit, DEFVAL(0));
     ClassDB::bind_method(D_METHOD("spawn_debug_spheres_in_bounds", "position", "range"),
                          &JarVoxelTerrain::spawn_debug_spheres_in_bounds);
     ClassDB::bind_method(D_METHOD("force_update_lod"), &JarVoxelTerrain::force_update_lod);
+    ClassDB::bind_method(D_METHOD("is_building"), &JarVoxelTerrain::is_building);
 }
 
 JarVoxelTerrain::JarVoxelTerrain() : _octreeScale(1.0f), _size(14), _playerNode(nullptr)
@@ -190,17 +193,27 @@ void JarVoxelTerrain::process_pool()
 }
 
 void JarVoxelTerrain::modify(const Ref<JarSignedDistanceField> sdf, const SDF::Operation operation,
-                             const Vector3 &position, const float radius)
+                             const Vector3 &position, const float radius, const int material)
 {
     glm::vec3 pos = glm::vec3(position.x, position.y, position.z);
-    auto s = new JarSphereSdf();
-    s->set_radius(radius);
+    // Use the caller's SDF; `radius` bounds the affected region. Fall back to a
+    // sphere when none is given (previously the sdf argument was ignored and a
+    // sphere was always used).
+    Ref<JarSignedDistanceField> s = sdf;
+    if (s.is_null())
+    {
+        Ref<JarSphereSdf> sphere;
+        sphere.instantiate();
+        sphere->set_radius(radius);
+        s = sphere;
+    }
 
     auto edge = glm::vec3(radius);
-    _modifySettingsQueue.push({s, Bounds(pos - edge, pos + edge), pos, operation});
+    _modifySettingsQueue.push({s, Bounds(pos - edge, pos + edge), pos, operation, material});
 }
 
-void JarVoxelTerrain::sphere_edit(const Vector3 &position, const float radius, bool operation_union)
+void JarVoxelTerrain::sphere_edit(const Vector3 &position, const float radius, bool operation_union,
+                                  const int material)
 {
     auto global_position = position - get_global_position();
     glm::vec3 pos = glm::vec3(global_position.x, global_position.y, global_position.z);
@@ -212,10 +225,9 @@ void JarVoxelTerrain::sphere_edit(const Vector3 &position, const float radius, b
 
     if (_isBuilding)
         return;
-    ModifySettings settings = {sdf, Bounds(pos - edge, pos + edge), pos, operation};
+    ModifySettings settings = {sdf, Bounds(pos - edge, pos + edge), pos, operation, material};
     _voxelRoot->modify_sdf_in_bounds(*this, settings);
     //_populationRoot->remove_population(settings);
-    //_modifySettingsQueue.push({sdf, Bounds(pos - edge, pos + edge), pos, operation});
 }
 
 void JarVoxelTerrain::enqueue_chunk_collider(VoxelOctreeNode *node)

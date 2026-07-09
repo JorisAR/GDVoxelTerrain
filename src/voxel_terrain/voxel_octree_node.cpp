@@ -280,8 +280,15 @@ void VoxelOctreeNode::modify_sdf_in_bounds(JarVoxelTerrain &terrain, const Modif
 
     set_value(new_value);
     _isSet = true;
-    if (std::abs(new_value - old_value) > 0.01f)
-        NodeColor = glm::vec4(1, 0, 0, 1);
+    // Paint the edit's material as a one-hot weight vector. Weights blend at
+    // material boundaries via the parent-average and the mesher's edge
+    // interpolation; all-zero means "unpainted" (procedural shader coloring).
+    if (settings.material >= 0 && std::abs(new_value - old_value) > 0.01f)
+    {
+        glm::vec4 weights(0.0f);
+        weights[glm::clamp(settings.material, 0, 3)] = 1.0f;
+        NodeColor = weights;
+    }
 
     if (is_leaf())
         mark_materialized();
