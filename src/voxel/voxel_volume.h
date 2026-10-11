@@ -196,6 +196,10 @@ class JarVoxelVolume : public Node3D
     void set_sea_level(float value);
     // Script helpers taking and returning global-space values.
     Vector3 get_up_direction_at(const Vector3 &global_position) const;
+    // Ray marches the volume's base SDF (edits are not included) from `from`
+    // to `to`, in global space. Works at any distance, without colliders.
+    // Returns {position, normal} or an empty dictionary.
+    Dictionary raycast_sdf(const Vector3 &from, const Vector3 &to) const;
     float get_height_at(const Vector3 &global_position) const;
 
     Ref<JarSignedDistanceField> get_sdf() const;

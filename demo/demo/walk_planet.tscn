@@ -1,0 +1,64 @@
+[gd_scene format=3]
+
+[ext_resource type="PackedScene" uid="uid://c7kqgl1k10x14" path="res://addons/jar_voxel_terrain/src/chunk.tscn" id="1_chunk"]
+[ext_resource type="JarPlanetSdf" uid="uid://c0w3b174vgmm7" path="res://demo/planet_sdf.tres" id="2_sdf"]
+[ext_resource type="PackedScene" path="res://demo/player/player.tscn" id="3_player"]
+[ext_resource type="JarTerrainDetail" uid="uid://d0oay8xwjjuf3" path="res://demo/assets/population/details/grass_detail.tres" id="4_grass"]
+[ext_resource type="Material" uid="uid://bnto51e7djra7" path="res://demo/assets/water/water_material.tres" id="5_water"]
+[ext_resource type="Material" uid="uid://55tbedv6qxva" path="res://demo/assets/space/space_sky.tres" id="6_sky"]
+
+[sub_resource type="SphereShape3D" id="GravityShape"]
+radius = 8000.0
+
+[sub_resource type="SphereMesh" id="WaterMesh"]
+radius = 4096.0
+height = 8192.0
+radial_segments = 256
+rings = 128
+
+[sub_resource type="Sky" id="Sky"]
+sky_material = ExtResource("6_sky")
+
+[sub_resource type="Environment" id="Environment"]
+background_mode = 2
+sky = SubResource("Sky")
+tonemap_mode = 3
+
+[node name="WalkPlanet" type="Node3D"]
+
+[node name="Planet" type="Node3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -4196, 0)
+
+[node name="JarVoxelVolume" type="JarVoxelVolume" parent="Planet"]
+size = 20
+chunk_scene = ExtResource("1_chunk")
+sdf = ExtResource("2_sdf")
+meshing_algorithm = 1
+lod_automatic_update_distance = 16.0
+up_mode = 1
+sea_level = 4096.0
+population_terrain_details = Array[JarTerrainDetail]([ExtResource("4_grass")])
+
+[node name="Gravity" type="Area3D" parent="Planet"]
+gravity_space_override = 3
+gravity_point = true
+gravity_point_unit_distance = 4096.0
+gravity_point_center = Vector3(0, 0, 0)
+gravity = 9.8
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="Planet/Gravity"]
+shape = SubResource("GravityShape")
+
+[node name="Water" type="MeshInstance3D" parent="Planet"]
+mesh = SubResource("WaterMesh")
+surface_material_override/0 = ExtResource("5_water")
+
+[node name="Player" parent="." instance=ExtResource("3_player")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 120, 0)
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
+environment = SubResource("Environment")
+
+[node name="DirectionalLight3D" type="DirectionalLight3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 0.7, 0.714, 0, -0.714, 0.7, 0, 0, 0)
+shadow_enabled = true

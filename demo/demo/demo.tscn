@@ -3,7 +3,7 @@
 [ext_resource type="PackedScene" uid="uid://c7kqgl1k10x14" path="res://addons/jar_voxel_terrain/src/chunk.tscn" id="1_0cm30"]
 [ext_resource type="Script" uid="uid://c0626baj7yc8l" path="res://demo/movable_camera.gd" id="2_kdd2p"]
 [ext_resource type="JarPlanetSdf" uid="uid://c0w3b174vgmm7" path="res://demo/planet_sdf.tres" id="2_onu7k"]
-[ext_resource type="Script" uid="uid://02ob37nu5at8" path="res://demo/terrain_editor.gd" id="3_8rpa4"]
+[ext_resource type="Script" path="res://demo/editing/brush_editor.gd" id="3_8rpa4"]
 [ext_resource type="JarTerrainDetail" uid="uid://d0oay8xwjjuf3" path="res://demo/assets/population/details/grass_detail.tres" id="3_onvmd"]
 [ext_resource type="Material" uid="uid://bnto51e7djra7" path="res://demo/assets/water/water_material.tres" id="4_oeqrt"]
 [ext_resource type="Script" uid="uid://bek13g43nt3gk" path="res://demo/post_processing/atmosphere/post_processing_atmosphere.gd" id="4_s1s6j"]
@@ -28,9 +28,6 @@ metadata/_custom_type_script = "uid://bek13g43nt3gk"
 
 [sub_resource type="Compositor" id="Compositor_4sdup"]
 compositor_effects = Array[CompositorEffect]([SubResource("CompositorEffect_onu7k")])
-
-[sub_resource type="JarSphereSdf" id="JarSphereSdf_yuphb"]
-radius = 20.0
 
 [sub_resource type="Sky" id="Sky_s1s6j"]
 sky_material = ExtResource("6_onvmd")
@@ -67,10 +64,8 @@ script = ExtResource("2_kdd2p")
 terrain = NodePath("../Planet/JarVoxelVolume")
 move_speed = 64.0
 
-[node name="TerrainEditor" type="Node3D" parent="Camera3D" unique_id=1923696105 node_paths=PackedStringArray("terrain")]
+[node name="Editor" type="Node3D" parent="Camera3D" unique_id=1923696105]
 script = ExtResource("3_8rpa4")
-terrain = NodePath("../../Planet/JarVoxelVolume")
-sdf = SubResource("JarSphereSdf_yuphb")
 
 [node name="JarVoxelViewer" type="JarVoxelViewer" parent="Camera3D" unique_id=107113133]
 

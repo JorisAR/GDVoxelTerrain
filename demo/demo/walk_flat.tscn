@@ -1,0 +1,35 @@
+[gd_scene format=3]
+
+[ext_resource type="PackedScene" uid="uid://c7kqgl1k10x14" path="res://addons/jar_voxel_terrain/src/chunk.tscn" id="1_chunk"]
+[ext_resource type="JarTerrainSdf" uid="uid://3jlwgf5biu2x" path="res://demo/terrain_sdf.tres" id="2_sdf"]
+[ext_resource type="PackedScene" path="res://demo/player/player.tscn" id="3_player"]
+[ext_resource type="JarTerrainDetail" uid="uid://d0oay8xwjjuf3" path="res://demo/assets/population/details/grass_detail.tres" id="4_grass"]
+
+[sub_resource type="ProceduralSkyMaterial" id="SkyMaterial"]
+
+[sub_resource type="Sky" id="Sky"]
+sky_material = SubResource("SkyMaterial")
+
+[sub_resource type="Environment" id="Environment"]
+background_mode = 2
+sky = SubResource("Sky")
+tonemap_mode = 3
+
+[node name="WalkFlat" type="Node3D"]
+
+[node name="JarVoxelVolume" type="JarVoxelVolume" parent="."]
+chunk_scene = ExtResource("1_chunk")
+sdf = ExtResource("2_sdf")
+meshing_algorithm = 1
+lod_automatic_update_distance = 16.0
+population_terrain_details = Array[JarTerrainDetail]([ExtResource("4_grass")])
+
+[node name="Player" parent="." instance=ExtResource("3_player")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 60, 0)
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
+environment = SubResource("Environment")
+
+[node name="DirectionalLight3D" type="DirectionalLight3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 0.7, 0.714, 0, -0.714, 0.7, 0, 0, 0)
+shadow_enabled = true

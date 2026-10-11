@@ -109,6 +109,7 @@ void JarVoxelVolume::_bind_methods()
     ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "sea_level"), "set_sea_level", "get_sea_level");
     ClassDB::bind_method(D_METHOD("get_up_direction_at", "global_position"), &JarVoxelVolume::get_up_direction_at);
     ClassDB::bind_method(D_METHOD("get_height_at", "global_position"), &JarVoxelVolume::get_height_at);
+    ClassDB::bind_method(D_METHOD("raycast_sdf", "from", "to"), &JarVoxelVolume::raycast_sdf);
 
     //-------------------------------------------------- POPULATION --------------------------------------------------
     ADD_GROUP("Population", "population_");
@@ -607,7 +608,7 @@ void JarVoxelVolume::process()
     {
         if (!_modifySettingsQueue.empty())
             process_modify_queue();
-        else if (_rebuildRequested || _voxelLod.process(*this))
+        else if ((_rebuildRequested && _voxelLod.update_viewers(*this, true)) || _voxelLod.process(*this))
         {
             build(); // hands off to the build worker (sets _isBuilding); resume next frame
             return;
@@ -813,8 +814,9 @@ void JarVoxelVolume::spawn_debug_spheres_in_bounds(const Vector3 &position, cons
 
 void JarVoxelVolume::force_update_lod()
 {
-    if (_voxelLod.update_viewers(*this, true))
-        build();
+    // Applied by the next build, which starts as soon as no mesh task runs
+    // (calling build() directly is silently refused while meshing).
+    _rebuildRequested = true;
 }
 
 float JarVoxelVolume::distance_to_nearest_viewer(const glm::vec3 &position) const
@@ -862,6 +864,38 @@ Vector3 JarVoxelVolume::get_up_direction_at(const Vector3 &global_position) cons
     const glm::vec3 up = _upField.up(glm::vec3(l.x, l.y, l.z));
     return get_global_basis().xform(Vector3(up.x, up.y, up.z)).normalized();
 }
+Dictionary JarVoxelVolume::raycast_sdf(const Vector3 &from, const Vector3 &to) const
+{
+    Dictionary result;
+    if (_sdf.is_null())
+        return result;
+    const Vector3 lf = to_local(from), lt = to_local(to);
+    const glm::vec3 origin(lf.x, lf.y, lf.z);
+    glm::vec3 dir(lt.x - lf.x, lt.y - lf.y, lt.z - lf.z);
+    const float length = glm::length(dir);
+    if (length <= 0.0f)
+        return result;
+    dir /= length;
+    // Sphere tracing; steps are shortened a little because noise-based fields
+    // are not exact distances.
+    const float epsilon = 0.01f * _octreeScale;
+    float t = 0.0f;
+    for (int i = 0; i < 1024 && t <= length; ++i)
+    {
+        const glm::vec3 p = origin + dir * t;
+        const float d = _sdf->distance(p);
+        if (d < epsilon)
+        {
+            const glm::vec3 n = _sdf->normal(p);
+            result["position"] = to_global(Vector3(p.x, p.y, p.z));
+            result["normal"] = get_global_basis().xform(Vector3(n.x, n.y, n.z)).normalized();
+            return result;
+        }
+        t += std::max(d * 0.8f, epsilon);
+    }
+    return result;
+}
+
 float JarVoxelVolume::get_height_at(const Vector3 &global_position) const
 {
     const Vector3 l = to_local(global_position);

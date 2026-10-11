@@ -26,9 +26,10 @@ func _process(delta : float) -> void:
 	position += move_dir.normalized() * move_speed * delta / Engine.time_scale;
 
 func _input(event) -> void:
-	if event.is_action_pressed("scroll_up"):
+	# Ctrl + scroll: speed (plain scroll resizes the edit brush).
+	if event.is_action_pressed("scroll_up") and Input.is_key_pressed(KEY_CTRL):
 		move_speed *= 2;
-	if event.is_action_pressed("scroll_down"):
+	if event.is_action_pressed("scroll_down") and Input.is_key_pressed(KEY_CTRL):
 		move_speed *= 0.5;
 	move_speed = clamp(move_speed, MIN_MOVE_SPEED, MAX_MOVE_SPEED);
 		

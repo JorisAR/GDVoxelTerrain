@@ -35,8 +35,18 @@ The compiled library is written straight into `demo/addons/jar_voxel_terrain/bin
 
 ### Trying the demo
 
-Open the `demo` project in Godot and run `demo/demo.tscn` (planet), `demo/moon_demo.tscn` (a planet with an orbiting, spinning moon) or `demo/flat_terrain.tscn` (flat terrain).
-Controls: `WASD` + mouse to fly, `left click` to add terrain, `right click` to dig, `scroll` to resize the brush, `F` to force a LOD update.
+Open the `demo` project in Godot and run one of the scenes in `demo/demo`:
+
+- `walk_planet.tscn` / `walk_flat.tscn`: walk around as a first-person character (dual contouring meshing).
+- `demo.tscn` (planet), `moon_demo.tscn` (a planet with an orbiting, spinning moon), `flat_terrain.tscn`, `op_demo.tscn`: fly around with a free camera.
+
+Controls:
+
+- Walking scenes: `WASD` move, `Space` jump, `Shift` sprint, `Tab` toggle flying (`Space`/`Shift` up/down, `Ctrl` + scroll speed).
+- Free camera scenes: `WASD` + mouse to fly, `Space`/`Shift` up/down, `Ctrl` + scroll speed, `F` force a LOD update.
+- Editing (all scenes): `left click` dig, `right click` add, `Q` next brush (sphere, box, cone, prism, torus), `scroll` brush size, `E` smooth blending, `1`-`4` material, `R` toggle the brush preview. `Esc` releases the mouse.
+
+The editing scripts in `demo/demo/editing` are meant to be reused: `SdfEditor` edits with any SDF resource you assign (plus an optional preview mesh), `BrushEditor` adds the built-in brushes. `demo/demo/player` contains the character controller, which follows Godot's gravity (an `Area3D` with point gravity makes a planet).
 
 ## Usage
 
@@ -92,6 +102,7 @@ Headless checks live in `demo/tests` and exit with a non-zero code on failure:
 godot --headless --path demo res://tests/sdf_tests.tscn
 godot --headless --path demo res://tests/edit_tests.tscn
 godot --headless --path demo res://tests/mesher_tests.tscn
+godot --headless --fixed-fps 60 --path demo res://tests/player_tests.tscn
 ```
 
 ### Performance tips

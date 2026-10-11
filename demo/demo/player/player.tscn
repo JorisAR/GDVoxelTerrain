@@ -1,0 +1,48 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://demo/player/player.gd" id="1_player"]
+[ext_resource type="Script" path="res://demo/editing/brush_editor.gd" id="2_brush"]
+
+[sub_resource type="CapsuleShape3D" id="Capsule"]
+radius = 0.4
+height = 1.8
+
+[node name="Player" type="CharacterBody3D"]
+script = ExtResource("1_player")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.9, 0)
+shape = SubResource("Capsule")
+
+[node name="Head" type="Node3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.6, 0)
+
+[node name="Camera3D" type="Camera3D" parent="Head"]
+far = 32000.0
+
+[node name="Editor" type="Node3D" parent="Head/Camera3D"]
+script = ExtResource("2_brush")
+
+[node name="JarVoxelViewer" type="JarVoxelViewer" parent="."]
+
+[node name="HUD" type="CanvasLayer" parent="."]
+
+[node name="Label" type="Label" parent="HUD"]
+offset_left = 12.0
+offset_top = 8.0
+offset_right = 900.0
+offset_bottom = 60.0
+
+[node name="Crosshair" type="Label" parent="HUD"]
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -6.0
+offset_top = -12.0
+offset_right = 6.0
+offset_bottom = 12.0
+text = "+"
+horizontal_alignment = 1
+vertical_alignment = 1

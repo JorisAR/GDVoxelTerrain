@@ -31,7 +31,7 @@
 		<method name="force_update_lod">
 			<return type="void" />
 			<description>
-				Force updates LODs to chunks.
+				Rebuilds the level of detail around the current viewers as soon as the volume is idle, even if they moved less than [member lod_automatic_update_distance]. Call it after teleporting a viewer.
 			</description>
 		</method>
 		<method name="get_height_at" qualifiers="const">
@@ -71,6 +71,14 @@
 				Modifies the terrain using another [JarSignedDistanceField] instance at a given [code]position[/code], with the specified [code]operation[/code].
 				The [code]radius[/code] determines the affected area. If [code]sdf[/code] is [code]null[/code], a sphere of [code]radius[/code] is used.
 				[code]material[/code] (0-3) is painted onto the affected voxels as a one-hot weight in the vertex color, which the chunk shader blends as materials; pass [code]-1[/code] to keep the existing material weights.
+			</description>
+		</method>
+		<method name="raycast_sdf" qualifiers="const">
+			<return type="Dictionary" />
+			<param index="0" name="from" type="Vector3" />
+			<param index="1" name="to" type="Vector3" />
+			<description>
+				Ray marches the volume's base [member sdf] from [param from] to [param to] (global space) and returns [code]{position, normal}[/code] of the first surface hit, or an empty dictionary. Edits are not included. Works at any distance, without colliders: useful for spawning on a planet or aiming far beyond the collider range.
 			</description>
 		</method>
 		<method name="remesh_all">

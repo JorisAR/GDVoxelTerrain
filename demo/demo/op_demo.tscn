@@ -5,10 +5,8 @@
 [ext_resource type="JarOperationSdf" path="res://demo/op_carve.tres" id="op_carve"]
 [ext_resource type="JarTerrainDetail" uid="uid://d0oay8xwjjuf3" path="res://demo/assets/population/details/grass_detail.tres" id="3_ter6h"]
 [ext_resource type="Script" uid="uid://c0626baj7yc8l" path="res://demo/movable_camera.gd" id="6_tuhf2"]
-[ext_resource type="Script" uid="uid://02ob37nu5at8" path="res://demo/terrain_editor.gd" id="7_0d654"]
+[ext_resource type="Script" path="res://demo/editing/brush_editor.gd" id="7_0d654"]
 [ext_resource type="Script" uid="uid://bhjsuh0weeh6j" path="res://demo/label.gd" id="9_5crk8"]
-
-[sub_resource type="Resource" id="JarSphereSdf_0ru4y"]
 
 [sub_resource type="ProceduralSkyMaterial" id="ProceduralSkyMaterial_67j7s"]
 
@@ -37,10 +35,8 @@ script = ExtResource("6_tuhf2")
 terrain = NodePath("../World/JarVoxelVolume")
 move_speed = 64.0
 
-[node name="TerrainEditor" type="Node3D" parent="Camera3D" node_paths=PackedStringArray("terrain")]
+[node name="Editor" type="Node3D" parent="Camera3D"]
 script = ExtResource("7_0d654")
-terrain = NodePath("../../World/JarVoxelVolume")
-sdf = SubResource("JarSphereSdf_0ru4y")
 
 [node name="JarVoxelViewer" type="JarVoxelViewer" parent="Camera3D"]
 

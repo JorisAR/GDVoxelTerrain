@@ -2,7 +2,7 @@
 
 [ext_resource type="PackedScene" uid="uid://c7kqgl1k10x14" path="res://addons/jar_voxel_terrain/src/chunk.tscn" id="1_chunk"]
 [ext_resource type="Script" uid="uid://c0626baj7yc8l" path="res://demo/movable_camera.gd" id="2_camera"]
-[ext_resource type="Script" uid="uid://02ob37nu5at8" path="res://demo/terrain_editor.gd" id="3_editor"]
+[ext_resource type="Script" path="res://demo/editing/brush_editor.gd" id="3_editor"]
 [ext_resource type="Script" uid="uid://ca8q8yfyo8l3h" path="res://demo/orbit.gd" id="4_orbit"]
 [ext_resource type="Script" uid="uid://bhjsuh0weeh6j" path="res://demo/label.gd" id="5_label"]
 
@@ -21,8 +21,6 @@ seed = 7
 noise = SubResource("Noise_moon")
 radius = 256.0
 noise_scale = 20.0
-
-[sub_resource type="JarSphereSdf" id="Sdf_edit"]
 
 [sub_resource type="ProceduralSkyMaterial" id="Sky_material"]
 
@@ -66,10 +64,8 @@ script = ExtResource("2_camera")
 terrain = NodePath("../Planet")
 move_speed = 64.0
 
-[node name="TerrainEditor" type="Node3D" parent="Camera3D" unique_id=229705655 node_paths=PackedStringArray("terrain")]
+[node name="Editor" type="Node3D" parent="Camera3D" unique_id=229705655]
 script = ExtResource("3_editor")
-terrain = NodePath("../../Planet")
-sdf = SubResource("Sdf_edit")
 
 [node name="JarVoxelViewer" type="JarVoxelViewer" parent="Camera3D" unique_id=697190137]
 

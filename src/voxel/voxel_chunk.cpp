@@ -191,9 +191,14 @@ void JarVoxelChunk::update_chunk(JarVoxelVolume &terrain, VoxelOctreeNode *node,
 
     if (generate_collider)
     {
-        // collision_shape->set_disabled(!chunk_mesh_data->has_collision_mesh());
-        // concave_polygon_shape->set_faces(chunk_mesh_data.create_collision_mesh());
-        terrain.enqueue_chunk_collider(this);
+        // The chunks this one replaces lose their colliders right now (see
+        // VoxelOctreeNode::update_chunk), so near a viewer build the collider
+        // immediately: a queued one leaves a gap a character can fall through.
+        const float nearDistance = 2.0f * terrain.get_chunk_size() * terrain.get_octree_scale();
+        if (terrain.distance_to_nearest_viewer(position) < nearDistance)
+            update_collision_mesh();
+        else
+            terrain.enqueue_chunk_collider(this);
     }
     else
     {
