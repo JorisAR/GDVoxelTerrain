@@ -41,7 +41,10 @@ class JarSignedDistanceField : public Resource
     {
     }
 
-    virtual glm::vec3 normal(const glm::vec3 &pos) const
+    // Unnormalized gradient of distance() (tetrahedral differences). Its length
+    // is 1 for exact distance fields; noise-displaced fields deviate, which
+    // dual contouring corrects for.
+    virtual glm::vec3 gradient(const glm::vec3 &pos) const
     {
         // Step relative to the coordinate magnitude: far from the origin (e.g. a
         // 4 km planet) a fixed tiny step drowns in float rounding.
@@ -50,10 +53,16 @@ class JarSignedDistanceField : public Resource
         const glm::vec3 yyx(-delta, -delta, delta);
         const glm::vec3 yxy(-delta, delta, -delta);
         const glm::vec3 xxx(delta, delta, delta);
-        const glm::vec3 n = xyy * distance(pos + xyy) + yyx * distance(pos + yyx) + yxy * distance(pos + yxy) +
-                            xxx * distance(pos + xxx);
-        const float len = glm::length(n);
-        return len > 0.0f ? n / len : glm::vec3(0.0f, 1.0f, 0.0f);
+        const glm::vec3 sum = xyy * distance(pos + xyy) + yyx * distance(pos + yyx) + yxy * distance(pos + yxy) +
+                              xxx * distance(pos + xxx);
+        return sum / (4.0f * delta * delta);
+    }
+
+    virtual glm::vec3 normal(const glm::vec3 &pos) const
+    {
+        const glm::vec3 g = gradient(pos);
+        const float len = glm::length(g);
+        return len > 0.0f ? g / len : glm::vec3(0.0f, 1.0f, 0.0f);
     }
 
     std::optional<glm::vec3> ray_march(const glm::vec3 &from, const glm::vec3 &dir, float epsilon = 0.01f,

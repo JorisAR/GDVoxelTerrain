@@ -40,6 +40,7 @@ class StitchedSurfaceNets
     // volume SDF's analytic gradient), computed on demand and cached.
     const JarSignedDistanceField *_sdf;
     std::vector<glm::vec3> _gradients;
+    std::vector<float> _distanceScale; // 1 / |gradient|: turns sample values into true distances
     std::vector<bool> _hasGradient;
     glm::vec3 gradient_at(int node_id);
     // Returns NaN if no dual contouring position fits the cell. `normal` gets the

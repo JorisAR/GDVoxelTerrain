@@ -324,7 +324,16 @@ void VoxelOctreeNode::modify_sdf_in_bounds(JarVoxelVolume &terrain, const Modify
 
     // ensure the node has children if it contains a surface
     if (has_surface(terrain, new_value)) // || has_surface(terrain, sdf_value)
+    {
+        const bool wasLeaf = is_leaf();
         subdivide(terrain.get_voxel_size());
+        // New children copy this node's single value. If it still is the
+        // volume's own SDF (never changed by an edit), sample the SDF at each
+        // child instead, so edits next to untouched terrain stay accurate.
+        if (wasLeaf && !is_leaf() && !has_normal())
+            for (auto &child : *_children)
+                child->set_value(terrain.get_sdf_ptr()->distance(child->_center));
+    }
     else
         if(settings.bounds.encloses(bounds))
             prune_children();

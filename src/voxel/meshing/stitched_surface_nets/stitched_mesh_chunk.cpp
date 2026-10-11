@@ -159,23 +159,25 @@ StitchedMeshChunk::StitchedMeshChunk(const JarVoxelVolume &terrain, const VoxelO
     }
 }
 
+// The quad around a grid edge is emitted by the chunk that owns the edge's
+// start node (grid positions 1..16 are this chunk's own nodes; 0 and 17 belong
+// to neighbours). Neighbours of the same LOD emit the other quads, so skipping
+// them removes duplicated border triangles. Faces with an LOD boundary keep all
+// quads: the stitching there relies on them.
 bool StitchedMeshChunk::should_have_quad(const glm::ivec3 &position, const int face) const
 {
-    // we might also need some cases for l2h chunks i think
-    return true;
-    if (_lodL2HBoundaries != 0)
-        return true;
-    switch (face)
+    glm::ivec3 start = position + glm::ivec3(1);
+    start[face] -= 1;
+    const uint8_t boundaries = _lodH2LBoundaries | _lodL2HBoundaries;
+    for (int axis = 0; axis < 3; ++axis)
     {
-    case 0:
-        return position.x < LargestPos;
-    case 1:
-        return position.y < LargestPos;
-    case 2:
-        return position.z < LargestPos;
-    default:
-        return true;
+        // Boundary bits: +x, -x, +y, -y, +z, -z.
+        if (start[axis] < 1 && ((boundaries >> (2 * axis + 1)) & 1) == 0)
+            return false;
+        if (start[axis] > LargestPos - 1 && ((boundaries >> (2 * axis)) & 1) == 0)
+            return false;
     }
+    return true;
 }
 
 bool StitchedMeshChunk::on_positive_edge(const glm::ivec3 &position) const

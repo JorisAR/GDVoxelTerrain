@@ -17,6 +17,7 @@ StitchedSurfaceNets::StitchedSurfaceNets(const JarVoxelVolume &terrain, const Vo
     if (_dualContouring)
     {
         _gradients.resize(_meshChunk.nodes.size());
+        _distanceScale.resize(_meshChunk.nodes.size(), 1.0f);
         _hasGradient.resize(_meshChunk.nodes.size(), false);
     }
 }
@@ -26,7 +27,19 @@ glm::vec3 StitchedSurfaceNets::gradient_at(int node_id)
     if (_hasGradient[node_id])
         return _gradients[node_id];
     const VoxelOctreeNode *node = _meshChunk.nodes[node_id];
-    _gradients[node_id] = node->has_normal() ? node->get_normal() : _sdf->normal(node->_center);
+    if (node->has_normal())
+        _gradients[node_id] = node->get_normal(); // edits store exact normals of exact distances
+    else
+    {
+        // The volume SDF may not be an exact distance (e.g. height minus noise
+        // displacement): divide by the gradient length so the value is a true
+        // distance locally. Otherwise sample planes land at the wrong height and
+        // slopes come out terraced.
+        const glm::vec3 g = _sdf->gradient(node->_center);
+        const float len = glm::length(g);
+        _gradients[node_id] = len > 0.0f ? g / len : glm::vec3(0.0f, 1.0f, 0.0f);
+        _distanceScale[node_id] = 1.0f / std::clamp(len, 0.2f, 5.0f);
+    }
     _hasGradient[node_id] = true;
     return _gradients[node_id];
 }
@@ -50,10 +63,10 @@ glm::vec3 StitchedSurfaceNets::place_dual_contouring_vertex(const int node_id, c
     for (int i = 0; i < 8; ++i)
     {
         VoxelOctreeNode *n = _meshChunk.nodes[neighbours[i]];
-        const float d = n->get_value();
+        const glm::vec3 normal = gradient_at(neighbours[i]);
+        const float d = n->get_value() * _distanceScale[neighbours[i]];
         if (std::abs(d) > 1.5f * cellSize)
             continue; // too far for its closest feature to be in this cell
-        const glm::vec3 normal = gradient_at(neighbours[i]);
         qef.add(n->_center - d * normal, normal);
         averageNormal += normal;
     }
