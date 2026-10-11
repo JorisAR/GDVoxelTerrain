@@ -30,6 +30,7 @@ func _ready() -> void:
 	_configure_size(terrain)
 	if OS.get_environment("MESHER") == "dc":
 		terrain.meshing_algorithm = JarVoxelVolume.MESHING_DUAL_CONTOURING
+	terrain.manifold = OS.get_environment("MANIFOLD") == "1"
 	planet.add_child(terrain)
 	camera = JarVoxelViewer.new()
 	camera.position = Vector3(-5, 20, 200)

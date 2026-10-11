@@ -18,6 +18,7 @@ tonemap_mode = 3
 [node name="Flat" type="Node3D"]
 
 [node name="JarVoxelVolume" type="JarVoxelVolume" parent="."]
+manifold = true
 chunk_scene = ExtResource("1_chunk")
 sdf = ExtResource("2_sdf")
 meshing_algorithm = 1

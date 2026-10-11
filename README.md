@@ -98,6 +98,8 @@ In the demos, `Q` cycles the brush (sphere, box, cone, prism mesh) and `E` toggl
 - **Surface Nets** (default): smooth, rounded surfaces.
 - **Dual Contouring**: reproduces sharp edges and corners (stamped boxes, meshes, carved tunnels). Edits store the exact surface normal of the shape they apply, and untouched terrain uses the SDF's gradient, so vertices land on creases and corners; quads are split along sharp edges and creases get their own normals. Seams between LOD levels use the same stitching as surface nets.
 
+`manifold` (works with both meshers) gives every separate piece of surface inside a voxel its own vertex, so thin walls and features smaller than a voxel stay closed, 2-manifold surfaces instead of collapsing into one vertex. It costs no measurable meshing time.
+
 ### Tests
 
 Headless checks live in `demo/tests` and exit with a non-zero code on failure:
@@ -107,6 +109,7 @@ godot --headless --path demo res://tests/sdf_tests.tscn
 godot --headless --path demo res://tests/edit_tests.tscn
 godot --headless --path demo res://tests/mesher_tests.tscn
 godot --headless --path demo res://tests/lod_tests.tscn
+godot --headless --path demo res://tests/topology_tests.tscn
 godot --headless --fixed-fps 60 --path demo res://tests/player_tests.tscn
 ```
 

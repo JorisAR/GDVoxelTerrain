@@ -30,6 +30,7 @@ tonemap_mode = 3
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -4196, 0)
 
 [node name="JarVoxelVolume" type="JarVoxelVolume" parent="Planet" unique_id=1034945197]
+manifold = true
 extent = 16384.0
 chunk_scene = ExtResource("1_chunk")
 sdf = ExtResource("2_sdf")

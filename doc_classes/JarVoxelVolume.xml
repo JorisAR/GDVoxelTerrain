@@ -134,6 +134,9 @@
 		<member name="lod_shell_size" type="int" setter="set_lod_shell_size" getter="get_lod_shell_size" default="2">
 			How quickly detail falls off: each level of detail is a ring this many chunks (of that level) wide. 1 falls off fastest; larger values keep more detail at a distance. Neighbouring chunks never differ by more than one level, whatever the value.
 		</member>
+		<member name="manifold" type="bool" setter="set_manifold" getter="get_manifold" default="false">
+			If [code]true[/code], every separate piece of surface inside a voxel gets its own vertex (with either mesher), so thin walls and features smaller than a voxel stay closed and 2-manifold instead of collapsing into a single vertex. Can be changed at runtime; all chunks are then remeshed.
+		</member>
 		<member name="meshing_algorithm" type="int" setter="set_meshing_algorithm" getter="get_meshing_algorithm" enum="JarVoxelVolume.MeshingAlgorithm" default="0">
 			How chunks are turned into triangles. [constant MESHING_SURFACE_NETS] gives smooth, rounded surfaces; [constant MESHING_DUAL_CONTOURING] reproduces sharp edges and corners (stamped boxes, meshes, carved tunnels). Can be changed at runtime; all chunks are then remeshed.
 		</member>

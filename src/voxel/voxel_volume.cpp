@@ -46,6 +46,9 @@ void JarVoxelVolume::_bind_methods()
                          &JarVoxelVolume::set_dual_contouring_feature_threshold);
     ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "dual_contouring_feature_threshold", PROPERTY_HINT_RANGE, "0.001,1,0.001"),
                  "set_dual_contouring_feature_threshold", "get_dual_contouring_feature_threshold");
+    ClassDB::bind_method(D_METHOD("get_manifold"), &JarVoxelVolume::get_manifold);
+    ClassDB::bind_method(D_METHOD("set_manifold", "enabled"), &JarVoxelVolume::set_manifold);
+    ADD_PROPERTY(PropertyInfo(Variant::BOOL, "manifold"), "set_manifold", "get_manifold");
     ClassDB::bind_method(D_METHOD("remesh_all"), &JarVoxelVolume::remesh_all);
 
     // -------------------------------------------------- PERFORMANCE --------------------------------------------------
@@ -426,6 +429,12 @@ void JarVoxelVolume::set_dual_contouring_feature_threshold(float value)
     _dcFeatureThreshold = std::clamp(value, 0.001f, 1.0f);
     if (_meshingAlgorithm == MESHING_DUAL_CONTOURING)
         remesh_all();
+}
+
+void JarVoxelVolume::set_manifold(bool value)
+{
+    _manifold = value;
+    remesh_all();
 }
 
 void JarVoxelVolume::remesh_all()

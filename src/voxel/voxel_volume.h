@@ -65,6 +65,7 @@ class JarVoxelVolume : public Node3D
     bool _cubicVoxels = false;
     std::atomic<int> _meshingAlgorithm{0}; // MeshingAlgorithm; read by mesh threads
     std::atomic<float> _dcFeatureThreshold{0.1f};
+    std::atomic<bool> _manifold{false};
     // Bumped when meshing settings change; chunks meshed with an older version
     // are remeshed by the next build.
     std::atomic<int> _meshVersion{0};
@@ -234,6 +235,8 @@ class JarVoxelVolume : public Node3D
     MeshingAlgorithm get_meshing_algorithm() const { return static_cast<MeshingAlgorithm>(_meshingAlgorithm.load()); }
     void set_meshing_algorithm(MeshingAlgorithm value);
     float get_dual_contouring_feature_threshold() const { return _dcFeatureThreshold; }
+    bool get_manifold() const { return _manifold; }
+    void set_manifold(bool value);
     void set_dual_contouring_feature_threshold(float value);
     int get_mesh_version() const { return _meshVersion; }
     // Remeshes every chunk (e.g. after changing meshing settings at runtime).

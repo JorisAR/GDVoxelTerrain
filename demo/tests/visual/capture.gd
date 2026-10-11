@@ -9,6 +9,7 @@ func _ready() -> void:
 		if OS.get_environment("VOXEL") != "":
 			v.voxel_size = float(OS.get_environment("VOXEL"))
 		v.meshing_algorithm = JarVoxelVolume.MESHING_DUAL_CONTOURING if OS.get_environment("MESHER") == "dc" else JarVoxelVolume.MESHING_SURFACE_NETS
+		v.manifold = OS.get_environment("MANIFOLD") == "1"
 	var player := scene.get_node_or_null("Player")
 	if player:
 		player.start_flying = true
@@ -39,11 +40,27 @@ func _ready() -> void:
 			busy = busy or v.is_building() or v.is_meshing()
 		idle = 0 if busy else idle + 1
 	if OS.get_environment("BOX") != "":
-		# Stamp a rotated box (like a user brush) and let it remesh.
-		var box := JarBoxSdf.new()
-		box.extent = Vector3.ONE * 4.0
+		# Stamp a rotated shape (SHAPE = box | cone | torus) and let it remesh.
+		var shape: JarSignedDistanceField
+		match OS.get_environment("SHAPE"):
+			"cone":
+				var cone := JarConeSdf.new()
+				cone.height = 10.0
+				cone.bottom_radius = 5.0
+				cone.top_radius = 0.0
+				shape = cone
+			"torus":
+				var torus := JarTorusSdf.new()
+				torus.major_radius = 5.0
+				torus.minor_radius = 1.6
+				shape = torus
+			_:
+				var box := JarBoxSdf.new()
+				box.extent = Vector3.ONE * 4.0
+				shape = box
 		var basis := Basis(Vector3.UP, 0.5) * Basis(Vector3.RIGHT, 0.35)
-		volumes[0].edit(box, JarVoxelVolume.SDF_OPERATION_UNION, Transform3D(basis, _vec(OS.get_environment("BOX"))), 0)
+		var op := JarVoxelVolume.SDF_OPERATION_SUBTRACTION if OS.get_environment("DIG") == "1" else JarVoxelVolume.SDF_OPERATION_UNION
+		volumes[0].edit(shape, op, Transform3D(basis, _vec(OS.get_environment("BOX"))), 0)
 		idle = 0
 		while idle < 60:
 			await get_tree().process_frame
