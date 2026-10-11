@@ -1,4 +1,4 @@
-[gd_resource type="JarTerrainFeature" load_steps=4 format=3]
+[gd_resource type="JarTerrainFeature" format=3 uid="uid://cr7mepb58kksy"]
 
 [ext_resource type="ArrayMesh" path="res://demo/assets/population/features/pine_mesh.tres" id="1_mesh"]
 [ext_resource type="Material" path="res://demo/assets/population/features/feature_material.tres" id="2_mat"]

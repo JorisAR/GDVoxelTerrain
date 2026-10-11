@@ -1,9 +1,12 @@
-[gd_resource type="JarPlanetSdf" format=3 uid="uid://c0w3b174vgmm7"]
+[gd_resource type="JarTerrainSdf" format=3 uid="uid://c0w3b174vgmm7"]
 
 [sub_resource type="FastNoiseLite" id="FastNoiseLite_awrh7"]
 frequency = 0.001
 
 [resource]
 noise = SubResource("FastNoiseLite_awrh7")
+shape = 1
 radius = 4096.0
-noise_scale = 200.0
+height = 200.0
+depth = 100.0
+erosion = false

@@ -7,4 +7,6 @@ fractal_weighted_strength = 0.19
 
 [resource]
 noise = SubResource("FastNoiseLite_8043g")
-height_scale = 64.0
+height = 128.0
+depth = 64.0
+erosion = false

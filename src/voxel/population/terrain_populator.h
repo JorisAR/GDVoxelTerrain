@@ -73,7 +73,11 @@ class JarTerrainPopulator : public Resource
     float get_sink() const { return sink; }
     void set_sink(float value) { sink = value; }
     Ref<FastNoiseLite> get_mask_noise() const { return mask_noise; }
-    void set_mask_noise(const Ref<FastNoiseLite> &value) { mask_noise = value; }
+    void set_mask_noise(const Ref<FastNoiseLite> &value)
+    {
+        mask_noise = value;
+        notify_property_list_changed();
+    }
     float get_mask_threshold() const { return mask_threshold; }
     void set_mask_threshold(float value) { mask_threshold = value; }
 
@@ -116,6 +120,12 @@ class JarTerrainPopulator : public Resource
     }
 
   protected:
+    void _validate_property(PropertyInfo &property) const
+    {
+        if (property.name == StringName("mask_threshold") && mask_noise.is_null())
+            property.usage = PROPERTY_USAGE_NO_EDITOR;
+    }
+
     static void _bind_methods()
     {
 #define BIND_POP(m_name, m_type, m_hint, m_hint_text)                                                                  \

@@ -1,4 +1,4 @@
-#include "eroded_terrain_sdf.h"
+#include "terrain_sdf.h"
 #include <cmath>
 #include <cstdint>
 
@@ -45,7 +45,7 @@ glm::vec3 cell_offset(const glm::ivec3 &cell)
 }
 } // namespace
 
-void JarErodedTerrainSdf::frame(const glm::vec3 &pos, glm::vec3 &surface, glm::vec3 &up, float &above) const
+void JarTerrainSdf::frame(const glm::vec3 &pos, glm::vec3 &surface, glm::vec3 &up, float &above) const
 {
     if (_shape == SHAPE_SPHERE)
     {
@@ -62,16 +62,32 @@ void JarErodedTerrainSdf::frame(const glm::vec3 &pos, glm::vec3 &surface, glm::v
     }
 }
 
-float JarErodedTerrainSdf::base_height(const glm::vec3 &surface) const
+float JarTerrainSdf::layered_height(const glm::vec3 &surface) const
 {
-    if (_noise.is_null())
-        return 0.0f;
-    const float n = _shape == SHAPE_SPHERE ? _noise->get_noise_3d(surface.x, surface.y, surface.z)
-                                           : _noise->get_noise_2d(surface.x, surface.z);
-    return n * _height;
+    const bool sphere = _shape == SHAPE_SPHERE;
+    float h = 0.0f;
+    if (_noise.is_valid())
+    {
+        const float n = sphere ? _noise->get_noise_3d(surface.x, surface.y, surface.z)
+                               : _noise->get_noise_2d(surface.x, surface.z);
+        h = n > 0.0f ? n * _height : n * _depth;
+    }
+    if (_mountainNoise.is_valid() && _mountainHeight > 0.0f)
+    {
+        const float m = sphere ? _mountainNoise->get_noise_3d(surface.x, surface.y, surface.z)
+                               : _mountainNoise->get_noise_2d(surface.x, surface.z);
+        const float t = std::clamp((m - _mountainThreshold) / _mountainBlend, 0.0f, 1.0f);
+        h += _mountainHeight * t * t * (3.0f - 2.0f * t);
+    }
+    return h;
 }
 
-glm::vec3 JarErodedTerrainSdf::base_gradient(const glm::vec3 &surface, const glm::vec3 &up, float h, float step) const
+float JarTerrainSdf::max_layered_height() const
+{
+    return std::max(std::abs(_height), std::abs(_depth)) + (_mountainNoise.is_valid() ? _mountainHeight : 0.0f);
+}
+
+glm::vec3 JarTerrainSdf::height_gradient(const glm::vec3 &surface, const glm::vec3 &up, float h, float step) const
 {
     // Differences along two tangent directions: forward ones for the local
     // slope, central ones with a wide step for a low-passed slope.
@@ -83,29 +99,31 @@ glm::vec3 JarErodedTerrainSdf::base_gradient(const glm::vec3 &surface, const glm
         glm::vec3 p = surface + offset;
         if (_shape == SHAPE_SPHERE)
             p = glm::normalize(p) * _radius;
-        return base_height(p);
+        return layered_height(p);
     };
     if (step <= 1.0f)
         return t1 * ((at(t1 * e) - h) / e) + t2 * ((at(t2 * e) - h) / e);
     return t1 * ((at(t1 * e) - at(-t1 * e)) / (2.0f * e)) + t2 * ((at(t2 * e) - at(-t2 * e)) / (2.0f * e));
 }
 
-JarErodedTerrainSdf::Sample JarErodedTerrainSdf::erode(const glm::vec3 &surface, const glm::vec3 &up, float h) const
+JarTerrainSdf::Sample JarTerrainSdf::evaluate(const glm::vec3 &surface, const glm::vec3 &up) const
 {
-    Sample result{h, base_gradient(surface, up, h, 0.5f)};
-    if (_octaves <= 0 || _erosionStrength <= 0.0f || _height == 0.0f)
+    const float h = layered_height(surface);
+    Sample result{h, height_gradient(surface, up, h, 0.5f)};
+    const float range = max_layered_height();
+    if (!_erosion || _octaves <= 0 || _erosionStrength <= 0.0f || range <= 0.0f)
         return result;
     // The gully direction field uses the low-passed slope: stripes are measured
     // up to a cell from their pivot, so any fast rotation of the direction (from
     // fine noise detail) would be magnified into steep, rippled slopes.
-    const glm::vec3 gradient = base_gradient(surface, up, h, 0.25f * _erosionScale);
+    const glm::vec3 gradient = height_gradient(surface, up, h, 0.25f * _erosionScale);
 
     const float slope = glm::length(gradient);
     // Gully directions follow the slope, but pretend the input has a fixed
     // steepness (the eroded output is about equally steep everywhere).
     glm::vec3 gullySlope = slope > 1e-6f ? gradient / slope * _assumedSlope : glm::vec3(0.0f);
     // Fade target: -1 in valleys, +1 on peaks (here from altitude).
-    float fadeTarget = std::clamp(h / std::abs(_height), -1.0f, 1.0f);
+    float fadeTarget = std::clamp(h / range, -1.0f, 1.0f);
     // No gullies where the input is flat (peaks and valleys).
     float mask = ease_out(slope / _assumedSlope);
 
@@ -189,21 +207,25 @@ JarErodedTerrainSdf::Sample JarErodedTerrainSdf::erode(const glm::vec3 &surface,
     return result;
 }
 
-// Largest possible height above or below the base surface: base noise plus the
-// sum of all octave amplitudes (a geometric series).
-float JarErodedTerrainSdf::max_deviation() const
+// Largest possible height above or below the base surface: the layers plus
+// the sum of all erosion octave amplitudes (a geometric series).
+float JarTerrainSdf::max_deviation() const
 {
-    const float first = _erosionStrength * _erosionScale / Tau / _gullyWeight;
-    const float series = _gain < 1.0f ? (1.0f - std::pow(_gain, float(_octaves))) / (1.0f - _gain) : float(_octaves);
-    return std::abs(_height) + first * series;
+    float erosion = 0.0f;
+    if (_erosion && _erosionStrength > 0.0f)
+    {
+        const float first = _erosionStrength * _erosionScale / Tau / _gullyWeight;
+        erosion = first * (_gain < 1.0f ? (1.0f - std::pow(_gain, float(_octaves))) / (1.0f - _gain) : float(_octaves));
+    }
+    return max_layered_height() + erosion;
 }
 
-float JarErodedTerrainSdf::distance(const glm::vec3 &pos) const
+float JarTerrainSdf::distance(const glm::vec3 &pos) const
 {
     glm::vec3 surface, up;
     float above;
     frame(pos, surface, up, above);
-    // Far from the surface the erosion cannot matter: return a lower bound,
+    // Far from the surface the terrain cannot matter: return a lower bound,
     // blended in over a band so the field stays continuous.
     const float reach = max_deviation();
     const float band = 0.5f * reach + 1.0f;
@@ -212,26 +234,24 @@ float JarErodedTerrainSdf::distance(const glm::vec3 &pos) const
     if (far >= band)
         return bound;
 
-    const float h = base_height(surface);
-    const Sample eroded = erode(surface, up, h);
+    const Sample terrain = evaluate(surface, up);
     // Height difference divided by the slope: close to a true distance.
-    const float d = (above - eroded.height) / std::sqrt(1.0f + glm::dot(eroded.gradient, eroded.gradient));
+    const float d = (above - terrain.height) / std::sqrt(1.0f + glm::dot(terrain.gradient, terrain.gradient));
     if (far <= 0.0f)
         return d;
     const float t = far / band;
     return glm::mix(d, bound, t * t * (3.0f - 2.0f * t));
 }
 
-float JarErodedTerrainSdf::sample_height(const Vector3 &position) const
+float JarTerrainSdf::sample_height(const Vector3 &position) const
 {
     glm::vec3 surface, up;
     float above;
     frame(glm::vec3(position.x, position.y, position.z), surface, up, above);
-    const float h = base_height(surface);
-    return erode(surface, up, h).height;
+    return evaluate(surface, up).height;
 }
 
-Bounds JarErodedTerrainSdf::bounds() const
+Bounds JarTerrainSdf::bounds() const
 {
     if (_shape != SHAPE_SPHERE)
         return Bounds::infinite();
@@ -239,19 +259,61 @@ Bounds JarErodedTerrainSdf::bounds() const
     return Bounds(glm::vec3(-(_radius + reach)), glm::vec3(_radius + reach));
 }
 
-void JarErodedTerrainSdf::_bind_methods()
+// Volumes in UP_MODE_AUTO take their up direction and sea level from here.
+bool JarTerrainSdf::natural_up(UpField &out) const
+{
+    out.center = glm::vec3(0.0f);
+    out.axis = glm::vec3(0.0f, 1.0f, 0.0f);
+    if (_shape == SHAPE_SPHERE)
+    {
+        out.mode = UpField::RADIAL;
+        out.sea_level = _radius + _seaLevel;
+    }
+    else
+    {
+        out.mode = UpField::AXIS;
+        out.sea_level = _seaLevel;
+    }
+    return true;
+}
+
+void JarTerrainSdf::_validate_property(PropertyInfo &property) const
+{
+    const String name = property.name;
+    bool hidden = false;
+    if (name == "radius")
+        hidden = _shape != SHAPE_SPHERE;
+    else if (name == "mountain_height" || name == "mountain_threshold" || name == "mountain_blend")
+        hidden = _mountainNoise.is_null();
+    else if (name == "erosion_strength" || name == "erosion_scale" || name == "octaves" || name == "lacunarity" ||
+             name == "gain" || name == "detail" || name == "gully_weight" || name == "assumed_slope")
+        hidden = !_erosion;
+    if (hidden)
+        property.usage = PROPERTY_USAGE_NO_EDITOR;
+}
+
+void JarTerrainSdf::_bind_methods()
 {
     BIND_ENUM_CONSTANT(SHAPE_FLAT);
     BIND_ENUM_CONSTANT(SHAPE_SPHERE);
-#define BIND_PROP(m_name, m_type, m_hint, m_hint_text)                                                                  \
-    ClassDB::bind_method(D_METHOD("set_" #m_name, "value"), &JarErodedTerrainSdf::set_##m_name);                       \
-    ClassDB::bind_method(D_METHOD("get_" #m_name), &JarErodedTerrainSdf::get_##m_name);                                \
+#define BIND_PROP(m_name, m_type, m_hint, m_hint_text) \
+    ClassDB::bind_method(D_METHOD("set_" #m_name, "value"), &JarTerrainSdf::set_##m_name); \
+    ClassDB::bind_method(D_METHOD("get_" #m_name), &JarTerrainSdf::get_##m_name); \
     ADD_PROPERTY(PropertyInfo(m_type, #m_name, m_hint, m_hint_text), "set_" #m_name, "get_" #m_name)
     BIND_PROP(shape, Variant::INT, PROPERTY_HINT_ENUM, "Flat,Sphere");
     BIND_PROP(radius, Variant::FLOAT, PROPERTY_HINT_RANGE, "1,100000,1,or_greater,suffix:m");
+    BIND_PROP(sea_level, Variant::FLOAT, PROPERTY_HINT_NONE, "suffix:m");
+    ADD_GROUP("Base", "");
     BIND_PROP(noise, Variant::OBJECT, PROPERTY_HINT_RESOURCE_TYPE, "FastNoiseLite");
     BIND_PROP(height, Variant::FLOAT, PROPERTY_HINT_RANGE, "0,2000,0.1,or_greater,suffix:m");
+    BIND_PROP(depth, Variant::FLOAT, PROPERTY_HINT_RANGE, "0,2000,0.1,or_greater,suffix:m");
+    ADD_GROUP("Mountains", "");
+    BIND_PROP(mountain_noise, Variant::OBJECT, PROPERTY_HINT_RESOURCE_TYPE, "FastNoiseLite");
+    BIND_PROP(mountain_height, Variant::FLOAT, PROPERTY_HINT_RANGE, "0,5000,0.1,or_greater,suffix:m");
+    BIND_PROP(mountain_threshold, Variant::FLOAT, PROPERTY_HINT_RANGE, "-1,1,0.01");
+    BIND_PROP(mountain_blend, Variant::FLOAT, PROPERTY_HINT_RANGE, "0.01,2,0.01");
     ADD_GROUP("Erosion", "");
+    BIND_PROP(erosion, Variant::BOOL, PROPERTY_HINT_NONE, "");
     BIND_PROP(erosion_strength, Variant::FLOAT, PROPERTY_HINT_RANGE, "0,1,0.01,or_greater");
     BIND_PROP(erosion_scale, Variant::FLOAT, PROPERTY_HINT_RANGE, "1,1000,0.1,or_greater,suffix:m");
     BIND_PROP(octaves, Variant::INT, PROPERTY_HINT_RANGE, "0,10,1");
@@ -261,5 +323,5 @@ void JarErodedTerrainSdf::_bind_methods()
     BIND_PROP(gully_weight, Variant::FLOAT, PROPERTY_HINT_RANGE, "0.05,1,0.01");
     BIND_PROP(assumed_slope, Variant::FLOAT, PROPERTY_HINT_RANGE, "0.05,3,0.01");
 #undef BIND_PROP
-    ClassDB::bind_method(D_METHOD("sample_height", "position"), &JarErodedTerrainSdf::sample_height);
+    ClassDB::bind_method(D_METHOD("sample_height", "position"), &JarTerrainSdf::sample_height);
 }

@@ -1,29 +1,34 @@
-[gd_scene format=3]
+[gd_scene format=3 uid="uid://uheyqxwyskfc"]
 
 [ext_resource type="PackedScene" uid="uid://c7kqgl1k10x14" path="res://addons/jar_voxel_terrain/src/chunk.tscn" id="1_chunk"]
 [ext_resource type="PackedScene" path="res://demo/player/player.tscn" id="2_player"]
-[ext_resource type="Script" path="res://demo/orbit.gd" id="3_orbit"]
+[ext_resource type="Script" uid="uid://ca8q8yfyo8l3h" path="res://demo/orbit.gd" id="3_orbit"]
 [ext_resource type="Material" uid="uid://55tbedv6qxva" path="res://demo/assets/space/space_sky.tres" id="4_sky"]
 
 [sub_resource type="FastNoiseLite" id="Noise_planet"]
 frequency = 0.004
 
-[sub_resource type="JarPlanetSdf" id="Sdf_planet"]
+[sub_resource type="JarTerrainSdf" id="Sdf_planet"]
 noise = SubResource("Noise_planet")
+shape = 1
 radius = 1024.0
-noise_scale = 60.0
+height = 60.0
+depth = 30.0
+erosion = false
 
 [sub_resource type="SphereShape3D" id="PlanetGravityShape"]
 radius = 1800.0
 
 [sub_resource type="FastNoiseLite" id="Noise_moon"]
 seed = 7
-frequency = 0.01
 
-[sub_resource type="JarPlanetSdf" id="Sdf_moon"]
+[sub_resource type="JarTerrainSdf" id="Sdf_moon"]
 noise = SubResource("Noise_moon")
+shape = 1
 radius = 256.0
-noise_scale = 20.0
+height = 20.0
+depth = 10.0
+erosion = false
 
 [sub_resource type="SphereShape3D" id="MoonGravityShape"]
 radius = 500.0
@@ -36,63 +41,68 @@ background_mode = 2
 sky = SubResource("Sky")
 tonemap_mode = 3
 
-[node name="MoonDemo" type="Node3D"]
+[node name="MoonDemo" type="Node3D" unique_id=654113656]
 
-[node name="Planet" type="Node3D" parent="."]
+[node name="Planet" type="Node3D" parent="." unique_id=748884392]
 
-[node name="JarVoxelVolume" type="JarVoxelVolume" parent="Planet"]
+[node name="JarVoxelVolume" type="JarVoxelVolume" parent="Planet" unique_id=1503941685]
 extent = 4096.0
 chunk_scene = ExtResource("1_chunk")
 sdf = SubResource("Sdf_planet")
+meshing_algorithm = 1
+manifold = true
 lod_automatic_update_distance = 16.0
 up_mode = 1
 sea_level = 1024.0
 
-[node name="Gravity" type="Area3D" parent="Planet" groups=["gravity_frames"]]
+[node name="Gravity" type="Area3D" parent="Planet" unique_id=1735546627 groups=["gravity_frames"]]
 gravity_space_override = 3
 gravity_point = true
 gravity_point_unit_distance = 1024.0
 gravity_point_center = Vector3(0, 0, 0)
-gravity = 9.8
+gravity_direction = Vector3(0, 0, 0)
 
-[node name="CollisionShape3D" type="CollisionShape3D" parent="Planet/Gravity"]
+[node name="CollisionShape3D" type="CollisionShape3D" parent="Planet/Gravity" unique_id=786421422]
 shape = SubResource("PlanetGravityShape")
 
-[node name="MoonOrbit" type="Node3D" parent="."]
+[node name="MoonOrbit" type="Node3D" parent="." unique_id=1794933357]
 script = ExtResource("3_orbit")
 degrees_per_second = 1.0
 
-[node name="Moon" type="Node3D" parent="MoonOrbit"]
+[node name="Moon" type="Node3D" parent="MoonOrbit" unique_id=613770671]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2400, 0, 0)
 script = ExtResource("3_orbit")
 degrees_per_second = 4.0
 axis = Vector3(0.3, 1, 0)
 
-[node name="JarVoxelVolume" type="JarVoxelVolume" parent="MoonOrbit/Moon"]
+[node name="JarVoxelVolume" type="JarVoxelVolume" parent="MoonOrbit/Moon" unique_id=391857484]
 extent = 1024.0
 chunk_scene = ExtResource("1_chunk")
 sdf = SubResource("Sdf_moon")
+meshing_algorithm = 1
+manifold = true
 lod_automatic_update_distance = 16.0
 up_mode = 1
 sea_level = 256.0
 
-[node name="Gravity" type="Area3D" parent="MoonOrbit/Moon" groups=["gravity_frames"]]
+[node name="Gravity" type="Area3D" parent="MoonOrbit/Moon" unique_id=1924561901 groups=["gravity_frames"]]
 priority = 1
 gravity_space_override = 3
 gravity_point = true
 gravity_point_unit_distance = 256.0
 gravity_point_center = Vector3(0, 0, 0)
+gravity_direction = Vector3(0, 0, 0)
 gravity = 4.0
 
-[node name="CollisionShape3D" type="CollisionShape3D" parent="MoonOrbit/Moon/Gravity"]
+[node name="CollisionShape3D" type="CollisionShape3D" parent="MoonOrbit/Moon/Gravity" unique_id=562731854]
 shape = SubResource("MoonGravityShape")
 
-[node name="Player" parent="." instance=ExtResource("2_player")]
+[node name="Player" parent="." unique_id=1634523882 instance=ExtResource("2_player")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1150, 0)
 
-[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
+[node name="WorldEnvironment" type="WorldEnvironment" parent="." unique_id=325736719]
 environment = SubResource("Environment")
 
-[node name="DirectionalLight3D" type="DirectionalLight3D" parent="."]
+[node name="DirectionalLight3D" type="DirectionalLight3D" parent="." unique_id=819279691]
 transform = Transform3D(1, 0, 0, 0, 0.7, 0.714, 0, -0.714, 0.7, 0, 0, 0)
 shadow_enabled = true

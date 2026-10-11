@@ -3,7 +3,6 @@
 #include "capsule_sdf.h"
 #include "cone_sdf.h"
 #include "ellipsoid_sdf.h"
-#include "eroded_terrain_sdf.h"
 #include "mesh_sdf.h"
 #include "modifier_sdfs.h"
 #include "cylinder_sdf.h"
@@ -11,7 +10,6 @@
 #include "torus_sdf.h"
 #include "transform_sdf.h"
 #include "plane_sdf.h"
-#include "planet_sdf.h"
 #include "sphere_sdf.h"
 #include "terrain_detail.h"
 #include "terrain_feature.h"
@@ -33,7 +31,6 @@ void initialize_jar_voxel_terrain_module(ModuleInitializationLevel p_level)
         GDREGISTER_CLASS(JarSphereSdf);
         GDREGISTER_CLASS(JarPlaneSdf);
         GDREGISTER_CLASS(JarTerrainSdf);
-        GDREGISTER_CLASS(JarPlanetSdf);
         GDREGISTER_CLASS(JarOperationSdf);
         GDREGISTER_CLASS(JarTorusSdf);
         GDREGISTER_CLASS(JarCylinderSdf);
@@ -46,7 +43,6 @@ void initialize_jar_voxel_terrain_module(ModuleInitializationLevel p_level)
         GDREGISTER_CLASS(JarOffsetSdf);
         GDREGISTER_CLASS(JarRepeatSdf);
         GDREGISTER_CLASS(JarDisplaceSdf);
-        GDREGISTER_CLASS(JarErodedTerrainSdf);
 
         // POPULATION
         GDREGISTER_ABSTRACT_CLASS(JarTerrainPopulator);

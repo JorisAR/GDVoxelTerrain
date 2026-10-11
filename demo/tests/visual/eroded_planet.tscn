@@ -6,7 +6,7 @@
 frequency = 0.0015
 fractal_octaves = 3
 
-[sub_resource type="JarErodedTerrainSdf" id="Sdf"]
+[sub_resource type="JarTerrainSdf" id="Sdf"]
 noise = SubResource("Noise")
 shape = 1
 radius = 1024.0

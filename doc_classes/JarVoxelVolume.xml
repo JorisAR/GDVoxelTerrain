@@ -56,6 +56,12 @@
 				Returns the global-space up direction at [param global_position] (see [member up_mode]). Useful to orient a character on a planet.
 			</description>
 		</method>
+		<method name="get_up_field_info" qualifiers="const">
+			<return type="Dictionary" />
+			<description>
+				Returns the up field in effect (see [member up_mode]) as a dictionary in volume-local space: [code]mode[/code] ([constant UP_MODE_AXIS] or [constant UP_MODE_RADIAL]), [code]axis[/code], [code]center[/code] and [code]sea_level[/code] (a height along the axis, or a radius). Water and atmosphere nodes use it.
+			</description>
+		</method>
 		<method name="is_building" qualifiers="const">
 			<return type="bool" />
 			<description>
@@ -204,8 +210,8 @@
 		<member name="up_center" type="Vector3" setter="set_up_center" getter="get_up_center" default="Vector3(0, 0, 0)">
 			Local-space center: the planet center for [constant UP_MODE_RADIAL], and the origin of height measurement for [constant UP_MODE_AXIS].
 		</member>
-		<member name="up_mode" type="int" setter="set_up_mode" getter="get_up_mode" enum="JarVoxelVolume.UpMode" default="0">
-			How "up" is defined inside the volume, used for population rules (slope and height ranges) and [method get_up_direction_at]. [constant UP_MODE_AXIS] for flat worlds, [constant UP_MODE_RADIAL] for planets.
+		<member name="up_mode" type="int" setter="set_up_mode" getter="get_up_mode" enum="JarVoxelVolume.UpMode" default="2">
+			Which way is up in this volume, used by the terrain material, population rules, water, atmosphere and player controllers. [constant UP_MODE_AUTO] (default) takes it from the [member sdf] when the SDF knows (a [JarTerrainSdf]: radial for planets, +Y for flat terrain, including its sea level) and otherwise uses +Y. [constant UP_MODE_AXIS] and [constant UP_MODE_RADIAL] use [member up_axis], [member up_center] and [member sea_level].
 		</member>
 		<member name="voxel_size" type="float" setter="set_voxel_size" getter="get_voxel_size" default="1.0">
 			Edge length of a voxel at full detail (LOD 0), in meters: the smallest feature and edit the volume can represent. Halving it doubles the detail near viewers and costs roughly 8 times more work there. Applied when the volume enters the tree.
@@ -223,6 +229,9 @@
 		</constant>
 		<constant name="UP_MODE_RADIAL" value="1" enum="UpMode">
 			Up points away from [member up_center] (planets and moons).
+		</constant>
+		<constant name="UP_MODE_AUTO" value="2" enum="UpMode">
+			Up direction and sea level come from the [member sdf] (a [JarTerrainSdf]); +Y if the SDF does not define them.
 		</constant>
 		<constant name="SDF_OPERATION_UNION" value="0" enum="Operation">
 			Adds the shape: [code]min(volume, shape)[/code].

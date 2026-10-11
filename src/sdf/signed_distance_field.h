@@ -3,6 +3,7 @@
 
 #include "bounds.h"
 #include "sdf_operations.h"
+#include "up_field.h"
 #include <algorithm>
 #include <glm/glm.hpp>
 #include <godot_cpp/classes/resource.hpp>
@@ -37,6 +38,13 @@ class JarSignedDistanceField : public Resource
 
     // Main thread: build caches needed by distance(). Containers forward it to
     // their children.
+    // Shapes with an obvious "up" (terrain, planets) report it here, so volumes
+    // in UP_MODE_AUTO need no separate up / sea level settings.
+    virtual bool natural_up(UpField &out) const
+    {
+        return false;
+    }
+
     virtual void prepare()
     {
     }

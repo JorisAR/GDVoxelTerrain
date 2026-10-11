@@ -103,9 +103,11 @@ void JarVoxelVolume::_bind_methods()
     ADD_GROUP("Up Direction", "");
     BIND_ENUM_CONSTANT(UP_MODE_AXIS);
     BIND_ENUM_CONSTANT(UP_MODE_RADIAL);
+    BIND_ENUM_CONSTANT(UP_MODE_AUTO);
+    ClassDB::bind_method(D_METHOD("get_up_field_info"), &JarVoxelVolume::get_up_field_info);
     ClassDB::bind_method(D_METHOD("get_up_mode"), &JarVoxelVolume::get_up_mode);
     ClassDB::bind_method(D_METHOD("set_up_mode", "mode"), &JarVoxelVolume::set_up_mode);
-    ADD_PROPERTY(PropertyInfo(Variant::INT, "up_mode", PROPERTY_HINT_ENUM, "Axis,Radial"), "set_up_mode", "get_up_mode");
+    ADD_PROPERTY(PropertyInfo(Variant::INT, "up_mode", PROPERTY_HINT_ENUM, "Axis,Radial,Auto"), "set_up_mode", "get_up_mode");
     ClassDB::bind_method(D_METHOD("get_up_axis"), &JarVoxelVolume::get_up_axis);
     ClassDB::bind_method(D_METHOD("set_up_axis", "axis"), &JarVoxelVolume::set_up_axis);
     ADD_PROPERTY(PropertyInfo(Variant::VECTOR3, "up_axis"), "set_up_axis", "get_up_axis");
@@ -401,6 +403,7 @@ Ref<JarSignedDistanceField> JarVoxelVolume::get_sdf() const
 void JarVoxelVolume::set_sdf(const Ref<JarSignedDistanceField> &sdf)
 {
     _sdf = sdf;
+    apply_rendering_to_chunks(); // the up field may come from the SDF
 }
 
 // std:: MeshComputeScheduler JarVoxelVolume::get_mesh_scheduler() const
@@ -453,6 +456,7 @@ void JarVoxelVolume::set_cubic_voxels(bool value)
 void JarVoxelVolume::set_meshing_algorithm(MeshingAlgorithm value)
 {
     _meshingAlgorithm = value;
+    notify_property_list_changed();
     remesh_all();
 }
 
@@ -536,6 +540,7 @@ bool JarVoxelVolume::get_lod_automatic_update() const
 void JarVoxelVolume::set_lod_automatic_update(bool value)
 {
     _lod_automatic_update = value;
+    notify_property_list_changed();
 }
 
 float JarVoxelVolume::get_lod_automatic_update_distance() const
@@ -836,12 +841,56 @@ float JarVoxelVolume::distance_to_nearest_viewer(const glm::vec3 &position) cons
 
 JarVoxelVolume::UpMode JarVoxelVolume::get_up_mode() const
 {
-    return static_cast<UpMode>(_upField.mode);
+    return static_cast<UpMode>(_upMode);
 }
 void JarVoxelVolume::set_up_mode(UpMode mode)
 {
-    _upField.mode = static_cast<UpField::Mode>(mode);
+    _upMode = mode;
+    if (mode != UP_MODE_AUTO)
+        _upField.mode = static_cast<UpField::Mode>(mode);
+    notify_property_list_changed();
     apply_rendering_to_chunks();
+}
+
+UpField JarVoxelVolume::get_up_field() const
+{
+    UpField field = _upField;
+    if (_upMode == UP_MODE_AUTO)
+    {
+        if (_sdf.is_null() || !_sdf->natural_up(field))
+        {
+            field = _upField;
+            field.mode = UpField::AXIS;
+        }
+    }
+    return field;
+}
+
+Dictionary JarVoxelVolume::get_up_field_info() const
+{
+    const UpField f = get_up_field();
+    Dictionary d;
+    d["mode"] = int(f.mode);
+    d["axis"] = Vector3(f.axis.x, f.axis.y, f.axis.z);
+    d["center"] = Vector3(f.center.x, f.center.y, f.center.z);
+    d["sea_level"] = f.sea_level;
+    return d;
+}
+
+void JarVoxelVolume::_validate_property(PropertyInfo &property) const
+{
+    const String name = property.name;
+    bool hidden = false;
+    if (name == "up_axis")
+        hidden = _upMode != UP_MODE_AXIS;
+    else if (name == "up_center" || name == "sea_level")
+        hidden = _upMode == UP_MODE_AUTO;
+    else if (name == "dual_contouring_feature_threshold")
+        hidden = _meshingAlgorithm != MESHING_DUAL_CONTOURING;
+    else if (name == "lod_automatic_update_distance")
+        hidden = !_lod_automatic_update;
+    if (hidden)
+        property.usage = PROPERTY_USAGE_NO_EDITOR;
 }
 Vector3 JarVoxelVolume::get_up_axis() const
 {
@@ -892,7 +941,7 @@ void JarVoxelVolume::apply_rendering_to_chunks()
 Vector3 JarVoxelVolume::get_up_direction_at(const Vector3 &global_position) const
 {
     const Vector3 l = to_local(global_position);
-    const glm::vec3 up = _upField.up(glm::vec3(l.x, l.y, l.z));
+    const glm::vec3 up = get_up_field().up(glm::vec3(l.x, l.y, l.z));
     return get_global_basis().xform(Vector3(up.x, up.y, up.z)).normalized();
 }
 Dictionary JarVoxelVolume::raycast_sdf(const Vector3 &from, const Vector3 &to) const
@@ -930,7 +979,7 @@ Dictionary JarVoxelVolume::raycast_sdf(const Vector3 &from, const Vector3 &to) c
 float JarVoxelVolume::get_height_at(const Vector3 &global_position) const
 {
     const Vector3 l = to_local(global_position);
-    return _upField.height(glm::vec3(l.x, l.y, l.z));
+    return get_up_field().height(glm::vec3(l.x, l.y, l.z));
 }
 
 int JarVoxelVolume::desired_lod(const VoxelOctreeNode &node)

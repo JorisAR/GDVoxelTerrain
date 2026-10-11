@@ -1,20 +1,92 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <class name="JarTerrainSdf" inherits="JarSignedDistanceField" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
 	<brief_description>
-		SDF Terrain object.
+		Terrain generator for flat worlds and planets: noise, mountain ranges and erosion.
 	</brief_description>
 	<description>
-		Represents terrain as a signed distance field generated using [FastNoiseLite] noise.
-		This class describes the terrain shape based on noise values.
+		A heightfield along +Y ([constant SHAPE_FLAT]) or a planet around the origin ([constant SHAPE_SPHERE]), built from layers evaluated per point, so it works with chunked, infinite and editable volumes:
+		- [b]Base[/b]: [member noise] scaled by [member height] above zero and by [member depth] below it (ocean floors).
+		- [b]Mountains[/b]: where the low-frequency [member mountain_noise] passes [member mountain_threshold], the ground rises by up to [member mountain_height].
+		- [b]Erosion[/b]: an erosion filter carves branching gullies and sharp ridges into both.
+		Heights are measured from the base plane or the sphere of [member radius]; [member sea_level] places the sea relative to it. Volumes in [constant JarVoxelVolume.UP_MODE_AUTO] take their up direction and sea level from this SDF, so the materials, population rules, water and atmosphere follow when you change the radius or sea level.
+		The erosion technique is by Rune Skovbo Johansen (runevision), building on work by Clay John and Felix Westin (Fewes): [url=https://blog.runevision.com/2026/03/fast-and-gorgeous-erosion-filter.html]Fast and Gorgeous Erosion Filter[/url]. This is an independent implementation written from that article, extended to 3D cells so it also works on spheres. Keep the smallest gullies ([member erosion_scale] / [member lacunarity]^([member octaves] - 1)) a few voxels wide; anything finer only aliases. Surface nets suit eroded terrain best.
 	</description>
 	<tutorials>
 	</tutorials>
+	<methods>
+		<method name="sample_height" qualifiers="const">
+			<return type="float" />
+			<param index="0" name="position" type="Vector3" />
+			<description>
+				Returns the terrain height (above the base plane, or above the sphere of [member radius]) below or above [param position]. Useful for placing objects on the surface.
+			</description>
+		</method>
+	</methods>
 	<members>
-		<member name="height_scale" type="float" setter="set_height_scale" getter="get_height_scale" default="256.0">
-			Vertical scaling factor applied to the noise values.
+		<member name="assumed_slope" type="float" setter="set_assumed_slope" getter="get_assumed_slope" default="0.6">
+			Gully directions follow the input slope, but the filter acts as if the input always had this steepness, because the eroded output is roughly equally steep everywhere. Input much flatter than this (peaks and valleys) gets no gullies.
+		</member>
+		<member name="depth" type="float" setter="set_depth" getter="get_depth" default="60.0">
+			Depth in meters that negative [member noise] values reach below the base surface. Larger than [member height] gives deep oceans and low hills.
+		</member>
+		<member name="detail" type="float" setter="set_detail" getter="get_detail" default="1.5">
+			How far smaller gullies reach onto flatter ground. Higher values add more fine gullies.
+		</member>
+		<member name="erosion" type="bool" setter="set_erosion" getter="get_erosion" default="true">
+			Enables the erosion filter.
+		</member>
+		<member name="erosion_scale" type="float" setter="set_erosion_scale" getter="get_erosion_scale" default="80.0">
+			Width of the largest gullies, in meters.
+		</member>
+		<member name="erosion_strength" type="float" setter="set_erosion_strength" getter="get_erosion_strength" default="0.5">
+			Slope that each octave of gullies adds (rise over run).
+		</member>
+		<member name="gain" type="float" setter="set_gain" getter="get_gain" default="0.5">
+			Amplitude factor from one gully octave to the next. With [code]gain = 1 / lacunarity[/code] every octave adds the same slope.
+		</member>
+		<member name="gully_weight" type="float" setter="set_gully_weight" getter="get_gully_weight" default="0.5">
+			Weight of the gullies against the fade towards peaks and valleys. The strength is scaled by the inverse, so values below [code]1[/code] keep peaks pointy and ridges sharp.
+		</member>
+		<member name="height" type="float" setter="set_height" getter="get_height" default="60.0">
+			Height in meters that positive [member noise] values reach above the base surface.
+		</member>
+		<member name="lacunarity" type="float" setter="set_lacunarity" getter="get_lacunarity" default="2.0">
+			Width factor from one gully octave to the next: each octave is this many times narrower.
+		</member>
+		<member name="mountain_blend" type="float" setter="set_mountain_blend" getter="get_mountain_blend" default="0.5">
+			Range of [member mountain_noise] values over which mountains rise from nothing to [member mountain_height]. Small values give steep mountain feet.
+		</member>
+		<member name="mountain_height" type="float" setter="set_mountain_height" getter="get_mountain_height" default="200.0">
+			Height in meters that mountains add on top of the base terrain.
+		</member>
+		<member name="mountain_noise" type="FastNoiseLite" setter="set_mountain_noise" getter="get_mountain_noise">
+			Mask noise for mountain ranges, usually of a much lower frequency than [member noise]. A ridged fractal type gives mountain chains. Without it there are no mountains.
+		</member>
+		<member name="mountain_threshold" type="float" setter="set_mountain_threshold" getter="get_mountain_threshold" default="0.2">
+			Value of [member mountain_noise] where mountains start. Higher values give fewer, more sporadic mountains.
 		</member>
 		<member name="noise" type="FastNoiseLite" setter="set_noise" getter="get_noise">
-			Instance of [FastNoiseLite] used to generate terrain noise.
+			Base noise, sampled in 2D (XZ) for [constant SHAPE_FLAT] and in 3D on the sphere for [constant SHAPE_SPHERE]. Without noise the base surface is flat.
+		</member>
+		<member name="octaves" type="int" setter="set_octaves" getter="get_octaves" default="4">
+			Number of gully octaves, from [member erosion_scale] down.
+		</member>
+		<member name="radius" type="float" setter="set_radius" getter="get_radius" default="1000.0">
+			Radius of the base sphere, in meters.
+		</member>
+		<member name="sea_level" type="float" setter="set_sea_level" getter="get_sea_level" default="0.0">
+			Sea level in meters above the base surface. Used by volumes in [constant JarVoxelVolume.UP_MODE_AUTO] (materials, population heights, water).
+		</member>
+		<member name="shape" type="int" setter="set_shape" getter="get_shape" default="0">
+			Base surface: [constant SHAPE_FLAT] or [constant SHAPE_SPHERE].
 		</member>
 	</members>
+	<constants>
+		<constant name="SHAPE_FLAT" value="0" enum="Shape">
+			A heightfield along +Y, infinite in X and Z.
+		</constant>
+		<constant name="SHAPE_SPHERE" value="1" enum="Shape">
+			A planet of [member radius] around the origin.
+		</constant>
+	</constants>
 </class>

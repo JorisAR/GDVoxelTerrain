@@ -34,7 +34,11 @@ class JarTerrainFeature : public JarTerrainPopulator
     Ref<Material> get_material() const { return material; }
     void set_material(const Ref<Material> &value) { material = value; }
     Ref<PackedScene> get_scene() const { return scene; }
-    void set_scene(const Ref<PackedScene> &value) { scene = value; }
+    void set_scene(const Ref<PackedScene> &value)
+    {
+        scene = value;
+        notify_property_list_changed();
+    }
     float get_density() const { return density; }
     void set_density(float value) { density = std::max(0.0f, value); }
     float get_draw_distance() const { return draw_distance; }
@@ -43,6 +47,16 @@ class JarTerrainFeature : public JarTerrainPopulator
     void set_cast_shadows(bool value) { cast_shadows = value; }
 
   protected:
+    // A scene replaces the mesh settings.
+    void _validate_property(PropertyInfo &property) const
+    {
+        JarTerrainPopulator::_validate_property(property);
+        const StringName name = property.name;
+        if (scene.is_valid() && (name == StringName("mesh") || name == StringName("material") ||
+                                 name == StringName("cast_shadows")))
+            property.usage = PROPERTY_USAGE_NO_EDITOR;
+    }
+
     static void _bind_methods()
     {
 #define BIND_FEATURE(m_name, m_type, m_hint, m_hint_text)                                                              \

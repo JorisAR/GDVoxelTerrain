@@ -34,6 +34,11 @@ class JarTerrainDetail : public JarTerrainPopulator
     void set_shadows_enabled(bool value) { shadows_enabled = value; }
 
   protected:
+    void _validate_property(PropertyInfo &property) const
+    {
+        JarTerrainPopulator::_validate_property(property);
+    }
+
     static void _bind_methods()
     {
 #define BIND_DETAIL(m_name, m_type, m_hint, m_hint_text)                                                               \

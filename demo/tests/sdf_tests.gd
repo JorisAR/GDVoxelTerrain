@@ -148,16 +148,16 @@ func _compare_mesh(name: String, mesh: Mesh, reference: JarSignedDistanceField) 
 func _test_eroded_terrain() -> void:
 	var noise := FastNoiseLite.new()
 	noise.frequency = 0.003
-	for shape in [JarErodedTerrainSdf.SHAPE_FLAT, JarErodedTerrainSdf.SHAPE_SPHERE]:
-		var sdf := JarErodedTerrainSdf.new()
+	for shape in [JarTerrainSdf.SHAPE_FLAT, JarTerrainSdf.SHAPE_SPHERE]:
+		var sdf := JarTerrainSdf.new()
 		sdf.noise = noise
 		sdf.height = 100.0
 		sdf.shape = shape
 		sdf.radius = 1000.0
 		var label: String = ["flat", "sphere"][shape]
 		var up := Vector3.UP
-		var base := Vector3(37, 0, -12) if shape == JarErodedTerrainSdf.SHAPE_FLAT else Vector3(0.3, 1.0, 0.2).normalized() * 1000.0
-		if shape == JarErodedTerrainSdf.SHAPE_SPHERE:
+		var base := Vector3(37, 0, -12) if shape == JarTerrainSdf.SHAPE_FLAT else Vector3(0.3, 1.0, 0.2).normalized() * 1000.0
+		if shape == JarTerrainSdf.SHAPE_SPHERE:
 			up = base.normalized()
 		var h := sdf.sample_height(base)
 		var surface := base + up * h

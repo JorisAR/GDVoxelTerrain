@@ -52,7 +52,7 @@ The editing scripts in `demo/demo/editing` are meant to be reused: `SdfEditor` e
 - The essentials for your own scene:
   1. Add a `JarVoxelVolume` node anywhere in the scene (it can be moved, rotated or animated).
   2. Assign its `sdf` (any `JarSignedDistanceField` resource — this defines the starting shape) and its `chunk_scene` (`addons/jar_voxel_terrain/src/chunk.tscn`).
-  3. For planets set `up_mode` to *Radial* and `sea_level` to the planet radius; flat worlds keep the default *Axis* mode. This drives population rules and `get_up_direction_at()` / `get_height_at()`.
+  3. With a `JarTerrainSdf` the default `up_mode` (*Auto*) takes the up direction and sea level from the SDF: radial for planets, +Y for flat terrain. For other SDFs pick *Axis* or *Radial* and set `sea_level` (the planet radius for radial). This drives the material, population rules, water and `get_up_direction_at()` / `get_height_at()`.
   4. Add a `JarVoxelViewer` as a child of your player or camera. Without one, volumes follow the active camera.
 - Edit volumes at runtime from scripts with `volume.sphere_edit(position, radius, union)` or the more general `volume.modify(...)`. To edit whatever a physics raycast hit: `hit.collider.get_parent().get_volume()`.
 
@@ -65,6 +65,8 @@ The editing scripts in `demo/demo/editing` are meant to be reused: `SdfEditor` e
 - Operation constants are now `JarVoxelVolume.SDF_OPERATION_UNION` etc.
 - `octree_scale` + `size` are replaced by `voxel_size` (meters per voxel at full detail) and `extent` (meters the volume covers); `size = n` corresponds to `extent = 2^n * voxel_size`. `min_chunk_size` and the unused `lod_level_count` are gone (chunks are always 16 voxels).
 - Population rules: `minimum_slope` (a cosine) is replaced by `maximum_slope` in degrees (`minimum_slope = 0.85` becomes `maximum_slope = 32`); the unused `max_lod` is gone. Height ranges now default to unlimited.
+- `JarPlanetSdf` and the old `JarTerrainSdf` are merged into `JarTerrainSdf`: set `shape` to *Sphere* and `radius` for planets. The old `noise_scale` / `height_scale` become `height` (above zero) and `depth` (below); the old terrain used `height = 2 * height_scale`, `depth = height_scale`, the old planet `height = noise_scale`, `depth = noise_scale / 2`. Set `erosion = false` for the old look.
+- `up_mode` defaults to the new *Auto*; volumes that set *Axis* or *Radial* explicitly keep working.
 - The chunk shader `chunk.gdshader` is replaced by `terrain.gdshader` (see [Materials](#materials)); its `world_center` / `world_radius` parameters are gone (the volume's up settings are used). Materials go up to 8 (`0`-`7`); weights 4-7 arrive in `CUSTOM0`.
 
 ### Shaping worlds with SDFs
@@ -72,7 +74,7 @@ The editing scripts in `demo/demo/editing` are meant to be reused: `SdfEditor` e
 Shapes are authored as composable `JarSignedDistanceField` resources:
 
 - **Primitives:** `JarSphereSdf`, `JarBoxSdf` (optionally rounded), `JarPlaneSdf`, `JarCylinderSdf`, `JarCapsuleSdf`, `JarTorusSdf`, `JarConeSdf`, `JarEllipsoidSdf`.
-- **Terrain:** `JarTerrainSdf` (noise heightmap), `JarPlanetSdf` (noisy sphere) and `JarErodedTerrainSdf` (heightmap or planet with an erosion filter: branching gullies and sharp ridges, evaluated per point, after [runevision's erosion filter](https://blog.runevision.com/2026/03/fast-and-gorgeous-erosion-filter.html)). Surface nets suit eroded terrain best; keep the smallest gullies a few voxels wide.
+- **Terrain:** `JarTerrainSdf`, a flat heightfield or a planet (`shape`), built from base noise (separate `height` and ocean `depth`), optional mountain ranges (a low-frequency mask raising mountains where it passes a threshold) and optional erosion (branching gullies and sharp ridges, evaluated per point, after [runevision's erosion filter](https://blog.runevision.com/2026/03/fast-and-gorgeous-erosion-filter.html)). Only the settings that apply are shown in the inspector. Surface nets suit eroded terrain best; keep the smallest gullies a few voxels wide.
 - **Meshes:** `JarMeshSdf` turns any closed triangle mesh into an SDF. It is baked once into a distance grid stored in the resource (press *Bake* in the inspector, or it bakes on first use).
 - **Combining:** `JarOperationSdf` (union / subtraction / intersection and smooth variants, nestable for full CSG) and `JarTransformSdf` (position / rotate / scale a child).
 - **Modifiers:** `JarOffsetSdf` (grow, shrink, hollow into a shell), `JarRepeatSdf` (grid copies), `JarDisplaceSdf` (noise displacement).
@@ -168,7 +170,7 @@ In particular, here are some areas of interest, in no particular order of import
 
 ## Credits
 
-- The erosion filter in `JarErodedTerrainSdf` is based on Rune Skovbo Johansen's (runevision) [Fast and Gorgeous Erosion Filter](https://blog.runevision.com/2026/03/fast-and-gorgeous-erosion-filter.html), which builds on work by Clay John and Felix Westin (Fewes). It is an independent implementation written from the article.
+- The erosion filter in `JarTerrainSdf` is based on Rune Skovbo Johansen's (runevision) [Fast and Gorgeous Erosion Filter](https://blog.runevision.com/2026/03/fast-and-gorgeous-erosion-filter.html), which builds on work by Clay John and Felix Westin (Fewes). It is an independent implementation written from the article.
 
 ## License
 

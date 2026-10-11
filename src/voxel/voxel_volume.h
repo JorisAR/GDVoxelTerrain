@@ -117,7 +117,8 @@ class JarVoxelVolume : public Node3D
     TypedArray<JarTerrainFeature> _terrainFeatures;
     float _featureCellSize = 64.0f;
     std::unique_ptr<FeatureManager> _featureManager;
-    UpField _upField;
+    UpField _upField; // manual settings (UP_MODE_AXIS / UP_MODE_RADIAL)
+    int _upMode = UP_MODE_AUTO;
 
     // TERRAIN DESTRUCTION
     // bool _separate_loose_chunks = true;
@@ -138,6 +139,7 @@ class JarVoxelVolume : public Node3D
 
   protected:
     static void _bind_methods();
+    void _validate_property(PropertyInfo &property) const;
 
   public:
     JarVoxelVolume();
@@ -184,14 +186,13 @@ class JarVoxelVolume : public Node3D
     {
         UP_MODE_AXIS = UpField::AXIS,
         UP_MODE_RADIAL = UpField::RADIAL,
+        UP_MODE_AUTO = 2, // from the SDF (JarTerrainSdf), else the manual axis settings
     };
 
-    // Up direction / height (population rules, player controllers). Copy is
-    // taken by worker threads; only change it while the volume is idle.
-    const UpField &get_up_field() const
-    {
-        return _upField;
-    }
+    // Up direction / height (population rules, materials, water, players), as
+    // in effect: in UP_MODE_AUTO taken from the SDF. Worker threads take copies.
+    UpField get_up_field() const;
+    Dictionary get_up_field_info() const;
     UpMode get_up_mode() const;
     void set_up_mode(UpMode mode);
     Vector3 get_up_axis() const;
