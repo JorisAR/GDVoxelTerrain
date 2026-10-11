@@ -57,6 +57,8 @@ func _physics_process(delta: float) -> void:
 	_preview.visible = show_preview and hit and preview_mesh != null
 	if _preview.visible:
 		_preview.global_transform = target
+		# Outline width scales with the brush, within sensible limits.
+		(_preview.material_override as ShaderMaterial).set_shader_parameter("band_width", clampf(scale_factor * 0.05, 0.05, 1.0))
 	if not hit or _cooldown > 0.0 or sdf == null:
 		return
 	var add := Input.is_action_pressed("right_click")

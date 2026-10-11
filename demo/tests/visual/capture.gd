@@ -48,6 +48,20 @@ func _ready() -> void:
 		while idle < 60:
 			await get_tree().process_frame
 			idle = 0 if volumes[0].is_building() or volumes[0].is_meshing() else idle + 1
+	if OS.get_environment("PREVIEW") != "":
+		# The brush preview ghost (sphere, radius 3) centered at PREVIEW.
+		var ghost := MeshInstance3D.new()
+		var sphere := SphereMesh.new()
+		sphere.radius = 3.0
+		sphere.height = 6.0
+		ghost.mesh = sphere
+		var mat := ShaderMaterial.new()
+		mat.shader = load("res://demo/editing/brush_preview.gdshader")
+		ghost.material_override = mat
+		add_child(ghost)
+		ghost.global_position = _vec(OS.get_environment("PREVIEW"))
+		for i in 5:
+			await get_tree().process_frame
 	await RenderingServer.frame_post_draw
 	var image := get_viewport().get_texture().get_image()
 	image.save_png(OS.get_environment("OUT"))
