@@ -10,6 +10,7 @@ func _init() -> void:
 	ResourceSaver.save(_rock(), DIR + "rock_mesh.tres")
 	ResourceSaver.save(_broadleaf(), DIR + "broadleaf_mesh.tres")
 	ResourceSaver.save(_bush(), DIR + "bush_mesh.tres")
+	ResourceSaver.save(_grass_clump(), "res://demo/assets/population/details/grass_clump_mesh.tres")
 	quit()
 
 func _pine() -> ArrayMesh:
@@ -95,3 +96,29 @@ func _blob(st: SurfaceTool, center: Vector3, size: Vector3, color: Color, seed_v
 	for i in indices:
 		var v := verts[i]
 		st.add_vertex(center + v * size * (1.0 + 0.25 * noise.get_noise_3dv(v)))
+
+
+## A clump of 7 single-triangle grass blades, about 0.6 m wide and 0.5 m tall.
+## Vertex color red is the height along the blade (0 root, 1 tip) for the
+## grass shader; normals point up (the shader lights blades like the ground).
+func _grass_clump() -> ArrayMesh:
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 7
+	for i in 7:
+		var angle := rng.randf() * TAU
+		var radius := rng.randf() * 0.25
+		var root := Vector3(cos(angle) * radius, 0.0, sin(angle) * radius)
+		var facing := rng.randf() * TAU
+		var side := Vector3(cos(facing), 0.0, sin(facing)) * rng.randf_range(0.035, 0.06)
+		var lean := Vector3(cos(angle), 0.0, sin(angle)) * rng.randf_range(0.05, 0.2)
+		var tip := root + lean + Vector3.UP * rng.randf_range(0.3, 0.6)
+		st.set_normal(Vector3.UP)
+		st.set_color(Color(0, 0, 0))
+		st.add_vertex(root - side)
+		st.set_color(Color(1, 0, 0))
+		st.add_vertex(tip)
+		st.set_color(Color(0, 0, 0))
+		st.add_vertex(root + side)
+	return st.commit()

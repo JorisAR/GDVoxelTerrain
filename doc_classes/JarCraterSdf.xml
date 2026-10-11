@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="JarCraterSdf" inherits="JarModifierSdf" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
+	<brief_description>
+		Impact craters on top of another SDF, such as a moon's [JarTerrainSdf].
+	</brief_description>
+	<description>
+		Adds bowl-shaped craters with raised rims to [member JarModifierSdf.sdf], in several sizes: each octave halves the radius and has four times as many craters. Craters are measured along the child's surface, using its up field (a planet's center, or +Y for flat terrain), and applied as a height change, so they follow the terrain underneath and need no extra samples of the child. Volumes in [constant JarVoxelVolume.UP_MODE_AUTO] still see the child's up field and sea level.
+	</description>
+	<tutorials>
+	</tutorials>
+	<members>
+		<member name="density" type="float" setter="set_density" getter="get_density" default="0.35">
+			Chance that a cell holds a crater. Each octave has one cell per four crater radii.
+		</member>
+		<member name="depth" type="float" setter="set_depth" getter="get_depth" default="0.3">
+			Depth of a crater bowl as a fraction of its radius.
+		</member>
+		<member name="octaves" type="int" setter="set_octaves" getter="get_octaves" default="3">
+			Number of crater sizes, from [member size] down, halving each time.
+		</member>
+		<member name="rim" type="float" setter="set_rim" getter="get_rim" default="0.1">
+			Height of a crater rim as a fraction of its radius.
+		</member>
+		<member name="seed" type="int" setter="set_seed" getter="get_seed" default="0">
+			Changes the crater layout.
+		</member>
+		<member name="size" type="float" setter="set_size" getter="get_size" default="40.0">
+			Radius in meters of the largest craters (radii vary per crater between half and all of this).
+		</member>
+	</members>
+</class>

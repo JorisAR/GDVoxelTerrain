@@ -11,7 +11,8 @@ extends Node3D
 @export var sdf: JarSignedDistanceField
 ## Uniform scale applied to the SDF (a unit sphere SDF with scale 2 has radius 2 m).
 @export var scale_factor := 1.0
-## Material painted by edits (0-7), or -1 to keep existing materials.
+## Material painted when adding or painting (an index into the volume's
+## materials), or -1 to keep existing materials. Digging never paints.
 @export_range(-1, 7) var material := 0
 ## Left click paints instead of removing; right click still adds.
 @export var paint_mode := false
@@ -76,7 +77,9 @@ func _physics_process(delta: float) -> void:
 	if volume and paint_mode and remove:
 		volume.paint(sdf, target, maxi(material, 0))
 	elif volume:
-		volume.edit(sdf, _operation(add), target, material, smoothness)
+		# Digging keeps the existing materials (the exposed ground follows the
+		# ground rules); adding paints the selected material.
+		volume.edit(sdf, _operation(add), target, material if add else -1, smoothness)
 
 ## Describes the current settings, for HUDs.
 func describe() -> String:

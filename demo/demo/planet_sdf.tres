@@ -4,9 +4,9 @@
 frequency = 0.001
 
 [resource]
-noise = SubResource("FastNoiseLite_awrh7")
 shape = 1
 radius = 4096.0
+noise = SubResource("FastNoiseLite_awrh7")
 height = 200.0
 depth = 100.0
 erosion = false

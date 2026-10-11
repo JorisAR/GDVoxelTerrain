@@ -90,6 +90,16 @@ void JarVoxelVolume::_bind_methods()
     ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "performance_collider_budget_ms", PROPERTY_HINT_RANGE, "0,16,0.1"),
                  "set_collider_budget_ms", "get_collider_budget_ms");
 
+    ADD_GROUP("Collision", "collision_");
+    ClassDB::bind_method(D_METHOD("get_collision_layer"), &JarVoxelVolume::get_collision_layer);
+    ClassDB::bind_method(D_METHOD("set_collision_layer", "layer"), &JarVoxelVolume::set_collision_layer);
+    ADD_PROPERTY(PropertyInfo(Variant::INT, "collision_layer", PROPERTY_HINT_LAYERS_3D_PHYSICS), "set_collision_layer",
+                 "get_collision_layer");
+    ClassDB::bind_method(D_METHOD("get_collision_mask"), &JarVoxelVolume::get_collision_mask);
+    ClassDB::bind_method(D_METHOD("set_collision_mask", "mask"), &JarVoxelVolume::set_collision_mask);
+    ADD_PROPERTY(PropertyInfo(Variant::INT, "collision_mask", PROPERTY_HINT_LAYERS_3D_PHYSICS), "set_collision_mask",
+                 "get_collision_mask");
+    ADD_GROUP("Performance", "performance_");
     ClassDB::bind_method(D_METHOD("get_collider_distance"), &JarVoxelVolume::get_collider_distance);
     ClassDB::bind_method(D_METHOD("set_collider_distance", "value"), &JarVoxelVolume::set_collider_distance);
     ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "performance_collider_distance", PROPERTY_HINT_RANGE, "0,4096,1,or_greater"),
@@ -172,12 +182,12 @@ void JarVoxelVolume::_bind_methods()
     BIND_ENUM_CONSTANT(SDF_OPERATION_SMOOTH_SUBTRACTION);
     BIND_ENUM_CONSTANT(SDF_OPERATION_SMOOTH_INTERSECTION);
     ClassDB::bind_method(D_METHOD("edit", "sdf", "operation", "transform", "material", "smoothness"),
-                         &JarVoxelVolume::edit, DEFVAL(0), DEFVAL(0.0f));
+                         &JarVoxelVolume::edit, DEFVAL(-1), DEFVAL(0.0f));
     ClassDB::bind_method(D_METHOD("modify", "sdf", "operation", "position", "radius", "material"),
-                         &JarVoxelVolume::modify, DEFVAL(0));
+                         &JarVoxelVolume::modify, DEFVAL(-1));
     ClassDB::bind_method(D_METHOD("paint", "sdf", "transform", "material"), &JarVoxelVolume::paint);
     ClassDB::bind_method(D_METHOD("sphere_edit", "position", "radius", "union", "material"),
-                         &JarVoxelVolume::sphere_edit, DEFVAL(0));
+                         &JarVoxelVolume::sphere_edit, DEFVAL(-1));
     ClassDB::bind_method(D_METHOD("spawn_debug_spheres_in_bounds", "position", "range"),
                          &JarVoxelVolume::spawn_debug_spheres_in_bounds);
     ClassDB::bind_method(D_METHOD("force_update_lod"), &JarVoxelVolume::force_update_lod);
@@ -272,8 +282,31 @@ JarVoxelChunk *JarVoxelVolume::pool_acquire()
         return c;
     }
     JarVoxelChunk *c = static_cast<JarVoxelChunk *>(_chunkScene->instantiate());
+    if (StaticBody3D *body = c->get_static_body())
+    {
+        body->set_collision_layer(_collisionLayer);
+        body->set_collision_mask(_collisionMask);
+    }
     add_child(c);
     return c;
+}
+
+void JarVoxelVolume::set_collision_layer(uint32_t value)
+{
+    _collisionLayer = value;
+    for (int i = 0; i < get_child_count(); ++i)
+        if (JarVoxelChunk *chunk = Object::cast_to<JarVoxelChunk>(get_child(i)))
+            if (chunk->get_static_body())
+                chunk->get_static_body()->set_collision_layer(value);
+}
+
+void JarVoxelVolume::set_collision_mask(uint32_t value)
+{
+    _collisionMask = value;
+    for (int i = 0; i < get_child_count(); ++i)
+        if (JarVoxelChunk *chunk = Object::cast_to<JarVoxelChunk>(get_child(i)))
+            if (chunk->get_static_body())
+                chunk->get_static_body()->set_collision_mask(value);
 }
 
 // Thread-safe (called from the build worker): just queue the chunk. The actual

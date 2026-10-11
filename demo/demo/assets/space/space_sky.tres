@@ -4,12 +4,3 @@
 
 [resource]
 shader = ExtResource("1_gt3sv")
-shader_parameter/sky_color = Color(0.03, 0.05, 0.11, 1)
-shader_parameter/star_base_color = Color(0.8, 1, 0.3, 1)
-shader_parameter/star_hue_offset = 0.649
-shader_parameter/star_intensity = 0.069
-shader_parameter/star_twinkle_speed = 0.8
-shader_parameter/star_twinkle_intensity = 0.0
-shader_parameter/layer_scale = 20.0
-shader_parameter/layer_scale_step = 4.0
-shader_parameter/layers_count = 6

@@ -1,130 +1,101 @@
 shader_type sky;
-
-// Comment this if you don't want to use star twinke. However, if you do want to keep it,
-// I suggest you to set the sky process mode to High-Quality Incremental or Real-Time,
-// as star twinkling may greatly impact performance.
-#define USE_TWINKLE
-
-group_uniforms sky;
-uniform vec3 sky_color: source_color = vec3(0.03, 0.05, 0.11);
+// Space background in physical-ish brightness: a starfield with a realistic
+// magnitude distribution (many faint stars, few bright ones) and colors from
+// star temperatures, a faint galactic band, and the sun's disk with limb
+// darkening and a small corona.
+//
+// Stars are far dimmer than a sunlit sky. With auto exposure (see the demo
+// environment's camera attributes) they vanish behind a bright day sky and
+// appear in space or at night, without special casing.
 
 group_uniforms stars;
-uniform vec3 star_base_color: source_color = vec3(0.8, 1.0, 0.3);
-uniform float star_hue_offset: hint_range(0., 1.) = 0.6;
-uniform float star_intensity: hint_range(0., 0.2) = 0.08;
-#ifdef USE_TWINKLE
-uniform float star_twinkle_speed: hint_range(0.0, 2.0) = 0.8;
-uniform float star_twinkle_intensity: hint_range(0.0, 1.0) = 0.2;
-#endif
+// Brightness of the brightest stars (HDR).
+uniform float star_brightness = 0.08;
+// Angular radius of a star's glow, in radians (about a pixel).
+uniform float star_size = 0.0009;
+// Stars per layer cell; higher = more stars.
+uniform float star_density : hint_range(0.0, 1.0) = 0.35;
+group_uniforms galaxy;
+uniform vec3 galaxy_normal = vec3(0.3, 0.9, 0.3);
+uniform vec3 galaxy_color : source_color = vec3(0.55, 0.6, 0.75);
+uniform float galaxy_brightness = 0.012;
+group_uniforms sun;
+// Disk brightness relative to the light energy (HDR; the disk is far brighter
+// than anything else).
+uniform float sun_disk_intensity = 40.0;
+uniform float sun_corona_intensity = 0.4;
+// Used when the light has no angular size set.
+uniform float sun_default_size_degrees = 0.8;
+group_uniforms;
 
-group_uniforms layers;
-uniform float layer_scale: hint_range(0., 60.) = 20.;
-uniform float layer_scale_step: hint_range(0., 40.) = 10.;
-uniform int layers_count: hint_range(0, 12) = 3;
-
-// Hue credit:
-// The MIT License
-// Copyright © 2024 DigvijaysinhGohil
-// https://github.com/DigvijaysinhGohil/Godot-Shader-Lib
-
-vec3 hue(vec3 input, float offset, int range_index) {
-	// RGB to HSV
-	vec4 k = vec4(0., -1./3., 2./3., -1.);
-	vec4 p = mix(vec4(input.bg, k.wz), vec4(input.gb, k.xy), step(input.b, input.g));
-	vec4 q = mix(vec4(p.xyw, input.r), vec4(input.r, p.yzx), step(p.x, input.r));
-	float d = q.x - min(q.w, q.y);
-	float e = 1.e-10;
-	vec3 hsv = vec3(abs(q.z + (q.w - q.y) / (6. * d + e)), d / (q.x + e), q.x);
-
-	offset = (range_index == 0) ? offset / 360. : offset;
-	float hue = hsv.x + offset;
-	if (hue < 0.) {
-		hsv.x = hue + 1.;
-	} else if (hue > 1.) {
-		hsv.x = hue - 1.;
-	} else {
-		hsv.x = hue;
-	}
-	hsv.y *= 0.5;
-
-	// HSV to RGB
-	vec4 k2 = vec4(1., 2./3., 1./3., 3.);
-	vec3 p2 = abs(fract(hsv.xxx + k2.xyz) * 6. - k2.www);
-	vec3 rgb = hsv.z * mix(k2.xxx, clamp(p2 - k2.xxx, 0., 1.), hsv.y);
-	return rgb;
+float hash13(vec3 p) {
+	p = fract(p * 0.1031);
+	p += dot(p, p.zyx + 31.32);
+	return fract((p.x + p.y) * p.z);
 }
 
-// Voronoi method credit:
-// The MIT License
-// Copyright © 2013 Inigo Quilez
-// https://www.shadertoy.com/view/ldl3Dl
-
-vec3 hash(vec3 x) {
-	x = vec3(dot(x, vec3(127.1,311.7, 74.7)),
-			 dot(x, vec3(269.5,183.3,246.1)),
-			 dot(x, vec3(113.5,271.9,124.6)));
-	return fract(sin(x) * 43758.5453123);
+vec3 hash33(vec3 p) {
+	p = fract(p * vec3(0.1031, 0.1030, 0.0973));
+	p += dot(p, p.yxz + 33.33);
+	return fract((p.xxy + p.yxx) * p.zyx);
 }
 
-vec2 voronoi(in vec3 x){
-	vec3 p = floor(x);
+float value_noise(vec3 x) {
+	vec3 i = floor(x);
 	vec3 f = fract(x);
+	f = f * f * (3.0 - 2.0 * f);
+	return mix(mix(mix(hash13(i), hash13(i + vec3(1, 0, 0)), f.x), mix(hash13(i + vec3(0, 1, 0)), hash13(i + vec3(1, 1, 0)), f.x), f.y),
+			   mix(mix(hash13(i + vec3(0, 0, 1)), hash13(i + vec3(1, 0, 1)), f.x), mix(hash13(i + vec3(0, 1, 1)), hash13(i + vec3(1, 1, 1)), f.x), f.y), f.z);
+}
 
-	float res = 100.;
-	float id = 0.;
+// Approximate color of a black body (star temperature t in 0..1: 3000K..12000K).
+vec3 star_color(float t) {
+	vec3 red = vec3(1.0, 0.62, 0.38);
+	vec3 white = vec3(1.0, 0.96, 0.92);
+	vec3 blue = vec3(0.68, 0.78, 1.0);
+	return t < 0.5 ? mix(red, white, t * 2.0) : mix(white, blue, (t - 0.5) * 2.0);
+}
 
-	for (float k = -1.; k <= 1.; k += 1.) {
-		for (float j = -1.; j <= 1.; j += 1.) {
-			for (float i = -1.; i <= 1.; i += 1.) {
-				vec3 b = vec3(i, j, k);
-				vec3 r = vec3(b) - f + hash(p + b);
-				float d = dot(r, r);
-				if (d < res) {
-					res = d;
-					id = dot(p + b, vec3(0., 57., 113.));
-				}
-		    }
-		}
-	}
-
-	return vec2(sqrt(res), id);
+// One layer of stars: at most one star per cell of a grid around the sphere,
+// kept away from the cell's edges so a pixel only needs its own cell.
+vec3 star_layer(vec3 dir, float scale, float brightness) {
+	vec3 cell = floor(dir * scale);
+	vec3 r = hash33(cell);
+	if (r.x > star_density)
+		return vec3(0.0);
+	vec3 star = normalize(cell + 0.15 + 0.7 * hash33(cell + 41.0));
+	float angle = acos(clamp(dot(dir, star), -1.0, 1.0));
+	// Magnitudes: brightness follows a steep power law.
+	float magnitude = pow(hash13(cell + 17.0), 10.0);
+	float glow = exp(-angle * angle / (star_size * star_size));
+	return star_color(r.y) * magnitude * glow * brightness;
 }
 
 void sky() {
-	COLOR = sky_color;
+	vec3 dir = EYEDIR;
+	vec3 color = vec3(0.00015, 0.0002, 0.0004);
 
-	float _sun_distance = 0.0;
-	float sun_size = 0.1f, sun_blur = 1.0f;
-	vec3 sun_color = vec3(1,.5,.2) * 2.0;
-	if( LIGHT0_ENABLED )
-	{
-		_sun_distance = distance( EYEDIR, LIGHT0_DIRECTION );
-		// Bigger sun near the horizon
-		float _sun_size = sun_size + cos( LIGHT0_DIRECTION.y * PI ) * sun_size * 0.25;
-		// Finding sun disc and edge blur
-		float _sun_amount = pow(clamp(( 1.0 - _sun_distance / _sun_size ) / sun_blur, 0.0, 1.0 ), 4.0);
-		if( _sun_amount > 0.0 )
-		{
-			COLOR = mix( COLOR, sun_color, _sun_amount );
+	// Galactic band: brighter near the plane, broken up by noise.
+	float band = 1.0 - abs(dot(dir, normalize(galaxy_normal)));
+	float clouds = value_noise(dir * 6.0) * 0.6 + value_noise(dir * 17.0) * 0.4;
+	color += galaxy_color * galaxy_brightness * pow(band, 6.0) * (0.4 + clouds);
+	// Three layers: few bright stars, many faint ones.
+	color += star_layer(dir, 90.0, star_brightness);
+	color += star_layer(dir, 180.0, star_brightness * 0.35);
+	color += star_layer(dir, 360.0, star_brightness * 0.12);
+
+	if (LIGHT0_ENABLED) {
+		float size = LIGHT0_SIZE > 0.0 ? LIGHT0_SIZE * 0.5 : radians(sun_default_size_degrees) * 0.5;
+		float angle = acos(clamp(dot(dir, LIGHT0_DIRECTION), -1.0, 1.0));
+		float r = angle / size;
+		if (r < 1.0) {
+			// Limb darkening: the edge of the disk is dimmer and redder.
+			float mu = sqrt(1.0 - r * r);
+			vec3 limb = vec3(pow(mu, 0.4), pow(mu, 0.5), pow(mu, 0.65));
+			color += LIGHT0_COLOR * LIGHT0_ENERGY * sun_disk_intensity * limb;
 		}
+		// Corona: a soft glow falling off quickly around the disk.
+		color += LIGHT0_COLOR * LIGHT0_ENERGY * sun_corona_intensity * exp(-max(r - 1.0, 0.0) * 1.5) * 0.02;
 	}
-
-	for (int i = 0; i < layers_count; i++) {
-		vec3 pos = EYEDIR * (layer_scale + float(i) * layer_scale_step);
-		vec2 layer = voronoi(pos);
-
-		vec3 rand = hash(vec3(layer.y));
-
-		#ifdef USE_TWINKLE
-			float twinkle = sin(TIME * PI * star_twinkle_speed + rand.x * TAU);
-			twinkle *= star_twinkle_intensity;
-			float star = smoothstep(star_intensity + star_intensity * twinkle, 0., layer.x);
-		#else
-			float star = smoothstep(star_intensity, 0., layer.x);
-		#endif
-
-		vec3 star_color = star * hue((COLOR + star_base_color), rand.y * star_hue_offset, 1);
-
-		COLOR += star_color;
-	}
+	COLOR = color;
 }

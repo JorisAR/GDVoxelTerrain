@@ -10,6 +10,7 @@ extends Node3D
 ## precise up close. Tweak the look through [member material] (water.gdshader).
 
 const WATER_SHADER := preload("res://addons/jar_voxel_terrain/nodes/water/water.gdshader")
+const UNDERWATER_SHADER := preload("res://addons/jar_voxel_terrain/nodes/water/underwater.gdshader")
 
 ## The volume whose sea level this water fills. Empty: the parent if it is a
 ## volume, else the first volume among the siblings.
@@ -26,10 +27,15 @@ const WATER_SHADER := preload("res://addons/jar_voxel_terrain/nodes/water/water.
 @export var patch_size := 1200.0
 ## Quads per side of the dense patch.
 @export_range(16, 512) var patch_resolution := 200
+## Fog when the camera is under water; empty uses the default
+## (underwater.gdshader, not saved with the scene).
+@export var underwater_material: ShaderMaterial
 
 var _far: MeshInstance3D
 var _near: MeshInstance3D
+var _fog: MeshInstance3D
 var _default_material: ShaderMaterial
+var _default_underwater: ShaderMaterial
 
 ## The material in use: [member material], or the default one.
 func get_active_material() -> ShaderMaterial:
@@ -40,7 +46,29 @@ func get_active_material() -> ShaderMaterial:
 		_default_material.shader = WATER_SHADER
 	return _default_material
 
+func get_active_underwater_material() -> ShaderMaterial:
+	if underwater_material:
+		return underwater_material
+	if _default_underwater == null:
+		_default_underwater = ShaderMaterial.new()
+		_default_underwater.shader = UNDERWATER_SHADER
+		# After the water surface, before clouds and the atmosphere.
+		_default_underwater.render_priority = 10
+	return _default_underwater
+
 func _ready() -> void:
+	# A small sphere around the camera: the fog shader covers the screen from it.
+	_fog = MeshInstance3D.new()
+	_fog.top_level = true
+	_fog.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	var bubble := SphereMesh.new()
+	bubble.radius = 2.0
+	bubble.height = 4.0
+	bubble.radial_segments = 16
+	bubble.rings = 8
+	_fog.mesh = bubble
+	_fog.extra_cull_margin = 16384.0
+	add_child(_fog, false, Node.INTERNAL_MODE_FRONT)
 	_far = MeshInstance3D.new()
 	_near = MeshInstance3D.new()
 	for m in [_far, _near]:
@@ -86,8 +114,15 @@ func _process(_delta: float) -> void:
 	mat.set_shader_parameter("water_axis", axis)
 	mat.set_shader_parameter("water_level", level)
 	mat.set_shader_parameter("water_radial", radial)
+	var fog := get_active_underwater_material()
+	_fog.material_override = fog
+	fog.set_shader_parameter("water_center", center)
+	fog.set_shader_parameter("water_axis", axis)
+	fog.set_shader_parameter("water_level", level)
+	fog.set_shader_parameter("water_radial", radial)
 
 	var eye := camera.global_position if camera else center + axis * (level + 100.0)
+	_fog.global_position = eye
 	if radial:
 		if not (_far.mesh is SphereMesh) or not is_equal_approx(_far.mesh.radius, level):
 			var sphere := SphereMesh.new()

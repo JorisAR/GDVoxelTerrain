@@ -35,6 +35,8 @@ class JarModifierSdf : public JarSignedDistanceField
 
     float distance(const glm::vec3 &pos) const override { return child_distance(pos); }
     Bounds bounds() const override { return child_bounds(); }
+    // Modifiers keep their child's "up" (a crater field on a planet is still a planet).
+    bool natural_up(UpField &out) const override { return _sdf.is_valid() && _sdf->natural_up(out); }
     void prepare() override
     {
         if (_sdf.is_valid())

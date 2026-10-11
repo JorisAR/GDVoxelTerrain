@@ -10,6 +10,7 @@ func _ready() -> void:
 	_test_modifiers()
 	_test_mesh_sdfs()
 	_test_eroded_terrain()
+	_test_craters()
 	print("SDF tests: %s" % ("ALL PASSED" if _failures == 0 else "%d FAILED" % _failures))
 	get_tree().quit(1 if _failures > 0 else 0)
 
@@ -187,3 +188,36 @@ func _test_eroded_terrain() -> void:
 		_check("eroded %s continuous" % label, max_jump < 0.02, "largest jump over 1 mm: %.4f" % max_jump)
 		_check("eroded %s distance-like" % label, slopes[100] < 1.6 and slopes[190] < 2.9,
 			"gradient length median %.2f, 95%% %.2f" % [slopes[100], slopes[190]])
+
+## Craters on flat ground: bowls lower it, rims raise it a little, the change
+## stays within the crater size, and the field stays continuous.
+func _test_craters() -> void:
+	var ground := JarTerrainSdf.new() # no noise: a flat plane at y = 0
+	ground.erosion = false
+	var craters := JarCraterSdf.new()
+	craters.sdf = ground
+	craters.size = 20.0
+	craters.density = 0.8
+	var lowest := 0.0
+	var highest := 0.0
+	var max_jump := 0.0
+	for i in 4000:
+		var p := Vector3(i * 0.37 - 700.0, 0.0, sin(i * 0.1) * 60.0)
+		# Height of the surface: the SDF at y = 0 is minus the height change.
+		var h := -craters.sample(p)
+		lowest = minf(lowest, h)
+		highest = maxf(highest, h)
+		max_jump = maxf(max_jump, absf(craters.sample(p + Vector3(0.001, 0, 0)) - craters.sample(p)))
+	_check("craters dig bowls", lowest < -2.0, "deepest %.2f m" % lowest)
+	_check("craters raise rims", highest > 0.2 and highest < lowest * -1.0, "highest rim %.2f m" % highest)
+	_check("craters bounded", lowest > -craters.size * (craters.depth + craters.rim) * 3.0, "deepest %.2f m" % lowest)
+	_check("craters continuous", max_jump < 0.01, "largest jump over 1 mm: %.4f" % max_jump)
+	# A crater field over a planet is still a planet: volumes in auto up mode see it.
+	var planet := JarTerrainSdf.new()
+	planet.shape = JarTerrainSdf.SHAPE_SPHERE
+	craters.sdf = planet
+	var volume := JarVoxelVolume.new()
+	volume.sdf = craters
+	_check("craters keep the child's up field", volume.get_up_field_info().mode == JarVoxelVolume.UP_MODE_RADIAL)
+	volume.free()
+

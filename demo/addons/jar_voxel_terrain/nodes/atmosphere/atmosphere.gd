@@ -19,7 +19,7 @@ const ATMOSPHERE_SHADER := preload("res://addons/jar_voxel_terrain/nodes/atmosph
 ## The sun. Empty: the first DirectionalLight3D in the scene.
 @export var sun: DirectionalLight3D
 ## Atmosphere height as a fraction of the planet radius.
-@export_range(0.01, 1.0) var thickness := 0.12
+@export_range(0.01, 1.0) var thickness := 0.25
 ## Atmosphere material; empty uses one with the default shader (not saved with
 ## the scene, so changes to the shader's defaults apply). Give your own a high
 ## render priority so it draws after water and other transparent objects.
@@ -60,15 +60,22 @@ func _find_volume() -> JarVoxelVolume:
 			return sibling
 	return null
 
+var _found_sun: DirectionalLight3D
+
 func _find_sun() -> DirectionalLight3D:
 	if sun:
 		return sun
+	# Searching the tree is slow (chunks and features are many nodes): only
+	# when the previous one is gone.
+	if is_instance_valid(_found_sun) and _found_sun.is_inside_tree():
+		return _found_sun
+	_found_sun = null
 	var root := get_tree().edited_scene_root if Engine.is_editor_hint() else get_tree().current_scene
 	if root:
 		var lights := root.find_children("*", "DirectionalLight3D", true, false)
 		if lights.size() > 0:
-			return lights[0]
-	return null
+			_found_sun = lights[0]
+	return _found_sun
 
 func _process(_delta: float) -> void:
 	var v := _find_volume()
@@ -95,3 +102,4 @@ func _process(_delta: float) -> void:
 	var light := _find_sun()
 	if light:
 		mat.set_shader_parameter("sun_direction", light.global_basis.z.normalized())
+		mat.set_shader_parameter("sun_color", Vector3(light.light_color.r, light.light_color.g, light.light_color.b))

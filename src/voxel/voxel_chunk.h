@@ -91,6 +91,16 @@ class JarVoxelChunk : public Node3D
     // Takes ownership of chunk_mesh_data.
     void update_chunk(JarVoxelVolume &terrain, VoxelOctreeNode *node, ChunkMeshData *chunk_mesh_data);
     void update_collision_mesh();
+    // A chunk without a collider takes its body out of the physics space:
+    // otherwise every body of a moving volume (an orbiting moon) is moved by the
+    // physics engine each frame, collider or not, which is expensive.
+    void set_collider_active(bool active)
+    {
+        if (collision_shape)
+            collision_shape->set_disabled(!active);
+        if (static_body)
+            static_body->set_process_mode(active ? PROCESS_MODE_INHERIT : PROCESS_MODE_DISABLED);
+    }
     void apply_rendering(const JarVoxelVolume &terrain);
     // The volume this chunk belongs to, e.g. from a physics raycast hit:
     // collider -> chunk (its body's owner) -> volume.
@@ -105,7 +115,7 @@ class JarVoxelChunk : public Node3D
     {
         set_visible(false);
         if (collision_shape)
-            collision_shape->set_disabled(true);
+            set_collider_active(false);
     }
     void reactivate()
     {

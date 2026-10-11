@@ -110,6 +110,8 @@ class JarVoxelVolume : public Node3D
     // limited; this further culls the ones the player can never touch, which is
     // the expensive part. Set it a bit larger than lod_automatic_update_distance.
     float _colliderDistance = 0.0f;
+    uint32_t _collisionLayer = 1;
+    uint32_t _collisionMask = 1;
     float _colliderBudgetMs = 2.0f;
 
     // LOD
@@ -170,10 +172,10 @@ class JarVoxelVolume : public Node3D
 
     // Places `sdf` with a global transform and combines it with the volume.
     void edit(const Ref<JarSignedDistanceField> &sdf, const Operation operation, const Transform3D &transform,
-              const int material = 0, const float smoothness = 0.0f);
+              const int material = -1, const float smoothness = 0.0f);
     void modify(const Ref<JarSignedDistanceField> sdf, const Operation operation, const Vector3 &position,
-                const float radius, const int material = 0);
-    void sphere_edit(const Vector3 &position, const float radius, bool operation_union, const int material = 0);
+                const float radius, const int material = -1);
+    void sphere_edit(const Vector3 &position, const float radius, bool operation_union, const int material = -1);
     void paint(const Ref<JarSignedDistanceField> &sdf, const Transform3D &transform, const int material);
 
     void spawn_debug_spheres_in_bounds(const Vector3 &position, const float range);
@@ -278,6 +280,10 @@ class JarVoxelVolume : public Node3D
     int get_updated_colliders_per_second() const;
     void set_updated_colliders_per_second(int value);
 
+    uint32_t get_collision_layer() const { return _collisionLayer; }
+    void set_collision_layer(uint32_t value);
+    uint32_t get_collision_mask() const { return _collisionMask; }
+    void set_collision_mask(uint32_t value);
     float get_collider_distance() const;
     float get_collider_budget_ms() const;
     void set_collider_budget_ms(float value);

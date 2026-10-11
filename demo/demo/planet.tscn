@@ -11,7 +11,8 @@
 [ext_resource type="Script" uid="uid://557h1ey0uo8c" path="res://addons/jar_voxel_terrain/nodes/water/planet_water.gd" id="9_water"]
 [ext_resource type="Script" uid="uid://bdr052q72xws1" path="res://addons/jar_voxel_terrain/nodes/atmosphere/atmosphere.gd" id="10_atmosphere"]
 [ext_resource type="Script" uid="uid://ca8q8yfyo8l3h" path="res://demo/orbit.gd" id="11_orbit"]
-[ext_resource type="JarTerrainSdf" uid="uid://da7ojhqqhsfdd" path="res://demo/planet/moon_terrain.tres" id="12_moon"]
+[ext_resource type="Script" path="res://addons/jar_voxel_terrain/nodes/clouds/clouds.gd" id="16_clouds"]
+[ext_resource type="JarCraterSdf" path="res://demo/planet/moon_craters.tres" id="12_moon"]
 [ext_resource type="Material" path="res://demo/planet/moon_material.tres" id="13_moon_material"]
 [ext_resource type="PackedScene" uid="uid://cupyeuv1xe20s" path="res://demo/player/player.tscn" id="14_player"]
 [ext_resource type="Material" uid="uid://55tbedv6qxva" path="res://demo/assets/space/space_sky.tres" id="15_sky"]
@@ -60,12 +61,12 @@ variation = 0.3
 radius = 9000.0
 
 [sub_resource type="JarTerrainMaterial" id="Regolith"]
-albedo = Color(0.56, 0.55, 0.53, 1)
+albedo = Color(0.3, 0.29, 0.28, 1)
 roughness = 0.95
 variation = 0.3
 
 [sub_resource type="JarTerrainMaterial" id="MoonRock"]
-albedo = Color(0.3, 0.3, 0.31, 1)
+albedo = Color(0.18, 0.18, 0.19, 1)
 roughness = 0.8
 
 [sub_resource type="SphereShape3D" id="MoonGravityShape"]
@@ -73,6 +74,13 @@ radius = 1000.0
 
 [sub_resource type="Sky" id="Sky"]
 sky_material = ExtResource("15_sky")
+
+[sub_resource type="CameraAttributesPractical" id="Exposure"]
+auto_exposure_enabled = true
+auto_exposure_scale = 0.15
+auto_exposure_speed = 2.0
+auto_exposure_min_sensitivity = 50.0
+auto_exposure_max_sensitivity = 800.0
 
 [sub_resource type="Environment" id="Environment"]
 background_mode = 2
@@ -107,7 +115,11 @@ script = ExtResource("9_water")
 [node name="Atmosphere" type="Node3D" parent="Planet" unique_id=1764051413]
 script = ExtResource("10_atmosphere")
 
+[node name="Clouds" type="Node3D" parent="Planet"]
+script = ExtResource("16_clouds")
+
 [node name="Gravity" type="Area3D" parent="Planet" unique_id=2147448440 groups=["gravity_frames"]]
+collision_mask = 2
 gravity_space_override = 3
 gravity_point = true
 gravity_point_unit_distance = 4096.0
@@ -123,7 +135,7 @@ degrees_per_second = 0.4
 axis = Vector3(0.2, 1, 0)
 
 [node name="Moon" type="Node3D" parent="MoonOrbit" unique_id=1054570794]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 6000, 0, 0)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 11000, 0, 0)
 script = ExtResource("11_orbit")
 axis = Vector3(0.3, 1, 0)
 
@@ -138,6 +150,7 @@ manifold = true
 lod_automatic_update_distance = 16.0
 
 [node name="Gravity" type="Area3D" parent="MoonOrbit/Moon" unique_id=938206815 groups=["gravity_frames"]]
+collision_mask = 2
 priority = 1
 gravity_space_override = 3
 gravity_point = true
@@ -154,6 +167,7 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -274.4, 4146.4, -48.5)
 
 [node name="WorldEnvironment" type="WorldEnvironment" parent="." unique_id=1854622839]
 environment = SubResource("Environment")
+camera_attributes = SubResource("Exposure")
 
 [node name="Sun" type="DirectionalLight3D" parent="." unique_id=705585350]
 transform = Transform3D(-0.6139, -0.6481, 0.4506, 0, 0.5708, 0.8211, -0.7894, 0.5041, -0.3505, 0, 0, 0)

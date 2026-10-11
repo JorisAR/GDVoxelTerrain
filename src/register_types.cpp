@@ -2,6 +2,7 @@
 #include "box_sdf.h"
 #include "capsule_sdf.h"
 #include "cone_sdf.h"
+#include "crater_sdf.h"
 #include "ellipsoid_sdf.h"
 #include "mesh_sdf.h"
 #include "modifier_sdfs.h"
@@ -44,6 +45,7 @@ void initialize_jar_voxel_terrain_module(ModuleInitializationLevel p_level)
         GDREGISTER_CLASS(JarOffsetSdf);
         GDREGISTER_CLASS(JarRepeatSdf);
         GDREGISTER_CLASS(JarDisplaceSdf);
+        GDREGISTER_CLASS(JarCraterSdf);
 
         // POPULATION
         GDREGISTER_ABSTRACT_CLASS(JarTerrainPopulator);

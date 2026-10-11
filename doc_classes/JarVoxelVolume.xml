@@ -16,10 +16,10 @@
 			<param index="0" name="sdf" type="JarSignedDistanceField" />
 			<param index="1" name="operation" type="int" enum="JarVoxelVolume.Operation" />
 			<param index="2" name="transform" type="Transform3D" />
-			<param index="3" name="material" type="int" default="0" />
+			<param index="3" name="material" type="int" default="-1" />
 			<param index="4" name="smoothness" type="float" default="0.0" />
 			<description>
-				Combines [param sdf], placed with the global [param transform] (position, rotation and uniform scale), with the volume using [param operation]. The affected region is derived from [method JarSignedDistanceField.get_bounds], so the SDF must be bounded. [param material] (an index into [member materials]) is painted onto changed voxels, [code]-1[/code] keeps existing materials. [param smoothness] is the blend radius of the smooth operations; [code]0[/code] uses the voxel size.
+				Combines [param sdf], placed with the global [param transform] (position, rotation and uniform scale), with the volume using [param operation]. The affected region is derived from [method JarSignedDistanceField.get_bounds], so the SDF must be bounded. [param material] (an index into [member materials]) is painted onto changed voxels; the default [code]-1[/code] keeps the existing materials (dug ground then shows the ground rules, and details keep growing on it). [param smoothness] is the blend radius of the smooth operations; [code]0[/code] uses the voxel size.
 				Edits are queued and applied on a background thread.
 				[codeblock]
 				var box := JarBoxSdf.new()
@@ -86,7 +86,7 @@
 			<param index="1" name="operation" type="int" enum="JarVoxelVolume.Operation" />
 			<param index="2" name="position" type="Vector3" />
 			<param index="3" name="radius" type="float" />
-			<param index="4" name="material" type="int" default="0" />
+			<param index="4" name="material" type="int" default="-1" />
 			<description>
 				Modifies the terrain using another [JarSignedDistanceField] instance at a given [code]position[/code], with the specified [code]operation[/code].
 				The [code]radius[/code] determines the affected area. If [code]sdf[/code] is [code]null[/code], a sphere of [code]radius[/code] is used.
@@ -143,7 +143,7 @@
 			<param index="0" name="position" type="Vector3" />
 			<param index="1" name="radius" type="float" />
 			<param index="2" name="union" type="bool" />
-			<param index="3" name="material" type="int" default="0" />
+			<param index="3" name="material" type="int" default="-1" />
 			<description>
 				Adds or subtracts a spherical volume from the terrain.
 				The center is defined by [code]position[/code], and [code]radius[/code] defines its size.
@@ -161,6 +161,12 @@
 	<members>
 		<member name="chunk_scene" type="PackedScene" setter="set_chunk_scene" getter="get_chunk_scene">
 			Scene used for singular chunk. Will be duplicated once for each rendered chunk.
+		</member>
+		<member name="collision_layer" type="int" setter="set_collision_layer" getter="get_collision_layer" default="1">
+			Physics layers the chunk colliders are on. Putting terrain on its own layer lets areas ignore it: a gravity [Area3D] that moves with a volume (an orbiting moon) and overlaps its terrain colliders costs a lot of physics time every frame, so give such areas a [member CollisionObject3D.collision_mask] without the terrain layer.
+		</member>
+		<member name="collision_mask" type="int" setter="set_collision_mask" getter="get_collision_mask" default="1">
+			Physics layers the chunk colliders scan. Static terrain rarely needs to detect anything itself.
 		</member>
 		<member name="cubic_voxels" type="bool" setter="set_cubic_voxels" getter="get_cubic_voxels" default="false">
 			Renders voxels as cubes.

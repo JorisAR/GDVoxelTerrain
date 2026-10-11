@@ -207,7 +207,7 @@ void JarVoxelChunk::update_chunk(JarVoxelVolume &terrain, VoxelOctreeNode *node,
     }
     else
     {
-        collision_shape->set_disabled(true);
+        set_collider_active(false);
     }
 
     //generate details. Chunks are pooled and change LOD, so anything that should
@@ -293,7 +293,7 @@ void JarVoxelChunk::update_collision_mesh()
         return;
     if (_chunk_mesh_data->collision_mesh.is_empty())
         _chunk_mesh_data->build_collision_mesh(); // LOD above MaxCollisionLod: not prebuilt
-    collision_shape->set_disabled(false);
+    set_collider_active(true);
     concave_polygon_shape->set_faces(_chunk_mesh_data->collision_mesh);
     _chunk_mesh_data.reset(); // physics has its own copy now
 }

@@ -65,6 +65,7 @@ The editing scripts in `demo/demo/editing` are meant to be reused: `SdfEditor` e
 - `octree_scale` + `size` are replaced by `voxel_size` (meters per voxel at full detail) and `extent` (meters the volume covers); `size = n` corresponds to `extent = 2^n * voxel_size`. `min_chunk_size` and the unused `lod_level_count` are gone (chunks are always 16 voxels).
 - Population rules: `minimum_slope` (a cosine) is replaced by `maximum_slope` in degrees (`minimum_slope = 0.85` becomes `maximum_slope = 32`); the unused `max_lod` is gone. Height ranges now default to unlimited.
 - `JarPlanetSdf` and the old `JarTerrainSdf` are merged into `JarTerrainSdf`: set `shape` to *Sphere* and `radius` for planets. The old `noise_scale` / `height_scale` become `height` (above zero) and `depth` (below); the old terrain used `height = 2 * height_scale`, `depth = height_scale`, the old planet `height = noise_scale`, `depth = noise_scale / 2`. Set `erosion = false` for the old look.
+- `edit()`, `modify()` and `sphere_edit()` default to `material = -1` (keep existing materials) instead of painting material 0; pass a material to paint.
 - `up_mode` defaults to the new *Auto*; volumes that set *Axis* or *Radial* explicitly keep working.
 - `moon.tscn` is merged into `planet.tscn`; the old water material and the compositor atmosphere of the demo are replaced by `JarPlanetWater` and `JarAtmosphere`.
 - The chunk shader `chunk.gdshader` is replaced by the material-mode shaders (see [Materials](#materials)); the chunk scene no longer carries a material (the volume assigns one). Its `world_center` / `world_radius` parameters are gone (the volume's up field is used). Colors per material moved from shader parameters to `JarTerrainMaterial` resources in the volume's `materials`.
@@ -77,7 +78,7 @@ Shapes are authored as composable `JarSignedDistanceField` resources:
 - **Terrain:** `JarTerrainSdf`, a flat heightfield or a planet (`shape`), built from base noise (separate `height` and ocean `depth`), optional mountain ranges (a low-frequency mask raising mountains where it passes a threshold) and optional erosion (branching gullies and sharp ridges, evaluated per point, after [runevision's erosion filter](https://blog.runevision.com/2026/03/fast-and-gorgeous-erosion-filter.html)). Only the settings that apply are shown in the inspector. Surface nets suit eroded terrain best; keep the smallest gullies a few voxels wide.
 - **Meshes:** `JarMeshSdf` turns any closed triangle mesh into an SDF. It is baked once into a distance grid stored in the resource (press *Bake* in the inspector, or it bakes on first use).
 - **Combining:** `JarOperationSdf` (union / subtraction / intersection and smooth variants, nestable for full CSG) and `JarTransformSdf` (position / rotate / scale a child).
-- **Modifiers:** `JarOffsetSdf` (grow, shrink, hollow into a shell), `JarRepeatSdf` (grid copies), `JarDisplaceSdf` (noise displacement).
+- **Modifiers:** `JarOffsetSdf` (grow, shrink, hollow into a shell), `JarRepeatSdf` (grid copies), `JarDisplaceSdf` (noise displacement), `JarCraterSdf` (impact craters on any terrain: bowls with rims in several sizes, measured along the surface; the demo moon uses it).
 - Every SDF can be queried from scripts: `sdf.sample(position)`, `sdf.sample_normal(position)`, `sdf.get_bounds()`.
 
 Edit volumes with any bounded SDF, placed with a full transform:
@@ -137,14 +138,17 @@ for f in volume.get_features_near(hit_position, 2.0):
 
 The demos use a generated low-poly pine and rock (`demo/demo/assets/population/features/`).
 
-### Water and atmosphere
+### Water, atmosphere and clouds
 
-Two script nodes in `addons/jar_voxel_terrain/nodes/` dress up a volume. Add them next to (or under) the volume; they find it and the sun on their own, and read the volume's up field, so they follow its radius, sea level and movement:
+Script nodes in `addons/jar_voxel_terrain/nodes/` dress up a volume. Add them next to (or under) the volume; they find it and the sun on their own, and read the volume's up field, so they follow its radius, sea level and movement:
 
-- **`JarPlanetWater`**: water at the volume's sea level, a sphere for planets or a plane for flat worlds. A dense patch follows the camera and is projected onto the exact sea level, so coasts are precise up close. The shader (`water.gdshader`) colors water by its depth, with waves, shore foam and transparency. `level_offset` raises or lowers it. It is deliberately separate from the volume, so it can be replaced by a simulation later.
-- **`JarAtmosphere`**: physically based single scattering (Rayleigh and Mie): blue sky and red sunsets from the ground, a glowing rim from space, and haze over distant terrain. It is drawn as a transparent shell after other transparent objects, so water gets hazed too, and several planets can each have one. Its `thickness` is a fraction of the planet radius. In `atmosphere.gdshader`, `aerial_perspective` scales the haze over terrain (game planets are small, so the physical amount washes the ground out) and `sky_occlusion` makes a bright day sky hide the stars.
+- **`JarPlanetWater`**: water at the volume's sea level, a sphere for planets or a plane for flat worlds. A dense patch follows the camera and is projected onto the exact sea level, so coasts are precise up close. `water.gdshader` colors water by its depth, with waves, shore foam and transparency; under water, `underwater.gdshader` fogs the view by the distance through the water and dims it with depth. `level_offset` raises or lowers it. It is deliberately separate from the volume, so it can be replaced by a simulation later.
+- **`JarAtmosphere`**: physically based single scattering (Rayleigh and Mie, light attenuated with an analytic Chapman function): blue sky and red sunsets from the ground, haze over distant terrain, and the planet seen through its air from space. The same physics applies to sky and ground; a small planet stays clear up close because the air density falls off gently over the atmosphere's height (`thickness`, a fraction of the radius). It is drawn after other transparent objects, so water and clouds get hazed too, and several planets can each have one.
+- **`JarClouds`**: a cloud layer at `altitude` meters above sea level: drifting noise with large-scale weather systems (clear and overcast regions), self-shadowing and a dark night side.
 
-Both create their default material at runtime (not saved with the scene); assign your own `material` to tweak or replace the shaders.
+All create their default material at runtime (not saved with the scene); assign your own `material` to tweak or replace the shaders.
+
+The demo's sky (`demo/demo/assets/space/space_sky.gdshader`) draws stars with a realistic brightness distribution and colors, a faint galactic band and the sun's disk, in physical-ish brightness: with auto exposure (the demo environment's camera attributes) the stars disappear behind a bright day sky and come out in space.
 
 ### Resolution and level of detail
 
@@ -179,6 +183,8 @@ godot --headless --fixed-fps 60 --path demo res://tests/player_tests.tscn
 - `performance_collider_distance` — when `> 0`, physics colliders are only generated for chunks within this distance of a viewer. Collider generation is one of the most expensive parts of chunk updates, so setting this to slightly more than your physics interaction range is a large win.
 - `performance_collider_budget_ms` — main-thread time per frame spent uploading colliders (nearest first). Raise it to get collision sooner, lower it for steadier frame times.
 - `performance_updated_colliders_per_second` — optional hard cap on collider uploads per second; `0` (default) means only the time budget applies.
+- Moving volumes (an orbiting moon) with a gravity `Area3D`: put the terrain on its own physics layer (`collision_layer`) and leave it out of the area's mask. An area that moves with the volume and overlaps its terrain colliders costs a lot of physics time every frame (the demo went from 10 ms to 0.4 ms).
+- Chunks without a collider take their body out of the physics space.
 - Chunks are recycled through an internal object pool, so heavy LOD churn does not repeatedly allocate/free thousands of nodes.
 - Memory is dominated by the octree (about 64 bytes per node, a few million nodes for a planet). Detail the viewer leaves behind is pruned once the coarser chunks are shown and regenerated on return, so memory stays flat while travelling; edited regions are always kept. `voxel_size` has the largest effect: halving it roughly quadruples the nodes near the surface.
 
