@@ -315,6 +315,28 @@ void VoxelOctreeNode::modify_sdf_in_bounds(JarVoxelVolume &terrain, const Modify
     if (!has_flag(FlagGenerated))
         set_value(terrain.get_sdf_ptr()->distance(_center));
 
+    if (settings.paintOnly)
+    {
+        // Full strength inside the brush, fading out over one voxel outside it.
+        const float inside = -settings.sample(_center) / terrain.get_voxel_size();
+        if (inside > -1.0f && settings.material >= 0)
+        {
+            _materials = MaterialWeights::mix(_materials, MaterialWeights::one_hot(settings.material),
+                                              std::clamp(inside + 1.0f, 0.0f, 1.0f));
+            set_flag(FlagGenerated, true);
+            mark_edited();
+            if (_parent != nullptr)
+                _parent->set_dirty(true); // parents average the weights
+        }
+        if (!is_leaf())
+            for (auto &child : *_children)
+                child.modify_sdf_in_bounds(terrain, settings);
+        _meshedEmpty = false;
+        if (is_chunk(terrain))
+            queue_update(terrain);
+        return;
+    }
+
     float old_value = get_value();
     float sdf_value = settings.sample(_center);
     const float k = settings.smoothness > 0.0f ? settings.smoothness : terrain.get_voxel_size();

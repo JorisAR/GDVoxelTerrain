@@ -63,7 +63,22 @@ func _run(camera: Node3D) -> void:
 	# Surface nets rounds the apex; mesher_tests checks it exactly under dual contouring.
 	_check("mesh stamp", peak > spot_ground + 2.5 and peak < spot_ground + 4.2, "peak=%.2f apex=%.2f" % [peak, spot_ground + 4.0])
 
-	# 4. Unbounded SDFs are rejected by edit() instead of editing the whole world.
+	# 4. Paint material 5 onto flat ground: the shape stays, the weight shows up
+	# in the vertex data (materials 4-7 live in CUSTOM0).
+	var paint_spot := at + Vector3(-12, 0, 0)
+	var paint_ground := _ground_height(paint_spot)
+	var brush := JarSphereSdf.new()
+	brush.radius = 3.0
+	volume.paint(brush, Transform3D(Basis(), Vector3(paint_spot.x, paint_ground, paint_spot.z)), 5)
+	await _settle()
+	_check("paint keeps shape", absf(_ground_height(paint_spot) - paint_ground) < 0.05,
+		"%.3f -> %.3f" % [paint_ground, _ground_height(paint_spot)])
+	var weights := _material_weights_near(Vector3(paint_spot.x, paint_ground, paint_spot.z), 1.5)
+	_check("paint sets material", weights.size() > 0 and weights.min() > 0.9, "material 5 weight near center: %s" % [weights.slice(0, 4)])
+	var outside := _material_weights_near(Vector3(paint_spot.x + 8, _ground_height(paint_spot + Vector3(8, 0, 0)), paint_spot.z), 1.5)
+	_check("paint stays inside", outside.size() > 0 and outside.max() < 0.01, "%s" % [outside.slice(0, 4)])
+
+	# 5. Unbounded SDFs are rejected by edit() instead of editing the whole world.
 	volume.edit(JarPlaneSdf.new(), JarVoxelVolume.SDF_OPERATION_UNION, Transform3D())
 	_check("unbounded edit rejected", not volume.is_building())
 	_finish()
@@ -89,3 +104,21 @@ func _ground_height(at: Vector3) -> float:
 	var query := PhysicsRayQueryParameters3D.create(Vector3(at.x, 500, at.z), Vector3(at.x, -500, at.z))
 	var hit := space.intersect_ray(query)
 	return hit.position.y if hit else NAN
+
+## CUSTOM0 green (material 5) of chunk vertices within `radius` of `at`.
+func _material_weights_near(at: Vector3, radius: float) -> Array:
+	var result := []
+	for c in volume.get_children():
+		if not (c is JarVoxelChunk and c.visible and c.get_lod() == 0):
+			continue
+		var mesh: Mesh = c.get_mesh_instance().mesh
+		if mesh.get_surface_count() == 0:
+			continue
+		var arrays := mesh.surface_get_arrays(0)
+		var verts: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
+		var custom: PackedByteArray = arrays[Mesh.ARRAY_CUSTOM0]
+		for i in verts.size():
+			if (c.position + verts[i]).distance_to(at) < radius:
+				result.append(custom[4 * i + 1] / 255.0)
+	return result
+

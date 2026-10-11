@@ -4,8 +4,8 @@ extends SdfEditor
 ## sized SDF with a mesh of exactly the same shape, so the preview shows what
 ## the edit will produce.
 ##
-## Q: next brush   scroll: brush size   E: smooth blending   1-4: material
-## R: toggle preview
+## Q: next brush   scroll: brush size   E: smooth blending   1-8: material
+## P: paint mode   R: toggle preview
 
 @export var size := 3.0
 @export var min_size := 0.25
@@ -33,7 +33,7 @@ func _unhandled_key_input(event: InputEvent) -> void:
 	if not (event is InputEventKey and event.pressed and not event.echo):
 		return
 	var idx: int = event.keycode - KEY_1
-	if idx >= 0 and idx <= 3:
+	if idx >= 0 and idx <= 7:
 		material = idx
 	elif event.keycode == KEY_Q:
 		_select((_index + 1) % _brushes.size())
@@ -41,7 +41,8 @@ func _unhandled_key_input(event: InputEvent) -> void:
 		smoothness = 0.0 if smoothness > 0.0 else 0.3
 
 func describe() -> String:
-	return "%s %.2f m  mat %d%s" % [_brushes[_index].name, size, material, "  smooth" if smoothness > 0.0 else ""]
+	return "%s %.2f m  mat %d%s%s" % [_brushes[_index].name, size, material, "  smooth" if smoothness > 0.0 else "",
+		"  PAINT" if paint_mode else ""]
 
 func _select(index: int) -> void:
 	_index = index

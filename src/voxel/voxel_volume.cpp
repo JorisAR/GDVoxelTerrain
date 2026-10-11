@@ -23,6 +23,11 @@ void JarVoxelVolume::_bind_methods()
     ClassDB::bind_method(D_METHOD("set_chunk_scene", "value"), &JarVoxelVolume::set_chunk_scene);
     ADD_PROPERTY(PropertyInfo(Variant::OBJECT, "chunk_scene", PROPERTY_HINT_RESOURCE_TYPE, "PackedScene"),
                  "set_chunk_scene", "get_chunk_scene");
+    ClassDB::bind_method(D_METHOD("get_material"), &JarVoxelVolume::get_material);
+    ClassDB::bind_method(D_METHOD("set_material", "value"), &JarVoxelVolume::set_material);
+    ADD_PROPERTY(PropertyInfo(Variant::OBJECT, "material", PROPERTY_HINT_RESOURCE_TYPE,
+                              "ShaderMaterial,StandardMaterial3D,ORMMaterial3D"),
+                 "set_material", "get_material");
 
     ClassDB::bind_method(D_METHOD("get_sdf"), &JarVoxelVolume::get_sdf);
     ClassDB::bind_method(D_METHOD("set_sdf", "sdf"), &JarVoxelVolume::set_sdf);
@@ -133,6 +138,7 @@ void JarVoxelVolume::_bind_methods()
                          &JarVoxelVolume::edit, DEFVAL(0), DEFVAL(0.0f));
     ClassDB::bind_method(D_METHOD("modify", "sdf", "operation", "position", "radius", "material"),
                          &JarVoxelVolume::modify, DEFVAL(0));
+    ClassDB::bind_method(D_METHOD("paint", "sdf", "transform", "material"), &JarVoxelVolume::paint);
     ClassDB::bind_method(D_METHOD("sphere_edit", "position", "radius", "union", "material"),
                          &JarVoxelVolume::sphere_edit, DEFVAL(0));
     ClassDB::bind_method(D_METHOD("spawn_debug_spheres_in_bounds", "position", "range"),
@@ -258,7 +264,8 @@ void JarVoxelVolume::process_pool()
 }
 
 void JarVoxelVolume::queue_edit(const Ref<JarSignedDistanceField> &sdf, SDF::Operation operation,
-                                const Transform3D &transform, int material, float smoothness, const Bounds &limit)
+                                const Transform3D &transform, int material, float smoothness, const Bounds &limit,
+                                bool paintOnly)
 {
     if (sdf.is_null())
     {
@@ -279,6 +286,7 @@ void JarVoxelVolume::queue_edit(const Ref<JarSignedDistanceField> &sdf, SDF::Ope
     settings.operation = operation;
     settings.smoothness = smoothness;
     settings.material = material;
+    settings.paintOnly = paintOnly;
 
     // Region the edit can change: the SDF's solid part (plus room for smooth
     // blending and the mesher's sampling margin), clipped to `limit`.
@@ -337,6 +345,11 @@ void JarVoxelVolume::sphere_edit(const Vector3 &position, const float radius, bo
     const auto operation =
         operation_union ? SDF::Operation::SDF_OPERATION_UNION : SDF::Operation::SDF_OPERATION_SUBTRACTION;
     queue_edit(sdf, operation, Transform3D(Basis(), position), material, 0.0f);
+}
+
+void JarVoxelVolume::paint(const Ref<JarSignedDistanceField> &sdf, const Transform3D &transform, const int material)
+{
+    queue_edit(sdf, SDF::Operation::SDF_OPERATION_UNION, transform, material, 0.0f, Bounds::infinite(), true);
 }
 
 void JarVoxelVolume::enqueue_chunk_collider(JarVoxelChunk *chunk)
@@ -806,6 +819,7 @@ JarVoxelVolume::UpMode JarVoxelVolume::get_up_mode() const
 void JarVoxelVolume::set_up_mode(UpMode mode)
 {
     _upField.mode = static_cast<UpField::Mode>(mode);
+    apply_rendering_to_chunks();
 }
 Vector3 JarVoxelVolume::get_up_axis() const
 {
@@ -816,6 +830,7 @@ void JarVoxelVolume::set_up_axis(const Vector3 &axis)
     const Vector3 n = axis.normalized();
     if (!n.is_zero_approx())
         _upField.axis = glm::vec3(n.x, n.y, n.z);
+    apply_rendering_to_chunks();
 }
 Vector3 JarVoxelVolume::get_up_center() const
 {
@@ -824,6 +839,7 @@ Vector3 JarVoxelVolume::get_up_center() const
 void JarVoxelVolume::set_up_center(const Vector3 &center)
 {
     _upField.center = glm::vec3(center.x, center.y, center.z);
+    apply_rendering_to_chunks();
 }
 float JarVoxelVolume::get_sea_level() const
 {
@@ -832,6 +848,24 @@ float JarVoxelVolume::get_sea_level() const
 void JarVoxelVolume::set_sea_level(float value)
 {
     _upField.sea_level = value;
+    apply_rendering_to_chunks();
+}
+
+void JarVoxelVolume::set_material(const Ref<Material> &value)
+{
+    _material = value;
+    apply_rendering_to_chunks();
+}
+
+// Main thread. Chunks also apply these whenever they are (re)meshed.
+void JarVoxelVolume::apply_rendering_to_chunks()
+{
+    if (!is_inside_tree())
+        return;
+    for (int i = 0; i < get_child_count(); ++i)
+        if (JarVoxelChunk *chunk = Object::cast_to<JarVoxelChunk>(get_child(i)))
+            if (chunk->get_mesh_instance() != nullptr)
+                chunk->apply_rendering(*this);
 }
 Vector3 JarVoxelVolume::get_up_direction_at(const Vector3 &global_position) const
 {

@@ -5,13 +5,16 @@ extends Node3D
 ##
 ## The SDF is used in its own units, scaled by `scale_factor`, and centered on
 ## the hit point. Assign `preview_mesh` (same shape and size as the SDF) to see
-## where the edit will land; R toggles the preview.
+## where the edit will land; R toggles the preview. In paint mode (P) left click
+## paints `material` onto the surface inside the shape instead of editing it.
 
 @export var sdf: JarSignedDistanceField
 ## Uniform scale applied to the SDF (a unit sphere SDF with scale 2 has radius 2 m).
 @export var scale_factor := 1.0
-## Material painted by edits (0-3), or -1 to keep existing materials.
-@export_range(-1, 3) var material := 0
+## Material painted by edits (0-7), or -1 to keep existing materials.
+@export_range(-1, 7) var material := 0
+## Left click paints instead of removing; right click still adds.
+@export var paint_mode := false
 ## Blend radius in meters; 0 gives hard edits, > 0 uses the smooth operations.
 @export var smoothness := 0.0
 ## Orient the shape to the surface normal instead of the volume's up.
@@ -47,8 +50,11 @@ func _ready() -> void:
 		_exclude.append(body.get_rid())
 
 func _unhandled_key_input(event: InputEvent) -> void:
-	if event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_R:
-		show_preview = not show_preview
+	if event is InputEventKey and event.pressed and not event.echo:
+		if event.keycode == KEY_R:
+			show_preview = not show_preview
+		elif event.keycode == KEY_P:
+			paint_mode = not paint_mode
 
 func _physics_process(delta: float) -> void:
 	_cooldown -= delta
@@ -67,13 +73,15 @@ func _physics_process(delta: float) -> void:
 		return
 	_cooldown = edit_interval
 	var volume := volume_from_hit(hit)
-	if volume:
+	if volume and paint_mode and remove:
+		volume.paint(sdf, target, maxi(material, 0))
+	elif volume:
 		volume.edit(sdf, _operation(add), target, material, smoothness)
 
 ## Describes the current settings, for HUDs.
 func describe() -> String:
-	return "%s  x%.2f  mat %d%s" % [sdf.get_class() if sdf else "no SDF", scale_factor, material,
-		"  smooth" if smoothness > 0.0 else ""]
+	return "%s  x%.2f  mat %d%s%s" % [sdf.get_class() if sdf else "no SDF", scale_factor, material,
+		"  smooth" if smoothness > 0.0 else "", "  PAINT" if paint_mode else ""]
 
 ## The volume owning a physics hit: collider -> chunk -> volume.
 static func volume_from_hit(hit: Dictionary) -> JarVoxelVolume:

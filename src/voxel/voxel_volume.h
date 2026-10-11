@@ -59,6 +59,8 @@ class JarVoxelVolume : public Node3D
     int _depth = 14;          // octree levels, derived from extent / voxel size in initialize()
 
     Ref<PackedScene> _chunkScene;
+    Ref<Material> _material; // overrides the chunk scene's material when set
+    void apply_rendering_to_chunks();
 
     std::atomic<bool> _isBuilding{false};
     bool _initialBuildRequested = false; // first build waits for process(), when the player is in the tree
@@ -125,7 +127,7 @@ class JarVoxelVolume : public Node3D
     // Resolves an edit into volume space and queues it. `limit` (volume-local)
     // further restricts the affected region, e.g. modify()'s radius.
     void queue_edit(const Ref<JarSignedDistanceField> &sdf, SDF::Operation operation, const Transform3D &transform,
-                    int material, float smoothness, const Bounds &limit = Bounds::infinite());
+                    int material, float smoothness, const Bounds &limit = Bounds::infinite(), bool paintOnly = false);
 
     // void process_delete_chunk_queue();
 
@@ -158,6 +160,7 @@ class JarVoxelVolume : public Node3D
     void modify(const Ref<JarSignedDistanceField> sdf, const Operation operation, const Vector3 &position,
                 const float radius, const int material = 0);
     void sphere_edit(const Vector3 &position, const float radius, bool operation_union, const int material = 0);
+    void paint(const Ref<JarSignedDistanceField> &sdf, const Transform3D &transform, const int material);
 
     void spawn_debug_spheres_in_bounds(const Vector3 &position, const float range);
 
@@ -221,6 +224,8 @@ class JarVoxelVolume : public Node3D
     int get_min_chunk_size() const { return ChunkSizeLog2; }
     int get_chunk_size() const { return 1 << ChunkSizeLog2; }
 
+    Ref<Material> get_material() const { return _material; }
+    void set_material(const Ref<Material> &value);
     Ref<PackedScene> get_chunk_scene() const;
     void set_chunk_scene(const Ref<PackedScene> &value);
 

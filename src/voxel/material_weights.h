@@ -27,6 +27,15 @@ struct MaterialWeights
     glm::vec4 low() const { return glm::vec4(get(0), get(1), get(2), get(3)) * (1.0f / 255.0f); }
     glm::vec4 high() const { return glm::vec4(get(4), get(5), get(6), get(7)) * (1.0f / 255.0f); }
 
+    // Moves each weight a fraction t (0..1) of the way towards `target`.
+    static MaterialWeights mix(const MaterialWeights &a, const MaterialWeights &target, float t)
+    {
+        MaterialWeights m;
+        for (int i = 0; i < Count; ++i)
+            m.set(i, uint8_t(std::clamp(a.get(i) + (float(target.get(i)) - a.get(i)) * t + 0.5f, 0.0f, 255.0f)));
+        return m;
+    }
+
     // Rounded average of 8 children.
     static MaterialWeights average(const MaterialWeights (&children)[8])
     {

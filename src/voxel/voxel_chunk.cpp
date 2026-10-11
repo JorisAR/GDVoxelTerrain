@@ -186,7 +186,10 @@ void JarVoxelChunk::update_chunk(JarVoxelVolume &terrain, VoxelOctreeNode *node,
     set_position({position.x, position.y, position.z});
 
     array_mesh->clear_surfaces();
-    array_mesh->add_surface_from_arrays(Mesh::PRIMITIVE_TRIANGLES, chunk_mesh_data->mesh_array);
+    // CUSTOM0 holds material weights 4..7 as 4 bytes per vertex.
+    array_mesh->add_surface_from_arrays(Mesh::PRIMITIVE_TRIANGLES, chunk_mesh_data->mesh_array, Array(), Dictionary(),
+                                        Mesh::ARRAY_CUSTOM_RGBA8_UNORM << Mesh::ARRAY_FORMAT_CUSTOM0_SHIFT);
+    apply_rendering(terrain);
 
     bool generate_collider = lod <= collider_lod_threshold && terrain.is_in_collider_range(position);
 
@@ -257,6 +260,23 @@ void JarVoxelChunk::update_chunk(JarVoxelVolume &terrain, VoxelOctreeNode *node,
     //     sphereInstance->set_position(nodeCenter);
     //     sphereInstance->set_material_override(stitch_material);
     // }
+}
+
+// Material and per-chunk shader inputs. The terrain shader works in volume
+// space (so textures and up directions follow a moving volume): it needs this
+// chunk's origin in the volume and the volume's up field.
+void JarVoxelChunk::apply_rendering(const JarVoxelVolume &terrain)
+{
+    const Ref<Material> volumeMaterial = terrain.get_material();
+    if (volumeMaterial.is_valid() && mesh_instance->get_material_override() != volumeMaterial)
+        mesh_instance->set_material_override(volumeMaterial);
+    const UpField &up = terrain.get_up_field();
+    const glm::vec3 origin = bounds.get_center();
+    mesh_instance->set_instance_shader_parameter("jar_chunk_origin", Vector3(origin.x, origin.y, origin.z));
+    mesh_instance->set_instance_shader_parameter("jar_up_center",
+                                                 Vector4(up.center.x, up.center.y, up.center.z, up.sea_level));
+    mesh_instance->set_instance_shader_parameter("jar_up_axis",
+                                                 Vector4(up.axis.x, up.axis.y, up.axis.z, float(up.mode)));
 }
 
 JarVoxelVolume *JarVoxelChunk::get_volume() const

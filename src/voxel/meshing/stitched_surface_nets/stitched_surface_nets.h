@@ -10,6 +10,7 @@
 #define GLM_ENABLE_EXPERIMENTAL
 #include <glm/gtx/hash.hpp>
 #include <godot_cpp/variant/color.hpp>
+#include <godot_cpp/variant/packed_byte_array.hpp>
 #include <godot_cpp/variant/packed_color_array.hpp>
 #include <godot_cpp/variant/packed_int32_array.hpp>
 #include <godot_cpp/variant/packed_vector3_array.hpp>
@@ -25,7 +26,10 @@ class StitchedSurfaceNets
   private:
     PackedVector3Array _verts;
     PackedVector3Array _normals;
+    // Material weights 0..3 (vertex COLOR) and 4..7 (CUSTOM0, RGBA8).
     PackedColorArray _colors;
+    PackedByteArray _custom0;
+    void push_materials(const glm::vec4 &low, const glm::vec4 &high);
     PackedInt32Array _indices;
     std::vector<bool> _badNormals;
     std::unordered_map<glm::ivec3, int> _innerEdgeNodes;

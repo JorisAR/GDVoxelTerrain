@@ -19,7 +19,7 @@
 			<param index="3" name="material" type="int" default="0" />
 			<param index="4" name="smoothness" type="float" default="0.0" />
 			<description>
-				Combines [param sdf], placed with the global [param transform] (position, rotation and uniform scale), with the volume using [param operation]. The affected region is derived from [method JarSignedDistanceField.get_bounds], so the SDF must be bounded. [param material] (0-3) is painted onto changed voxels, [code]-1[/code] keeps existing materials. [param smoothness] is the blend radius of the smooth operations; [code]0[/code] uses the voxel size.
+				Combines [param sdf], placed with the global [param transform] (position, rotation and uniform scale), with the volume using [param operation]. The affected region is derived from [method JarSignedDistanceField.get_bounds], so the SDF must be bounded. [param material] (0-7) is painted onto changed voxels, [code]-1[/code] keeps existing materials. [param smoothness] is the blend radius of the smooth operations; [code]0[/code] uses the voxel size.
 				Edits are queued and applied on a background thread.
 				[codeblock]
 				var box := JarBoxSdf.new()
@@ -70,7 +70,16 @@
 			<description>
 				Modifies the terrain using another [JarSignedDistanceField] instance at a given [code]position[/code], with the specified [code]operation[/code].
 				The [code]radius[/code] determines the affected area. If [code]sdf[/code] is [code]null[/code], a sphere of [code]radius[/code] is used.
-				[code]material[/code] (0-3) is painted onto the affected voxels as a one-hot weight in the vertex color, which the chunk shader blends as materials; pass [code]-1[/code] to keep the existing material weights.
+				[code]material[/code] (0-7) is painted onto the affected voxels; the mesher passes the weights of materials 0-3 in vertex [code]COLOR[/code] and 4-7 in [code]CUSTOM0[/code], and the terrain shader blends them. Pass [code]-1[/code] to keep the existing material weights.
+			</description>
+		</method>
+		<method name="paint">
+			<return type="void" />
+			<param index="0" name="sdf" type="JarSignedDistanceField" />
+			<param index="1" name="transform" type="Transform3D" />
+			<param index="2" name="material" type="int" />
+			<description>
+				Paints [param material] (0-7) onto the surface inside [param sdf] (placed by [param transform], like [method edit]) without changing the shape. The weight fades out over one voxel outside the shape, so repeated strokes blend. Painted voxels are kept when level of detail drops.
 			</description>
 		</method>
 		<method name="raycast_sdf" qualifiers="const">
@@ -105,7 +114,7 @@
 				Adds or subtracts a spherical volume from the terrain.
 				The center is defined by [code]position[/code], and [code]radius[/code] defines its size.
 				Set [code]union[/code] to [code]true[/code] to add, or [code]false[/code] to subtract.
-				[code]material[/code] (0-3) selects the material painted onto the edited voxels (see [method modify]); pass [code]-1[/code] to keep the existing material.
+				[code]material[/code] (0-7) selects the material painted onto the edited voxels (see [method modify]); pass [code]-1[/code] to keep the existing material.
 			</description>
 		</method>
 	</methods>
@@ -136,6 +145,9 @@
 		</member>
 		<member name="manifold" type="bool" setter="set_manifold" getter="get_manifold" default="false">
 			If [code]true[/code], every separate piece of surface inside a voxel gets its own vertex (with either mesher), so thin walls and features smaller than a voxel stay closed and 2-manifold instead of collapsing into a single vertex. Can be changed at runtime; all chunks are then remeshed.
+		</member>
+		<member name="material" type="Material" setter="set_material" getter="get_material">
+			Material for all chunks of this volume, replacing the one in [member chunk_scene]. Lets volumes that share a chunk scene look different (a planet and its moon). The default chunk material uses [code]addons/jar_voxel_terrain/src/shaders/terrain.gdshader[/code]: 8 paintable materials plus top, cliff and shore layers, triplanar texture arrays and per-layer tints. Each chunk passes [code]jar_chunk_origin[/code], [code]jar_up_center[/code] (xyz center, w [member sea_level]) and [code]jar_up_axis[/code] (xyz [member up_axis], w [member up_mode]) as instance uniforms, which custom shaders can declare too.
 		</member>
 		<member name="meshing_algorithm" type="int" setter="set_meshing_algorithm" getter="get_meshing_algorithm" enum="JarVoxelVolume.MeshingAlgorithm" default="0">
 			How chunks are turned into triangles. [constant MESHING_SURFACE_NETS] gives smooth, rounded surfaces; [constant MESHING_DUAL_CONTOURING] reproduces sharp edges and corners (stamped boxes, meshes, carved tunnels). Can be changed at runtime; all chunks are then remeshed.

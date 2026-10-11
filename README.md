@@ -42,7 +42,7 @@ Open the `demo` project in Godot and run one of the scenes in `demo/demo`:
 - `moon.tscn`: a planet with an orbiting, spinning moon; you can land on the moon and it carries you along.
 
 Controls: `WASD` move, `Space` jump, `Shift` sprint, `Tab` toggle flying (`Space`/`Shift` up/down, `Ctrl` + scroll speed), `M` toggle surface nets / dual contouring, `Esc` release the mouse.
-Editing: `left click` dig, `right click` add, `Q` next brush (sphere, box, cone, prism, torus), `scroll` brush size, `E` smooth blending, `1`-`4` material, `R` toggle the brush preview.
+Editing: `left click` dig, `right click` add, `Q` next brush (sphere, box, cone, prism, torus), `scroll` brush size, `E` smooth blending, `1`-`8` material, `P` paint mode (left click paints instead of digging), `R` toggle the brush preview.
 
 The editing scripts in `demo/demo/editing` are meant to be reused: `SdfEditor` edits with any SDF resource you assign (plus an optional preview mesh), `BrushEditor` adds the built-in brushes. `demo/demo/player` contains the character controller, which follows Godot's gravity (an `Area3D` with point gravity makes a planet). Put gravity areas in the `gravity_frames` group to have the player move along with their parent (e.g. an orbiting moon).
 
@@ -64,6 +64,7 @@ The editing scripts in `demo/demo/editing` are meant to be reused: `SdfEditor` e
 - `performance_max_concurrent_tasks` is gone: all volumes share one worker pool sized to the CPU.
 - Operation constants are now `JarVoxelVolume.SDF_OPERATION_UNION` etc.
 - `octree_scale` + `size` are replaced by `voxel_size` (meters per voxel at full detail) and `extent` (meters the volume covers); `size = n` corresponds to `extent = 2^n * voxel_size`. `min_chunk_size` and the unused `lod_level_count` are gone (chunks are always 16 voxels).
+- The chunk shader `chunk.gdshader` is replaced by `terrain.gdshader` (see [Materials](#materials)); its `world_center` / `world_radius` parameters are gone (the volume's up settings are used). Materials go up to 8 (`0`-`7`); weights 4-7 arrive in `CUSTOM0`.
 
 ### Shaping worlds with SDFs
 
@@ -85,6 +86,23 @@ volume.edit(box, JarVoxelVolume.SDF_OPERATION_UNION, Transform3D(Basis(Vector3.U
 ```
 
 In the demos, `Q` cycles the brush (sphere, box, cone, prism mesh) and `E` toggles smooth blending. See `demo/demo/flat.tscn` + `demo/demo/op_carve.tres` for a crater carved out of noise terrain with a single resource.
+
+### Materials
+
+Every voxel stores blend weights for 8 paintable materials. Edits paint their `material` argument (0-7, or `-1` to keep what is there), and `volume.paint(sdf, transform, material)` paints inside a shape without changing it:
+
+```gdscript
+var brush := JarSphereSdf.new()
+brush.radius = 4.0
+volume.paint(brush, Transform3D(Basis(), hit_position), 5)
+```
+
+The default chunk material uses `addons/jar_voxel_terrain/src/shaders/terrain.gdshader`:
+
+- Layers 0-7 are the painted materials. Unpainted ground is covered by three rule layers: 8 top (flat), 9 cliff (steeper than `cliff_angle`) and 10 shore (below `shore_height` above the volume's `sea_level`).
+- Each layer has a tint, a texture scale and a roughness. Assign `Texture2DArray`s to `albedo_textures` / `normal_textures` (layer *i* uses array layer *i*) and enable `use_albedo_textures` / `use_normal_textures` for triplanar texturing; without textures the tints are used.
+- Everything is computed in the volume's own space, with "up" taken from its `up_mode`, so textures and rules follow moving volumes and work on planets and moons alike.
+- Give a volume its own look with its `material` property (e.g. a duplicate of `chunk_material.tres` with other tints), or write your own shader: chunks pass `jar_chunk_origin`, `jar_up_center` and `jar_up_axis` as instance uniforms, material weights 0-3 arrive in `COLOR` and 4-7 in `CUSTOM0`.
 
 ### Resolution and level of detail
 
@@ -126,7 +144,6 @@ godot --headless --fixed-fps 60 --path demo res://tests/player_tests.tscn
 Contributions are welcome! Please fork the repository and submit a pull request.
 
 In particular, here are some areas of interest, in no particular order of importance:
-- Multi-material support: painting materials (4-way weight blend) is in — see `sphere_edit`/`modify`'s `material` argument. Texture-array/triplanar materials and more than 4 slots remain open.
 - More SDF shapes, operators and terrain generators.
 - Navigation system.
 

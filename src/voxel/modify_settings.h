@@ -29,6 +29,8 @@ struct ModifySettings
     // vertex COLOR and the chunk shader blends as materials. -1 = leave the
     // existing material weights untouched (e.g. dig without repainting).
     int material = 0;
+    // Paint only: change materials inside the SDF, keep the shape.
+    bool paintOnly = false;
 
     float sample(const glm::vec3 &volumePoint) const
     {

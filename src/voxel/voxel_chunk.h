@@ -91,6 +91,7 @@ class JarVoxelChunk : public Node3D
     // Takes ownership of chunk_mesh_data.
     void update_chunk(JarVoxelVolume &terrain, VoxelOctreeNode *node, ChunkMeshData *chunk_mesh_data);
     void update_collision_mesh();
+    void apply_rendering(const JarVoxelVolume &terrain);
     // The volume this chunk belongs to, e.g. from a physics raycast hit:
     // collider -> chunk (its body's owner) -> volume.
     JarVoxelVolume *get_volume() const;

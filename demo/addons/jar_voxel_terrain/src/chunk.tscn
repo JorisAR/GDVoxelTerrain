@@ -1,16 +1,10 @@
 [gd_scene load_steps=5 format=3 uid="uid://c7kqgl1k10x14"]
 
-[ext_resource type="Shader" uid="uid://dd5ygrat5ranb" path="res://addons/jar_voxel_terrain/src/shaders/chunk.gdshader" id="1_xkp0y"]
+[ext_resource type="Shader" path="res://addons/jar_voxel_terrain/src/shaders/terrain.gdshader" id="1_xkp0y"]
 
 [sub_resource type="ShaderMaterial" id="ShaderMaterial_ut1dc"]
 render_priority = 0
 shader = ExtResource("1_xkp0y")
-shader_parameter/sand_color = Color(0.79, 0.717452, 0.5609, 1)
-shader_parameter/rock_color = Color(0.609, 0.669667, 0.7, 1)
-shader_parameter/grass_color = Color(0.262745, 0.380392, 0.231373, 1)
-shader_parameter/dirt_color = Color(0.26, 0.1768, 0.0936, 1)
-shader_parameter/world_center = Vector3(0, -4196, 0)
-shader_parameter/world_radius = 4096.0
 
 [sub_resource type="ArrayMesh" id="ArrayMesh_yhpwu"]
 resource_local_to_scene = true
