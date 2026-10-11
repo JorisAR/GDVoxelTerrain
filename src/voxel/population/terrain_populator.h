@@ -52,8 +52,20 @@ class JarTerrainPopulator : public Resource
     bool align_with_normal = false;
     bool random_rotation = true;
     float sink = 0.0f; // meters pushed into the ground
+    float height_falloff = 0.0f; // meters over which the height limits fade in
+    float slope_falloff = 5.0f;  // degrees over which the slope limit fades in
     Ref<FastNoiseLite> mask_noise;
     float mask_threshold = 0.0f;
+    float mask_falloff = 0.1f; // noise range over which the mask fades in
+    bool mask_invert = false;
+    float cluster_spacing = 0.0f; // meters between cluster centers; 0 = no clusters
+    float cluster_radius = 10.0f;
+
+    static float ramp(float x) // 0 below 0, 1 above 1, smooth between
+    {
+        const float t = std::clamp(x, 0.0f, 1.0f);
+        return t * t * (3.0f - 2.0f * t);
+    }
 
   public:
     float get_minimum_scale() const { return minimum_scale; }
@@ -80,21 +92,83 @@ class JarTerrainPopulator : public Resource
     }
     float get_mask_threshold() const { return mask_threshold; }
     void set_mask_threshold(float value) { mask_threshold = value; }
-
-    // Height above sea level, the surface normal and up at a candidate
-    // position (volume space). The mask is checked after placement, so density
-    // is the density inside the areas the mask lets through.
-    bool accepts(const glm::vec3 &position, float height, const glm::vec3 &normal, const glm::vec3 &up) const
+    float get_mask_falloff() const { return mask_falloff; }
+    void set_mask_falloff(float value) { mask_falloff = std::max(0.0f, value); }
+    bool get_mask_invert() const { return mask_invert; }
+    void set_mask_invert(bool value) { mask_invert = value; }
+    float get_height_falloff() const { return height_falloff; }
+    void set_height_falloff(float value) { height_falloff = std::max(0.0f, value); }
+    float get_slope_falloff() const { return slope_falloff; }
+    void set_slope_falloff(float value) { slope_falloff = std::max(0.0f, value); }
+    float get_cluster_spacing() const { return cluster_spacing; }
+    void set_cluster_spacing(float value)
     {
-        if (height < minimum_height || height > maximum_height)
-            return false;
-        const float cosSlope = glm::dot(normal, up);
-        if (cosSlope < std::cos(maximum_slope * float(Math_PI) / 180.0f))
-            return false;
-        if (mask_noise.is_valid() &&
-            mask_noise->get_noise_3d(position.x, position.y, position.z) < mask_threshold)
-            return false;
-        return true;
+        cluster_spacing = std::max(0.0f, value);
+        notify_property_list_changed();
+    }
+    float get_cluster_radius() const { return cluster_radius; }
+    void set_cluster_radius(float value) { cluster_radius = std::max(0.01f, value); }
+
+    // Probability (0..1) from the position alone: mask and clusters. Cheap, so
+    // placement tests it before finding the exact surface. The density settings
+    // are the density where this is 1 (inside forests, in cluster centers).
+    float distribution(const glm::vec3 &position, const glm::vec3 &up) const
+    {
+        float p = 1.0f;
+        if (mask_noise.is_valid())
+        {
+            float n = mask_noise->get_noise_3d(position.x, position.y, position.z);
+            if (mask_invert)
+                n = -n;
+            p *= mask_falloff > 0.0f ? ramp((n - mask_threshold) / mask_falloff + 0.5f) : (n >= mask_threshold ? 1.0f : 0.0f);
+        }
+        if (cluster_spacing > 0.0f && p > 0.0f)
+        {
+            // Distance along the ground to the nearest cluster center: one
+            // random point per grid cell of cluster_spacing (Worley noise).
+            // Centers more than half a cell above or below are skipped, so the
+            // ground sees about one center per cell of area, flat or round.
+            const glm::vec3 g = position / cluster_spacing;
+            const glm::ivec3 base = glm::ivec3(glm::floor(g));
+            float nearest = 1e9f;
+            for (int z = -1; z <= 1; ++z)
+                for (int y = -1; y <= 1; ++y)
+                    for (int x = -1; x <= 1; ++x)
+                    {
+                        const glm::ivec3 c = base + glm::ivec3(x, y, z);
+                        PopulationRandom r(PopulationRandom::hash(uint32_t(c.x), uint32_t(c.y), uint32_t(c.z), 0xc1u));
+                        const glm::vec3 delta = glm::vec3(c) + glm::vec3(r.next(), r.next(), r.next()) - g;
+                        const float along = glm::dot(delta, up);
+                        if (std::abs(along) > 0.5f)
+                            continue;
+                        nearest = std::min(nearest, glm::length(delta - up * along));
+                    }
+            const float d = nearest * cluster_spacing / cluster_radius;
+            p *= std::exp(-d * d);
+        }
+        return p;
+    }
+
+    // Probability (0..1) from the ground: height above sea level and slope,
+    // fading in over the falloffs (inside the limits).
+    float terrain_fit(float height, const glm::vec3 &normal, const glm::vec3 &up) const
+    {
+        float p = 1.0f;
+        if (height_falloff > 0.0f)
+            p *= ramp((height - minimum_height) / height_falloff) * ramp((maximum_height - height) / height_falloff);
+        else if (height < minimum_height || height > maximum_height)
+            return 0.0f;
+        const float slope = std::acos(std::clamp(glm::dot(normal, up), -1.0f, 1.0f)) * 180.0f / float(Math_PI);
+        if (slope_falloff > 0.0f)
+            p *= ramp((maximum_slope - slope) / slope_falloff);
+        else if (slope > maximum_slope)
+            return 0.0f;
+        return p;
+    }
+
+    float probability(const glm::vec3 &position, float height, const glm::vec3 &normal, const glm::vec3 &up) const
+    {
+        return terrain_fit(height, normal, up) * distribution(position, up);
     }
 
     // Volume-space transform for an instance at `position`. `up` is the volume's
@@ -122,7 +196,11 @@ class JarTerrainPopulator : public Resource
   protected:
     void _validate_property(PropertyInfo &property) const
     {
-        if (property.name == StringName("mask_threshold") && mask_noise.is_null())
+        const StringName name = property.name;
+        if (mask_noise.is_null() && (name == StringName("mask_threshold") || name == StringName("mask_falloff") ||
+                                     name == StringName("mask_invert")))
+            property.usage = PROPERTY_USAGE_NO_EDITOR;
+        if (cluster_spacing <= 0.0f && name == StringName("cluster_radius"))
             property.usage = PROPERTY_USAGE_NO_EDITOR;
     }
 
@@ -141,9 +219,16 @@ class JarTerrainPopulator : public Resource
         ADD_GROUP("Rules", "");
         BIND_POP(minimum_height, Variant::FLOAT, PROPERTY_HINT_NONE, "suffix:m");
         BIND_POP(maximum_height, Variant::FLOAT, PROPERTY_HINT_NONE, "suffix:m");
+        BIND_POP(height_falloff, Variant::FLOAT, PROPERTY_HINT_RANGE, "0,100,0.1,or_greater,suffix:m");
         BIND_POP(maximum_slope, Variant::FLOAT, PROPERTY_HINT_RANGE, "0,180,0.1,degrees");
+        BIND_POP(slope_falloff, Variant::FLOAT, PROPERTY_HINT_RANGE, "0,45,0.1,degrees");
+        ADD_GROUP("Distribution", "");
         BIND_POP(mask_noise, Variant::OBJECT, PROPERTY_HINT_RESOURCE_TYPE, "FastNoiseLite");
         BIND_POP(mask_threshold, Variant::FLOAT, PROPERTY_HINT_RANGE, "-1,1,0.01");
+        BIND_POP(mask_falloff, Variant::FLOAT, PROPERTY_HINT_RANGE, "0,1,0.01");
+        BIND_POP(mask_invert, Variant::BOOL, PROPERTY_HINT_NONE, "");
+        BIND_POP(cluster_spacing, Variant::FLOAT, PROPERTY_HINT_RANGE, "0,500,0.1,or_greater,suffix:m");
+        BIND_POP(cluster_radius, Variant::FLOAT, PROPERTY_HINT_RANGE, "0.1,200,0.1,or_greater,suffix:m");
 #undef BIND_POP
     }
 };

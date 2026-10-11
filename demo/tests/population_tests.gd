@@ -98,9 +98,65 @@ func _test_features() -> void:
 	var masked := volume.get_features_near(center, 100.0).size()
 	_check("mask rule", masked > count * 0.2 and masked < count * 0.8, "%d of %d kept" % [masked, count])
 
+	# Layers: a second feature placed after the first keeps clear of its
+	# footprint. Cells are generated independently, so pairs across a cell
+	# border can still overlap: allow a small share.
+	feature.mask_noise = null
+	feature.footprint = 6.0
+	var small := _box_feature(0.02)
+	small.footprint = 2.0
+	volume.population_terrain_features = [feature, small]
+	await _settle(volume)
+	var big_ones := []
+	var small_ones := []
+	for f in volume.get_features_near(center, 100.0):
+		(big_ones if f.feature == feature else small_ones).append(f.transform.origin)
+	var too_close := 0
+	for a in small_ones:
+		for b in big_ones:
+			if a.distance_to(b) < 6.0:
+				too_close += 1
+	_check("footprints keep layers apart", small_ones.size() > 0 and too_close <= small_ones.size() * 0.15,
+		"%d of %d small features inside a big footprint" % [too_close, small_ones.size()])
+
+	# Clusters: the same density, gathered into groves, is much lumpier
+	# (index of dispersion of counts in 20 m bins).
+	volume.population_terrain_features = [feature]
+	feature.footprint = 2.0
+	await _settle(volume)
+	var even := _dispersion(volume.get_features_near(center, 100.0), center)
+	feature.cluster_spacing = 60.0
+	feature.cluster_radius = 12.0
+	volume.regenerate_population()
+	await _settle(volume)
+	var clustered := _dispersion(volume.get_features_near(center, 100.0), center)
+	_check("clusters", clustered > even * 2.0, "dispersion %.2f clustered vs %.2f even" % [clustered, even])
+
 	world.volume.queue_free()
 	world.viewer.queue_free()
 	await get_tree().process_frame
+
+## Variance / mean of feature counts in 20 m bins: about 1 for random
+## placement, below for even spacing, far above for clusters.
+func _dispersion(features: Array, center: Vector3) -> float:
+	var bins := {}
+	for x in range(-3, 3):
+		for z in range(-3, 3):
+			bins[Vector2i(x, z)] = 0
+	for f in features:
+		var o: Vector3 = f.transform.origin - center
+		var k := Vector2i(floori(o.x / 20.0), floori(o.z / 20.0))
+		if bins.has(k):
+			bins[k] += 1
+	var mean := 0.0
+	for k in bins:
+		mean += bins[k]
+	mean /= bins.size()
+	var variance := 0.0
+	for k in bins:
+		variance += (bins[k] - mean) * (bins[k] - mean)
+	variance /= bins.size()
+	return variance / maxf(mean, 1e-3)
 
 func _test_details() -> void:
 	var detail := JarTerrainDetail.new()

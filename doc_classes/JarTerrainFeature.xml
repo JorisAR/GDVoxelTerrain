@@ -4,9 +4,9 @@
 		Large, persistent objects (trees, rocks, structures) placed on the surface of a [JarVoxelVolume].
 	</brief_description>
 	<description>
-		Features are placed on the volume's SDF surface, independent of the mesh resolution, so they are seen from afar and always stand in the same place. Around each viewer, space within the largest [member draw_distance] is divided into cells of [member JarVoxelVolume.population_feature_cell_size]; in every cell the surface passes through, Poisson disc samples are ray marched down to the surface. Each sample picks a feature with probability proportional to its [member density], then that feature's rules decide whether it is placed. Generation runs on worker threads and is deterministic per cell.
+		Features are placed on the volume's SDF surface, independent of the mesh resolution, so they are seen from afar and always stand in the same place. Around each viewer, space within the largest [member draw_distance] is divided into cells of [member JarVoxelVolume.population_feature_cell_size]; in every cell the surface passes through, each feature is placed as its own layer, in the order of [member JarVoxelVolume.population_terrain_features]: Poisson disc samples are tested against the mask and clusters, ray marched down to the surface, then tested against the ground rules. A feature keeps instances of the features after it out of its [member footprint], so list large things first (trees, then rocks, then bushes). Generation runs on worker threads and is deterministic per cell.
 		Edits remove the features standing in the region they change, for good; [method JarVoxelVolume.remove_features] does the same for gameplay (chopping a tree), and [method JarVoxelVolume.get_features_near] lists them.
-		Add features to [member JarVoxelVolume.population_terrain_features]. The approach follows [url=https://jorisar.nl/blog/Population/]Population of a Large-Scale Terrain[/url].
+		The approach follows [url=https://jorisar.nl/blog/Population/]Population of a Large-Scale Terrain[/url].
 	</description>
 	<tutorials>
 	</tutorials>
@@ -19,6 +19,9 @@
 		</member>
 		<member name="draw_distance" type="float" setter="set_draw_distance" getter="get_draw_distance" default="500.0">
 			Distance in meters from the nearest viewer within which this feature is shown. The largest draw distance of all features also decides how far features are generated.
+		</member>
+		<member name="footprint" type="float" setter="set_footprint" getter="get_footprint" default="2.0">
+			Radius in meters kept free around each instance: instances of this feature are at least this far apart, and features later in the list are not placed inside it. Cells are generated independently, so instances in neighbouring cells can occasionally come closer.
 		</member>
 		<member name="material" type="Material" setter="set_material" getter="get_material">
 			Material override for [member mesh].

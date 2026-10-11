@@ -121,7 +121,13 @@ Volumes populate themselves with two kinds of objects (the approach is described
 - **Details** (`JarTerrainDetail`, `population_terrain_details`): grass and other small things, scattered over the triangles of full-detail chunks on the mesh threads and drawn with a `MultiMesh` per chunk. Cheap, and they follow edits automatically.
 - **Features** (`JarTerrainFeature`, `population_terrain_features`): trees, rocks, structures. They are placed on the SDF surface (Poisson disc samples ray marched down onto it), independent of the mesh resolution, so they are visible from afar (`draw_distance`) and always stand in the same place. Use a `mesh` (instanced, cheapest) or a `scene` (for colliders and scripts). Features are generated on worker threads in cells around the viewers (`population_feature_cell_size`).
 
-Both share placement rules: scale range, random rotation, alignment to the normal, sink, a height range above sea level, a maximum slope, and a noise mask to group them into forests or meadows. Edits remove the features standing where the shape changes, permanently; for gameplay there are `remove_features(position, radius)` and `get_features_near(position, radius)`:
+Both share placement rules, all of them probabilities so populations thin out naturally instead of stopping at hard lines:
+
+- **Rules:** a height range above sea level and a maximum slope, each with a falloff.
+- **Distribution:** a noise mask with a soft threshold (forests, meadows; `mask_invert` puts grass between the trees of a forest using the same noise) and clusters (groves of `cluster_radius` about `cluster_spacing` apart).
+- **Placement:** scale range, random rotation, alignment to the normal, sink.
+
+Features are placed as layers in list order, and each keeps the ones after it out of its `footprint`: list trees first, then rocks, then bushes, and they fill the gaps without overlapping. Edits remove the features standing where the shape changes, permanently; for gameplay there are `remove_features(position, radius)` and `get_features_near(position, radius)`:
 
 ```gdscript
 # Chop the tree the player is looking at.

@@ -57,7 +57,7 @@ std::vector<PackedFloat32Array> ChunkDetailGenerator::generate_detail_buffers(
                     r2 = 1.0f - r2;
                 }
                 const float r0 = 1.0f - r1 - r2;
-                const float rotation = rng.next(), scale = rng.next();
+                const float rotation = rng.next(), scale = rng.next(), keep = rng.next();
                 if (r0 * painted(ia) + r1 * painted(ib) + r2 * painted(ic) > 0.5f)
                     continue;
                 const Vector3 local = a + e1 * r1 + e2 * r2;
@@ -65,7 +65,7 @@ std::vector<PackedFloat32Array> ChunkDetailGenerator::generate_detail_buffers(
                 const Vector3 n = (normals[ia] * r0 + normals[ib] * r1 + normals[ic] * r2).normalized();
                 const glm::vec3 normal(n.x, n.y, n.z);
                 const glm::vec3 up = _upField.up(position);
-                if (!detail->accepts(position, _upField.height(position), normal, up))
+                if (keep >= detail->probability(position, _upField.height(position), normal, up))
                     continue;
                 // Chunk-relative: the MultiMesh lives under the chunk node.
                 Transform3D t = detail->build_transform(position, up, normal, rotation, scale);

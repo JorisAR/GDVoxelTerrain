@@ -25,6 +25,7 @@ class JarTerrainFeature : public JarTerrainPopulator
     Ref<Material> material;
     Ref<PackedScene> scene;
     float density = 0.01f;         // instances per square meter where the rules allow
+    float footprint = 2.0f;        // meters kept free of other features
     float draw_distance = 500.0f;  // meters
     bool cast_shadows = true;
 
@@ -40,6 +41,8 @@ class JarTerrainFeature : public JarTerrainPopulator
         notify_property_list_changed();
     }
     float get_density() const { return density; }
+    float get_footprint() const { return footprint; }
+    void set_footprint(float value) { footprint = std::max(0.0f, value); }
     void set_density(float value) { density = std::max(0.0f, value); }
     float get_draw_distance() const { return draw_distance; }
     void set_draw_distance(float value) { draw_distance = std::max(1.0f, value); }
@@ -67,6 +70,7 @@ class JarTerrainFeature : public JarTerrainPopulator
         BIND_FEATURE(material, Variant::OBJECT, PROPERTY_HINT_RESOURCE_TYPE, "Material");
         BIND_FEATURE(scene, Variant::OBJECT, PROPERTY_HINT_RESOURCE_TYPE, "PackedScene");
         BIND_FEATURE(density, Variant::FLOAT, PROPERTY_HINT_RANGE, "0,1,0.0001,or_greater,suffix:/m²");
+        BIND_FEATURE(footprint, Variant::FLOAT, PROPERTY_HINT_RANGE, "0,50,0.1,or_greater,suffix:m");
         BIND_FEATURE(draw_distance, Variant::FLOAT, PROPERTY_HINT_RANGE, "1,5000,1,or_greater,suffix:m");
         BIND_FEATURE(cast_shadows, Variant::BOOL, PROPERTY_HINT_NONE, "");
 #undef BIND_FEATURE

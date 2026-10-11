@@ -404,16 +404,8 @@ std::vector<FeatureManager::Instance> FeatureManager::generate_cell(
     const Ref<JarSignedDistanceField> &sdf, const UpField &upField)
 {
     std::vector<Instance> result;
-    // Cumulative densities: a sample picks feature i with probability density_i / total.
-    std::vector<float> cumulative;
-    float total = 0.0f;
-    for (const Ref<JarTerrainFeature> &f : features)
-    {
-        total += f.is_valid() ? f->get_density() : 0.0f;
-        cumulative.push_back(total);
-    }
-    if (total <= 0.0f)
-        return result;
+    std::vector<glm::vec3> placed;    // positions of result
+    std::vector<float> placedFootprint;
 
     const glm::vec3 lo = glm::vec3(key) * cellSize;
     const glm::vec3 hi = lo + glm::vec3(cellSize);
@@ -427,67 +419,93 @@ std::vector<FeatureManager::Instance> FeatureManager::generate_cell(
     // density per area right.
     const float side = cellSize * 1.7320508f;
 
-    // Poisson disc samples by dart throwing on a grid (one sample per grid cell).
-    const float radius = 0.6f / std::sqrt(total);
-    const int target = std::min(20000, int(std::ceil(total * side * side)));
-    const float gridStep = radius / 1.4142136f;
-    const int gridSize = std::max(1, int(std::ceil(side / gridStep)));
-    if (gridSize > 2048)
-        return result; // density too high for features; use details instead
-    std::vector<int> grid(size_t(gridSize) * gridSize, -1);
-    std::vector<glm::vec2> samples;
-    PopulationRandom rng(PopulationRandom::hash(uint32_t(key.x), uint32_t(key.y), uint32_t(key.z), 0x5eed));
-    for (int attempt = 0; attempt < target * 8 && int(samples.size()) < target; ++attempt)
+    // Each feature is its own layer, in list order: earlier features claim
+    // their footprint first (trees, then rocks between them, then bushes...).
+    for (int f = 0; f < int(features.size()); ++f)
     {
-        const glm::vec2 p(rng.next() * side, rng.next() * side);
-        const int gx = std::min(gridSize - 1, int(p.x / gridStep)), gy = std::min(gridSize - 1, int(p.y / gridStep));
-        bool ok = true;
-        for (int y = std::max(0, gy - 2); ok && y <= std::min(gridSize - 1, gy + 2); ++y)
-            for (int x = std::max(0, gx - 2); ok && x <= std::min(gridSize - 1, gx + 2); ++x)
-            {
-                const int s = grid[size_t(y) * gridSize + x];
-                ok = s < 0 || glm::distance(samples[s], p) >= radius;
-            }
-        if (!ok)
-            continue;
-        grid[size_t(gy) * gridSize + gx] = int(samples.size());
-        samples.push_back(p);
-    }
-
-    for (const glm::vec2 &s : samples)
-    {
-        // Every sample consumes the same random numbers, so a sample's feature
-        // and look do not depend on whether earlier samples were kept.
-        const float pick = rng.next() * total, r1 = rng.next(), r2 = rng.next();
-        glm::vec3 p = center + t1 * (s.x - side * 0.5f) + t2 * (s.y - side * 0.5f) + up * (side * 0.5f);
-        float d = sdf->distance(p);
-        if (d < 0.0f)
-            continue; // surface above the sampled square: not this cell's
-        float travelled = 0.0f;
-        bool hit = false;
-        for (int step = 0; step < 128 && travelled <= side; ++step)
-        {
-            if (d < 0.02f)
-            {
-                hit = true;
-                break;
-            }
-            const float advance = std::max(d * 0.7f, 0.02f); // noise SDFs overestimate a little
-            p -= up * advance;
-            travelled += advance;
-            d = sdf->distance(p);
-        }
-        if (!hit || glm::any(glm::lessThan(p, lo)) || glm::any(glm::greaterThanEqual(p, hi)))
-            continue;
-        const int f = int(std::upper_bound(cumulative.begin(), cumulative.end(), pick) - cumulative.begin());
-        if (f >= int(features.size()) || features[f].is_null())
+        if (features[f].is_null() || features[f]->get_density() <= 0.0f)
             continue;
         const JarTerrainFeature &feature = **features[f];
-        const glm::vec3 normal = sdf->normal(p);
-        const glm::vec3 localUp = upField.up(p);
-        if (!feature.accepts(p, upField.height(p), normal, localUp))
-            continue;
-        result.push_back({f, feature.build_transform(p, localUp, normal, r1, r2)});
+        const float density = feature.get_density();
+        const float footprint = feature.get_footprint();
+
+        // Poisson disc samples by dart throwing on a grid (one sample per grid
+        // cell): even spacing within the layer, no clumps of overlapping copies.
+        const float radius = std::max(footprint, 0.6f / std::sqrt(density));
+        const int target = std::min(20000, int(std::ceil(density * side * side)));
+        const float gridStep = radius / 1.4142136f;
+        const int gridSize = std::max(1, int(std::ceil(side / gridStep)));
+        if (gridSize > 2048)
+            continue; // density too high for features; use details instead
+        std::vector<int> grid(size_t(gridSize) * gridSize, -1);
+        std::vector<glm::vec2> samples;
+        PopulationRandom rng(PopulationRandom::hash(uint32_t(key.x), uint32_t(key.y), uint32_t(key.z), 0x5eedu + f));
+        for (int attempt = 0; attempt < target * 8 && int(samples.size()) < target; ++attempt)
+        {
+            const glm::vec2 p(rng.next() * side, rng.next() * side);
+            const int gx = std::min(gridSize - 1, int(p.x / gridStep));
+            const int gy = std::min(gridSize - 1, int(p.y / gridStep));
+            bool ok = true;
+            for (int y = std::max(0, gy - 2); ok && y <= std::min(gridSize - 1, gy + 2); ++y)
+                for (int x = std::max(0, gx - 2); ok && x <= std::min(gridSize - 1, gx + 2); ++x)
+                {
+                    const int s = grid[size_t(y) * gridSize + x];
+                    ok = s < 0 || glm::distance(samples[s], p) >= radius;
+                }
+            if (!ok)
+                continue;
+            grid[size_t(gy) * gridSize + gx] = int(samples.size());
+            samples.push_back(p);
+        }
+
+        for (const glm::vec2 &s : samples)
+        {
+            // Every sample consumes the same random numbers, so its look does
+            // not depend on whether earlier samples were kept.
+            const float keep = rng.next(), r1 = rng.next(), r2 = rng.next();
+            const glm::vec3 onPlane = center + t1 * (s.x - side * 0.5f) + t2 * (s.y - side * 0.5f);
+            // Mask and clusters only depend on the position: test them on the
+            // sample's projection before paying for the ray march.
+            const float spread = feature.distribution(onPlane, up);
+            if (keep >= spread)
+                continue;
+            glm::vec3 p = onPlane + up * (side * 0.5f);
+            float d = sdf->distance(p);
+            if (d < 0.0f)
+                continue; // surface above the sampled square: not this cell's
+            float travelled = 0.0f;
+            bool hit = false;
+            for (int step = 0; step < 128 && travelled <= side; ++step)
+            {
+                if (d < 0.02f)
+                {
+                    hit = true;
+                    break;
+                }
+                const float advance = std::max(d * 0.7f, 0.02f); // noise SDFs overestimate a little
+                p -= up * advance;
+                travelled += advance;
+                d = sdf->distance(p);
+            }
+            if (!hit || glm::any(glm::lessThan(p, lo)) || glm::any(glm::greaterThanEqual(p, hi)))
+                continue;
+            const glm::vec3 normal = sdf->normal(p);
+            const glm::vec3 localUp = upField.up(p);
+            // Ground fit, and the mask at the exact position (the projection
+            // above was only an estimate): keep with the combined probability.
+            const float fit = feature.terrain_fit(upField.height(p), normal, localUp);
+            const float exact = feature.distribution(p, localUp);
+            if (keep >= fit * exact)
+                continue;
+            bool blocked = false;
+            for (size_t i = 0; i < placed.size() && !blocked; ++i)
+                blocked = glm::distance(placed[i], p) < std::max(footprint, placedFootprint[i]);
+            if (blocked)
+                continue;
+            placed.push_back(p);
+            placedFootprint.push_back(footprint);
+            result.push_back({f, feature.build_transform(p, localUp, normal, r1, r2)});
+        }
     }
     return result;
 }

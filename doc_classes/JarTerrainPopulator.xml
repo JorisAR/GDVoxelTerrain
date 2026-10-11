@@ -4,8 +4,12 @@
 		Placement rules shared by [JarTerrainDetail] and [JarTerrainFeature].
 	</brief_description>
 	<description>
-		Base class for things scattered over a [JarVoxelVolume]: where they may appear (height, slope, a noise mask) and how they are placed (scale, rotation, alignment, sink). Heights are measured from the volume's [member JarVoxelVolume.sea_level] along its up direction ([member JarVoxelVolume.up_mode]), so the same rules work on flat worlds and planets.
-		These resources are read from worker threads while populating: change them only before or between populations (see [method JarVoxelVolume.regenerate_population]).
+		Base class for things scattered over a [JarVoxelVolume]: where they may appear and how they are placed. Heights are measured from the volume's sea level along its up direction (see [member JarVoxelVolume.up_mode]), so the same rules work on flat worlds and planets of any size.
+		Every rule is a probability rather than a hard cut, so populations thin out naturally:
+		- [b]Rules[/b]: height range and maximum slope, each fading in over a falloff ([member height_falloff], [member slope_falloff]).
+		- [b]Distribution[/b]: a [member mask_noise] fading in around [member mask_threshold] (forests, meadows; [member mask_invert] for the opposite), and clusters: groves of radius [member cluster_radius] about [member cluster_spacing] apart.
+		The density settings are the density where all of these are 1 (inside a forest, at a cluster center).
+		These resources are read from worker threads while populating: change them between populations (see [method JarVoxelVolume.regenerate_population]).
 	</description>
 	<tutorials>
 	</tutorials>
@@ -13,11 +17,26 @@
 		<member name="align_with_normal" type="bool" setter="set_align_with_normal" getter="get_align_with_normal" default="false">
 			If [code]true[/code], instances point along the surface normal; otherwise along the volume's up direction (trees grow straight up on slopes).
 		</member>
+		<member name="cluster_radius" type="float" setter="set_cluster_radius" getter="get_cluster_radius" default="10.0">
+			Radius in meters of a cluster: the density falls off like a Gaussian with this radius around each cluster center.
+		</member>
+		<member name="cluster_spacing" type="float" setter="set_cluster_spacing" getter="get_cluster_spacing" default="0.0">
+			Typical distance in meters between cluster centers (one random center per cell of this size). [code]0[/code] disables clustering.
+		</member>
+		<member name="height_falloff" type="float" setter="set_height_falloff" getter="get_height_falloff" default="0.0">
+			Meters inside the height range over which the probability fades in from 0 to 1. [code]0[/code] gives hard limits.
+		</member>
+		<member name="mask_falloff" type="float" setter="set_mask_falloff" getter="get_mask_falloff" default="0.1">
+			Range of [member mask_noise] values around [member mask_threshold] over which the probability fades in. [code]0[/code] gives hard edges.
+		</member>
+		<member name="mask_invert" type="bool" setter="set_mask_invert" getter="get_mask_invert" default="false">
+			If [code]true[/code], instances are placed where the mask is low instead: e.g. grass in the meadows between forests that use the same noise.
+		</member>
 		<member name="mask_noise" type="FastNoiseLite" setter="set_mask_noise" getter="get_mask_noise">
 			Optional noise that groups instances (forests, meadows): an instance is only placed where the noise, sampled at its position, is at least [member mask_threshold]. The mask is applied after placement, so the density settings are the density inside the areas the mask lets through.
 		</member>
 		<member name="mask_threshold" type="float" setter="set_mask_threshold" getter="get_mask_threshold" default="0.0">
-			Noise value (-1 to 1) below which [member mask_noise] removes instances. Higher values leave smaller, sparser patches.
+			Value of [member mask_noise] (-1 to 1) around which instances fade in. Higher values leave smaller, sparser patches.
 		</member>
 		<member name="maximum_height" type="float" setter="set_maximum_height" getter="get_maximum_height" default="100000.0">
 			Highest height above sea level, in meters, at which instances are placed.
@@ -39,6 +58,9 @@
 		</member>
 		<member name="sink" type="float" setter="set_sink" getter="get_sink" default="0.0">
 			Meters each instance is pushed into the ground (negative values lift it), e.g. to hide the base of a tree trunk on slopes.
+		</member>
+		<member name="slope_falloff" type="float" setter="set_slope_falloff" getter="get_slope_falloff" default="5.0">
+			Degrees below [member maximum_slope] over which the probability fades in. [code]0[/code] gives a hard limit.
 		</member>
 	</members>
 </class>
