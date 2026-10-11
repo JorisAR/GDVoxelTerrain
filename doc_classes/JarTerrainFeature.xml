@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="JarTerrainFeature" inherits="JarTerrainPopulator" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
+	<brief_description>
+		Large, persistent objects (trees, rocks, structures) placed on the surface of a [JarVoxelVolume].
+	</brief_description>
+	<description>
+		Features are placed on the volume's SDF surface, independent of the mesh resolution, so they are seen from afar and always stand in the same place. Around each viewer, space within the largest [member draw_distance] is divided into cells of [member JarVoxelVolume.population_feature_cell_size]; in every cell the surface passes through, Poisson disc samples are ray marched down to the surface. Each sample picks a feature with probability proportional to its [member density], then that feature's rules decide whether it is placed. Generation runs on worker threads and is deterministic per cell.
+		Edits remove the features standing in the region they change, for good; [method JarVoxelVolume.remove_features] does the same for gameplay (chopping a tree), and [method JarVoxelVolume.get_features_near] lists them.
+		Add features to [member JarVoxelVolume.population_terrain_features]. The approach follows [url=https://jorisar.nl/blog/Population/]Population of a Large-Scale Terrain[/url].
+	</description>
+	<tutorials>
+	</tutorials>
+	<members>
+		<member name="cast_shadows" type="bool" setter="set_cast_shadows" getter="get_cast_shadows" default="true">
+			If [code]true[/code], [member mesh] instances cast shadows. Scenes set this themselves.
+		</member>
+		<member name="density" type="float" setter="set_density" getter="get_density" default="0.01">
+			Instances per square meter where the rules and mask allow them. Trees are typically around [code]0.001[/code] to [code]0.01[/code].
+		</member>
+		<member name="draw_distance" type="float" setter="set_draw_distance" getter="get_draw_distance" default="500.0">
+			Distance in meters from the nearest viewer within which this feature is shown. The largest draw distance of all features also decides how far features are generated.
+		</member>
+		<member name="material" type="Material" setter="set_material" getter="get_material">
+			Material override for [member mesh].
+		</member>
+		<member name="mesh" type="Mesh" setter="set_mesh" getter="get_mesh">
+			Mesh drawn for each instance, with one [MultiMesh] per cell: the cheapest way to show many features. Ignored when [member scene] is set.
+		</member>
+		<member name="scene" type="PackedScene" setter="set_scene" getter="get_scene">
+			Scene instantiated for each feature, positioned by its root [Node3D]. Use it for colliders, scripts or LOD setups; it costs nodes per feature, so keep [member draw_distance] moderate.
+		</member>
+	</members>
+</class>

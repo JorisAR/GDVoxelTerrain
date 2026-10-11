@@ -1,18 +1,15 @@
 #ifndef JAR_TERRAIN_DETAIL_H
 #define JAR_TERRAIN_DETAIL_H
 
-#include <algorithm>
-#include <glm/glm.hpp>
-#include <godot_cpp/classes/resource.hpp>
-#include <godot_cpp/classes/mesh.hpp>
-#include <godot_cpp/classes/material.hpp>
-#include <godot_cpp/core/class_db.hpp>
-#include <godot_cpp/variant/utility_functions.hpp>
-#include <optional>
 #include "terrain_populator.h"
+#include <godot_cpp/classes/material.hpp>
+#include <godot_cpp/classes/mesh.hpp>
 
 using namespace godot;
 
+// Small, dense objects (grass, pebbles) scattered over full-detail chunks. They
+// are generated from the chunk mesh, so they follow edits automatically, and
+// are not persistent: their exact positions may change when regenerated.
 class JarTerrainDetail : public JarTerrainPopulator
 {
     GDCLASS(JarTerrainDetail, JarTerrainPopulator);
@@ -20,50 +17,35 @@ class JarTerrainDetail : public JarTerrainPopulator
   private:
     Ref<Mesh> mesh;
     Ref<Material> material;
-    float density = 1.0f;
-    int max_lod = 0;
+    float density = 1.0f;          // instances per square meter
+    float draw_distance = 0.0f;    // meters; 0 shows them on every full-detail chunk
     bool shadows_enabled = false;
 
   public:
-    virtual ~JarTerrainDetail() = default;
-
-    // Getters
     Ref<Mesh> get_mesh() const { return mesh; }
-    Ref<Material> get_material() const { return material; }
-    float get_density() const { return density; }
-    int get_max_lod() const { return max_lod; }
-    bool get_shadows_enabled() const { return shadows_enabled; }
-
-    // Setters
     void set_mesh(const Ref<Mesh> &value) { mesh = value; }
+    Ref<Material> get_material() const { return material; }
     void set_material(const Ref<Material> &value) { material = value; }
-    void set_density(float value) { density = value; }
-    void set_max_lod(int value) { max_lod = value; }
-    void set_shadows_enabled(int value) { shadows_enabled = value; }
+    float get_density() const { return density; }
+    void set_density(float value) { density = std::max(0.0f, value); }
+    float get_draw_distance() const { return draw_distance; }
+    void set_draw_distance(float value) { draw_distance = std::max(0.0f, value); }
+    bool get_shadows_enabled() const { return shadows_enabled; }
+    void set_shadows_enabled(bool value) { shadows_enabled = value; }
 
   protected:
-    static void _bind_methods() {
-        // Binding methods for Godot
-        ClassDB::bind_method(D_METHOD("get_mesh"), &JarTerrainDetail::get_mesh);
-        ClassDB::bind_method(D_METHOD("set_mesh", "value"), &JarTerrainDetail::set_mesh);
-        ADD_PROPERTY(PropertyInfo(Variant::OBJECT, "mesh", PROPERTY_HINT_RESOURCE_TYPE, "Mesh"), "set_mesh", "get_mesh");
-
-        ClassDB::bind_method(D_METHOD("get_material"), &JarTerrainDetail::get_material);
-        ClassDB::bind_method(D_METHOD("set_material", "value"), &JarTerrainDetail::set_material);
-        ADD_PROPERTY(PropertyInfo(Variant::OBJECT, "material", PROPERTY_HINT_RESOURCE_TYPE, "Material"), "set_material", "get_material");
-
-        ClassDB::bind_method(D_METHOD("get_density"), &JarTerrainDetail::get_density);
-        ClassDB::bind_method(D_METHOD("set_density", "value"), &JarTerrainDetail::set_density);
-        ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "density"), "set_density", "get_density");
-
-        ClassDB::bind_method(D_METHOD("get_max_lod"), &JarTerrainDetail::get_max_lod);
-        ClassDB::bind_method(D_METHOD("set_max_lod", "value"), &JarTerrainDetail::set_max_lod);
-        ADD_PROPERTY(PropertyInfo(Variant::INT, "max_lod"), "set_max_lod", "get_max_lod");
-
-
-        ClassDB::bind_method(D_METHOD("get_shadows_enabled"), &JarTerrainDetail::get_shadows_enabled);
-        ClassDB::bind_method(D_METHOD("set_shadows_enabled", "value"), &JarTerrainDetail::set_shadows_enabled);
-        ADD_PROPERTY(PropertyInfo(Variant::BOOL, "shadows_enabled"), "set_shadows_enabled", "get_shadows_enabled");
+    static void _bind_methods()
+    {
+#define BIND_DETAIL(m_name, m_type, m_hint, m_hint_text)                                                               \
+    ClassDB::bind_method(D_METHOD("get_" #m_name), &JarTerrainDetail::get_##m_name);                                   \
+    ClassDB::bind_method(D_METHOD("set_" #m_name, "value"), &JarTerrainDetail::set_##m_name);                          \
+    ADD_PROPERTY(PropertyInfo(m_type, #m_name, m_hint, m_hint_text), "set_" #m_name, "get_" #m_name)
+        BIND_DETAIL(mesh, Variant::OBJECT, PROPERTY_HINT_RESOURCE_TYPE, "Mesh");
+        BIND_DETAIL(material, Variant::OBJECT, PROPERTY_HINT_RESOURCE_TYPE, "Material");
+        BIND_DETAIL(density, Variant::FLOAT, PROPERTY_HINT_RANGE, "0,20,0.01,or_greater,suffix:/m²");
+        BIND_DETAIL(draw_distance, Variant::FLOAT, PROPERTY_HINT_RANGE, "0,500,0.1,or_greater,suffix:m");
+        BIND_DETAIL(shadows_enabled, Variant::BOOL, PROPERTY_HINT_NONE, "");
+#undef BIND_DETAIL
     }
 };
 

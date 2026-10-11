@@ -31,10 +31,10 @@ class JarVoxelLoD
 
     bool is_in_lod_shell(int lod, const glm::vec3 &pos, const glm::vec3 &viewer) const;
     int lod_for_viewer(const glm::vec3 &position, const glm::vec3 &viewer) const;
-    // Current viewer positions in the volume's local space (main thread).
-    static std::vector<glm::vec3> gather_viewers(const JarVoxelVolume &volume);
 
   public:
+    // Current viewer positions in the volume's local space (main thread).
+    static std::vector<glm::vec3> gather_viewers(const JarVoxelVolume &volume);
     JarVoxelLoD() = default;
     JarVoxelLoD(bool automaticUpdate, float automaticUpdateDistance, int shellSize, float chunkMeters,
                 float detailDistance);

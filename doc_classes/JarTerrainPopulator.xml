@@ -1,45 +1,44 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <class name="JarTerrainPopulator" inherits="Resource" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
 	<brief_description>
-		Abstract class defining objects generated as decorations for the terrain (like grass or rocks).
+		Placement rules shared by [JarTerrainDetail] and [JarTerrainFeature].
 	</brief_description>
 	<description>
-		Abstract class defining terrain decoration objects such as grass or rocks.
-		It specifies important parameters controlling placement, scale, and alignment of decorations.
+		Base class for things scattered over a [JarVoxelVolume]: where they may appear (height, slope, a noise mask) and how they are placed (scale, rotation, alignment, sink). Heights are measured from the volume's [member JarVoxelVolume.sea_level] along its up direction ([member JarVoxelVolume.up_mode]), so the same rules work on flat worlds and planets.
+		These resources are read from worker threads while populating: change them only before or between populations (see [method JarVoxelVolume.regenerate_population]).
 	</description>
 	<tutorials>
 	</tutorials>
-	<methods>
-		<method name="build_transform" qualifiers="const">
-			<return type="Transform3D" />
-			<param index="0" name="origin" type="Vector3" />
-			<param index="1" name="up" type="Vector3" />
-			<param index="2" name="rotation" type="float" />
-			<param index="3" name="scale" type="float" />
-			<description>
-				Builds a transformation matrix for placing a decoration instance in the world,
-				using the specified origin point, up vector, rotation angle, and uniform scale.
-			</description>
-		</method>
-	</methods>
 	<members>
 		<member name="align_with_normal" type="bool" setter="set_align_with_normal" getter="get_align_with_normal" default="false">
-			If true, aligns the decoration to the surface normal when placing it.
+			If [code]true[/code], instances point along the surface normal; otherwise along the volume's up direction (trees grow straight up on slopes).
 		</member>
-		<member name="maximum_height" type="float" setter="set_maximum_height" getter="get_maximum_height" default="0.0">
-			Maximum terrain height at which this decoration will be placed.
+		<member name="mask_noise" type="FastNoiseLite" setter="set_mask_noise" getter="get_mask_noise">
+			Optional noise that groups instances (forests, meadows): an instance is only placed where the noise, sampled at its position, is at least [member mask_threshold]. The mask is applied after placement, so the density settings are the density inside the areas the mask lets through.
+		</member>
+		<member name="mask_threshold" type="float" setter="set_mask_threshold" getter="get_mask_threshold" default="0.0">
+			Noise value (-1 to 1) below which [member mask_noise] removes instances. Higher values leave smaller, sparser patches.
+		</member>
+		<member name="maximum_height" type="float" setter="set_maximum_height" getter="get_maximum_height" default="100000.0">
+			Highest height above sea level, in meters, at which instances are placed.
 		</member>
 		<member name="maximum_scale" type="float" setter="set_maximum_scale" getter="get_maximum_scale" default="1.0">
-			Maximum scale factor applied to the decoration instances.
+			Largest uniform scale of an instance. Each instance gets a random scale between [member minimum_scale] and this.
 		</member>
-		<member name="minimum_height" type="float" setter="set_minimum_height" getter="get_minimum_height" default="0.0">
-			Minimum terrain height at which this decoration will be placed.
+		<member name="maximum_slope" type="float" setter="set_maximum_slope" getter="get_maximum_slope" default="30.0">
+			Steepest ground, in degrees between the surface normal and up, on which instances are placed.
+		</member>
+		<member name="minimum_height" type="float" setter="set_minimum_height" getter="get_minimum_height" default="-100000.0">
+			Lowest height above sea level, in meters, at which instances are placed.
 		</member>
 		<member name="minimum_scale" type="float" setter="set_minimum_scale" getter="get_minimum_scale" default="1.0">
-			Minimum scale factor applied to the decoration instances.
+			Smallest uniform scale of an instance.
 		</member>
-		<member name="minimum_slope" type="float" setter="set_minimum_slope" getter="get_minimum_slope" default="0.0">
-			Minimum slope angle (in degrees or radians) of the terrain surface where decoration can be placed.
+		<member name="random_rotation" type="bool" setter="set_random_rotation" getter="get_random_rotation" default="true">
+			If [code]true[/code], each instance is rotated randomly around its up axis.
+		</member>
+		<member name="sink" type="float" setter="set_sink" getter="get_sink" default="0.0">
+			Meters each instance is pushed into the ground (negative values lift it), e.g. to hide the base of a tree trunk on slopes.
 		</member>
 	</members>
 </class>

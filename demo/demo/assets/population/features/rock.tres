@@ -1,0 +1,15 @@
+[gd_resource type="JarTerrainFeature" load_steps=3 format=3]
+
+[ext_resource type="ArrayMesh" path="res://demo/assets/population/features/rock_mesh.tres" id="1_mesh"]
+[ext_resource type="Material" path="res://demo/assets/population/features/feature_material.tres" id="2_mat"]
+
+[resource]
+mesh = ExtResource("1_mesh")
+material = ExtResource("2_mat")
+density = 0.0015
+draw_distance = 400.0
+minimum_scale = 0.4
+maximum_scale = 2.0
+align_with_normal = true
+maximum_slope = 60.0
+minimum_height = -5.0

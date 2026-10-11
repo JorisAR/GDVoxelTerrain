@@ -2,6 +2,7 @@
 #include "chunk_detail_generator.h"
 #include "voxel_volume.h"
 #include "voxel_octree_node.h"
+#include <godot_cpp/classes/multi_mesh.hpp>
 #include <godot_cpp/classes/sphere_mesh.hpp>
 #include <godot_cpp/classes/standard_material3d.hpp>
 
@@ -232,6 +233,7 @@ void JarVoxelChunk::update_chunk(JarVoxelVolume &terrain, VoxelOctreeNode *node,
         if (!buffers[i].is_empty())
             multi_mesh->set_buffer(buffers[i]);
         multi_mesh_instance->set_material_override(detail->get_material());
+        multi_mesh_instance->set_visibility_range_end(detail->get_draw_distance());
         multi_mesh_instance->set_cast_shadows_setting(detail->get_shadows_enabled()
                                                           ? MeshInstance3D::SHADOW_CASTING_SETTING_ON
                                                           : MeshInstance3D::SHADOW_CASTING_SETTING_OFF);

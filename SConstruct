@@ -18,6 +18,7 @@ env.Append(CPPPATH=[
     "src/voxel/meshing/stitched_surface_nets",
     "src/voxel/population",
     "src/voxel/population/details",
+    "src/voxel/population/features",
 ])
 
 sources = (
@@ -29,6 +30,7 @@ sources = (
     + Glob("src/voxel/meshing/stitched_surface_nets/*.cpp")
     + Glob("src/voxel/population/*.cpp")
     + Glob("src/voxel/population/details/*.cpp")
+    + Glob("src/voxel/population/features/*.cpp")
 )
 
 if env["target"] != "template_release":

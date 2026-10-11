@@ -121,6 +121,21 @@ void JarVoxelVolume::_bind_methods()
 
     //-------------------------------------------------- POPULATION --------------------------------------------------
     ADD_GROUP("Population", "population_");
+    ClassDB::bind_method(D_METHOD("get_terrain_features"), &JarVoxelVolume::get_terrain_features);
+    ClassDB::bind_method(D_METHOD("set_terrain_features", "value"), &JarVoxelVolume::set_terrain_features);
+    ADD_PROPERTY(PropertyInfo(Variant::ARRAY, "population_terrain_features", PROPERTY_HINT_TYPE_STRING,
+                              String::num(Variant::OBJECT) + "/" + String::num(PROPERTY_HINT_RESOURCE_TYPE) +
+                                  ":JarTerrainFeature"),
+                 "set_terrain_features", "get_terrain_features");
+    ClassDB::bind_method(D_METHOD("get_feature_cell_size"), &JarVoxelVolume::get_feature_cell_size);
+    ClassDB::bind_method(D_METHOD("set_feature_cell_size", "value"), &JarVoxelVolume::set_feature_cell_size);
+    ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "population_feature_cell_size", PROPERTY_HINT_RANGE,
+                              "8,512,1,or_greater,suffix:m"),
+                 "set_feature_cell_size", "get_feature_cell_size");
+    ClassDB::bind_method(D_METHOD("remove_features", "global_position", "radius"), &JarVoxelVolume::remove_features);
+    ClassDB::bind_method(D_METHOD("get_features_near", "global_position", "radius"),
+                         &JarVoxelVolume::get_features_near);
+    ClassDB::bind_method(D_METHOD("regenerate_population"), &JarVoxelVolume::regenerate_population);
     ClassDB::bind_method(D_METHOD("get_terrain_details"), &JarVoxelVolume::get_terrain_details);
     ClassDB::bind_method(D_METHOD("set_terrain_details", "value"), &JarVoxelVolume::set_terrain_details);
     ADD_PROPERTY(PropertyInfo(Variant::ARRAY, "population_terrain_details", PROPERTY_HINT_TYPE_STRING,
@@ -156,6 +171,7 @@ JarVoxelVolume::~JarVoxelVolume()
     // Members are destroyed in reverse declaration order, which would free the
     // octree first. In-flight mesh tasks read the octree, so wait for them (by
     // destroying the scheduler) first.
+    _featureManager.reset();
     _meshComputeScheduler.reset();
     _voxelRoot.reset();
 }
@@ -304,6 +320,9 @@ void JarVoxelVolume::queue_edit(const Ref<JarSignedDistanceField> &sdf, SDF::Ope
         return;
     }
     settings.bounds = region;
+    // Features standing where the shape changes go away, for good.
+    if (!paintOnly && _featureManager)
+        _featureManager->remove_in(region);
 
     // Queued rather than applied immediately: the octree may only be mutated
     // when no build or meshing task is reading it (see process()).
@@ -580,6 +599,7 @@ void JarVoxelVolume::initialize()
                             get_chunk_size() * _voxelSize, _lodDetailDistance);
     _meshComputeScheduler = std::make_unique<MeshComputeScheduler>();
     _voxelRoot = std::make_unique<VoxelOctreeNode>(_depth);
+    _featureManager = std::make_unique<FeatureManager>(*this);
     //_populationRoot = memnew(PopulationOctreeNode(_size));
     if (!_buildThread.joinable())
         _buildThread = std::thread([this] { build_worker(); });
@@ -595,6 +615,8 @@ void JarVoxelVolume::process()
     // the same nodes the worker is mutating. Letting any of them run concurrently
     // was the heap-corruption / nondeterministic-SIGSEGV race. So bail the whole
     // frame until the build finishes.
+    if (_featureManager)
+        _featureManager->process(); // independent of the octree: runs during builds too
     if (_isBuilding || !_meshComputeScheduler)
         return; // building, or initialize() failed (missing chunk scene / sdf)
     process_pool(); // reclaim chunks the last build released, ready for reuse
@@ -919,6 +941,53 @@ int JarVoxelVolume::desired_lod(const VoxelOctreeNode &node)
 int JarVoxelVolume::lod_at(const glm::vec3 &position) const
 {
     return _voxelLod.lod_at(position);
+}
+
+void JarVoxelVolume::set_terrain_features(const TypedArray<JarTerrainFeature> &features)
+{
+    _terrainFeatures = features;
+    if (_featureManager)
+        _featureManager->reset();
+}
+
+void JarVoxelVolume::set_feature_cell_size(float value)
+{
+    _featureCellSize = std::max(1.0f, value);
+    if (_featureManager)
+        _featureManager->reset();
+}
+
+void JarVoxelVolume::regenerate_population()
+{
+    if (_featureManager)
+        _featureManager->reset();
+    remesh_all(); // details are made with the chunk meshes
+}
+
+void JarVoxelVolume::remove_features(const Vector3 &global_position, float radius)
+{
+    if (!_featureManager)
+        return;
+    const Vector3 local = to_local(global_position);
+    const glm::vec3 c(local.x, local.y, local.z);
+    _featureManager->remove_in(Bounds(c - glm::vec3(radius), c + glm::vec3(radius)));
+}
+
+TypedArray<Dictionary> JarVoxelVolume::get_features_near(const Vector3 &global_position, float radius) const
+{
+    TypedArray<Dictionary> result;
+    if (!_featureManager)
+        return result;
+    const Vector3 local = to_local(global_position);
+    for (const FeatureManager::Instance &instance :
+         _featureManager->instances_near(glm::vec3(local.x, local.y, local.z), radius))
+    {
+        Dictionary d;
+        d["feature"] = _terrainFeatures[instance.feature];
+        d["transform"] = get_global_transform() * instance.transform;
+        result.push_back(d);
+    }
+    return result;
 }
 
 void JarVoxelVolume::set_terrain_details(const TypedArray<JarTerrainDetail> &details)

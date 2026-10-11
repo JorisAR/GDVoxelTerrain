@@ -64,6 +64,7 @@ The editing scripts in `demo/demo/editing` are meant to be reused: `SdfEditor` e
 - `performance_max_concurrent_tasks` is gone: all volumes share one worker pool sized to the CPU.
 - Operation constants are now `JarVoxelVolume.SDF_OPERATION_UNION` etc.
 - `octree_scale` + `size` are replaced by `voxel_size` (meters per voxel at full detail) and `extent` (meters the volume covers); `size = n` corresponds to `extent = 2^n * voxel_size`. `min_chunk_size` and the unused `lod_level_count` are gone (chunks are always 16 voxels).
+- Population rules: `minimum_slope` (a cosine) is replaced by `maximum_slope` in degrees (`minimum_slope = 0.85` becomes `maximum_slope = 32`); the unused `max_lod` is gone. Height ranges now default to unlimited.
 - The chunk shader `chunk.gdshader` is replaced by `terrain.gdshader` (see [Materials](#materials)); its `world_center` / `world_radius` parameters are gone (the volume's up settings are used). Materials go up to 8 (`0`-`7`); weights 4-7 arrive in `CUSTOM0`.
 
 ### Shaping worlds with SDFs
@@ -104,6 +105,23 @@ The default chunk material uses `addons/jar_voxel_terrain/src/shaders/terrain.gd
 - Everything is computed in the volume's own space, with "up" taken from its `up_mode`, so textures and rules follow moving volumes and work on planets and moons alike.
 - Give a volume its own look with its `material` property (e.g. a duplicate of `chunk_material.tres` with other tints), or write your own shader: chunks pass `jar_chunk_origin`, `jar_up_center` and `jar_up_axis` as instance uniforms, material weights 0-3 arrive in `COLOR` and 4-7 in `CUSTOM0`.
 
+### Population
+
+Volumes populate themselves with two kinds of objects (the approach is described in [Population of a Large-Scale Terrain](https://jorisar.nl/blog/Population/)):
+
+- **Details** (`JarTerrainDetail`, `population_terrain_details`): grass and other small things, scattered over the triangles of full-detail chunks on the mesh threads and drawn with a `MultiMesh` per chunk. Cheap, and they follow edits automatically.
+- **Features** (`JarTerrainFeature`, `population_terrain_features`): trees, rocks, structures. They are placed on the SDF surface (Poisson disc samples ray marched down onto it), independent of the mesh resolution, so they are visible from afar (`draw_distance`) and always stand in the same place. Use a `mesh` (instanced, cheapest) or a `scene` (for colliders and scripts). Features are generated on worker threads in cells around the viewers (`population_feature_cell_size`).
+
+Both share placement rules: scale range, random rotation, alignment to the normal, sink, a height range above sea level, a maximum slope, and a noise mask to group them into forests or meadows. Edits remove the features standing where the shape changes, permanently; for gameplay there are `remove_features(position, radius)` and `get_features_near(position, radius)`:
+
+```gdscript
+# Chop the tree the player is looking at.
+for f in volume.get_features_near(hit_position, 2.0):
+	volume.remove_features(f.transform.origin, 0.5)
+```
+
+The demos use a generated low-poly pine and rock (`demo/demo/assets/population/features/`).
+
 ### Resolution and level of detail
 
 - `voxel_size` sets the smallest detail (and edit) in meters; `extent` the size of the volume.
@@ -128,6 +146,7 @@ godot --headless --path demo res://tests/edit_tests.tscn
 godot --headless --path demo res://tests/mesher_tests.tscn
 godot --headless --path demo res://tests/lod_tests.tscn
 godot --headless --path demo res://tests/topology_tests.tscn
+godot --headless --path demo res://tests/population_tests.tscn
 godot --headless --fixed-fps 60 --path demo res://tests/player_tests.tscn
 ```
 

@@ -6,6 +6,8 @@
 [ext_resource type="JarTerrainDetail" uid="uid://d0oay8xwjjuf3" path="res://demo/assets/population/details/grass_detail.tres" id="4_grass"]
 [ext_resource type="Material" uid="uid://bnto51e7djra7" path="res://demo/assets/water/water_material.tres" id="5_water"]
 [ext_resource type="Material" uid="uid://55tbedv6qxva" path="res://demo/assets/space/space_sky.tres" id="6_sky"]
+[ext_resource type="JarTerrainFeature" path="res://demo/assets/population/features/pine.tres" id="7_pine"]
+[ext_resource type="JarTerrainFeature" path="res://demo/assets/population/features/rock.tres" id="8_rock"]
 
 [sub_resource type="SphereShape3D" id="GravityShape"]
 radius = 8000.0
@@ -39,6 +41,7 @@ lod_automatic_update_distance = 16.0
 up_mode = 1
 sea_level = 4096.0
 population_terrain_details = Array[JarTerrainDetail]([ExtResource("4_grass")])
+population_terrain_features = Array[JarTerrainFeature]([ExtResource("7_pine"), ExtResource("8_rock")])
 
 [node name="Gravity" type="Area3D" parent="Planet" unique_id=822470123 groups=["gravity_frames"]]
 gravity_space_override = 3

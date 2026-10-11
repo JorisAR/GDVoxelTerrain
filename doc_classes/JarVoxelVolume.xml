@@ -34,6 +34,14 @@
 				Rebuilds the level of detail around the current viewers as soon as the volume is idle, even if they moved less than [member lod_automatic_update_distance]. Call it after teleporting a viewer.
 			</description>
 		</method>
+		<method name="get_features_near" qualifiers="const">
+			<return type="Dictionary[]" />
+			<param index="0" name="global_position" type="Vector3" />
+			<param index="1" name="radius" type="float" />
+			<description>
+				Returns the features whose base lies within [param radius] of [param global_position], as dictionaries with [code]feature[/code] (the [JarTerrainFeature]) and [code]transform[/code] (global [Transform3D]). Only generated features (near viewers) are listed.
+			</description>
+		</method>
 		<method name="get_height_at" qualifiers="const">
 			<return type="float" />
 			<param index="0" name="global_position" type="Vector3" />
@@ -90,10 +98,24 @@
 				Ray marches the volume's base [member sdf] from [param from] to [param to] (global space) and returns [code]{position, normal}[/code] of the first surface hit, or an empty dictionary. Edits are not included. Works at any distance, without colliders: useful for spawning on a planet or aiming far beyond the collider range.
 			</description>
 		</method>
+		<method name="regenerate_population">
+			<return type="void" />
+			<description>
+				Regenerates all features and details, e.g. after changing their settings at runtime. Removed features stay removed.
+			</description>
+		</method>
 		<method name="remesh_all">
 			<return type="void" />
 			<description>
 				Remeshes every chunk with the current meshing settings. Called automatically when [member meshing_algorithm], [member dual_contouring_feature_threshold] or [member cubic_voxels] change.
+			</description>
+		</method>
+		<method name="remove_features">
+			<return type="void" />
+			<param index="0" name="global_position" type="Vector3" />
+			<param index="1" name="radius" type="float" />
+			<description>
+				Removes the features whose base lies within a cube of half size [param radius] around [param global_position], permanently (they are not generated there again). Edits do this automatically for the region they change.
 			</description>
 		</method>
 		<method name="spawn_debug_spheres_in_bounds">
@@ -161,8 +183,14 @@
 		<member name="performance_updated_colliders_per_second" type="int" setter="set_updated_colliders_per_second" getter="get_updated_colliders_per_second" default="0">
 			Optional hard cap on how many chunk colliders are uploaded per second. [code]0[/code] means no cap: uploads are limited only by [member performance_collider_budget_ms].
 		</member>
+		<member name="population_feature_cell_size" type="float" setter="set_feature_cell_size" getter="get_feature_cell_size" default="64.0">
+			Edge length in meters of the cells features are generated in. Smaller cells follow the surface more closely and stream in finer steps; larger cells mean fewer, bigger jobs and nodes.
+		</member>
 		<member name="population_terrain_details" type="JarTerrainDetail[]" setter="set_terrain_details" getter="get_terrain_details" default="[]">
-			Defines additional objects or modifications applied to the terrain, such as grass, rocks, or decorations.
+			[JarTerrainDetail]s scattered over full-detail chunks: grass, pebbles, small plants.
+		</member>
+		<member name="population_terrain_features" type="JarTerrainFeature[]" setter="set_terrain_features" getter="get_terrain_features" default="[]">
+			[JarTerrainFeature]s placed on the surface around viewers: trees, rocks, structures.
 		</member>
 		<member name="sdf" type="JarSignedDistanceField" setter="set_sdf" getter="get_sdf">
 			The signed distance field ([JarSignedDistanceField]) used to define terrain shape.

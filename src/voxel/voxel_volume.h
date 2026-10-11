@@ -5,6 +5,8 @@
 #include "modify_settings.h"
 #include "signed_distance_field.h"
 #include "terrain_detail.h"
+#include "terrain_feature.h"
+#include "feature_manager.h"
 #include "up_field.h"
 #include "voxel_lod.h"
 #include "voxel_octree_node.h"
@@ -112,6 +114,9 @@ class JarVoxelVolume : public Node3D
 
     // POPULATION
     TypedArray<JarTerrainDetail> _terrainDetails;
+    TypedArray<JarTerrainFeature> _terrainFeatures;
+    float _featureCellSize = 64.0f;
+    std::unique_ptr<FeatureManager> _featureManager;
     UpField _upField;
 
     // TERRAIN DESTRUCTION
@@ -283,6 +288,13 @@ class JarVoxelVolume : public Node3D
     int lod_at(const glm::vec3 &position) const;
 
     // POPULATION
+    void set_terrain_features(const TypedArray<JarTerrainFeature> &features);
+    TypedArray<JarTerrainFeature> get_terrain_features() const { return _terrainFeatures; }
+    void set_feature_cell_size(float value);
+    float get_feature_cell_size() const { return _featureCellSize; }
+    void remove_features(const Vector3 &global_position, float radius);
+    TypedArray<Dictionary> get_features_near(const Vector3 &global_position, float radius) const;
+    void regenerate_population();
     void set_terrain_details(const TypedArray<JarTerrainDetail> &details);
     TypedArray<JarTerrainDetail> get_terrain_details() const;
 };

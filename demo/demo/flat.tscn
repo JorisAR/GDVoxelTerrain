@@ -4,6 +4,8 @@
 [ext_resource type="JarOperationSdf" uid="uid://dv0mfksbe4f83" path="res://demo/op_carve.tres" id="2_sdf"]
 [ext_resource type="PackedScene" path="res://demo/player/player.tscn" id="3_player"]
 [ext_resource type="JarTerrainDetail" uid="uid://d0oay8xwjjuf3" path="res://demo/assets/population/details/grass_detail.tres" id="4_grass"]
+[ext_resource type="JarTerrainFeature" path="res://demo/assets/population/features/pine.tres" id="7_pine"]
+[ext_resource type="JarTerrainFeature" path="res://demo/assets/population/features/rock.tres" id="8_rock"]
 
 [sub_resource type="ProceduralSkyMaterial" id="SkyMaterial"]
 
@@ -24,6 +26,7 @@ sdf = ExtResource("2_sdf")
 meshing_algorithm = 1
 lod_automatic_update_distance = 16.0
 population_terrain_details = Array[JarTerrainDetail]([ExtResource("4_grass")])
+population_terrain_features = Array[JarTerrainFeature]([ExtResource("7_pine"), ExtResource("8_rock")])
 
 [node name="Player" parent="." instance=ExtResource("3_player")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 60, 0)

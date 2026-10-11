@@ -11,5 +11,5 @@ minimum_scale = 0.3
 maximum_scale = 0.5
 minimum_height = -19.0
 maximum_height = 1000.0
-minimum_slope = 0.85
+maximum_slope = 32.0
 align_with_normal = true

@@ -3,7 +3,8 @@ extends Node
 ## same work regardless of machine speed:
 ##   godot --headless --fixed-fps 60 --path demo res://benchmark/benchmark.tscn
 ## Prints one RESULT line per phase; wall-clock numbers are what to compare.
-## Set CHUNK_DUMP=<file> to also write the resulting chunk set for diffing.
+## Set CHUNK_DUMP=<file> to also write the resulting chunk set for diffing,
+## FEATURES=1 to populate the planet with the demo's trees and rocks.
 
 const CHUNK_SCENE := preload("res://addons/jar_voxel_terrain/src/chunk.tscn")
 const PLANET_SDF := preload("res://demo/planet_sdf.tres")
@@ -31,6 +32,9 @@ func _ready() -> void:
 	if OS.get_environment("MESHER") == "dc":
 		terrain.meshing_algorithm = JarVoxelVolume.MESHING_DUAL_CONTOURING
 	terrain.manifold = OS.get_environment("MANIFOLD") == "1"
+	if OS.get_environment("FEATURES") == "1":
+		terrain.population_terrain_features = [load("res://demo/assets/population/features/pine.tres"),
+			load("res://demo/assets/population/features/rock.tres")]
 	planet.add_child(terrain)
 	camera = JarVoxelViewer.new()
 	camera.position = Vector3(-5, 20, 200)
@@ -121,6 +125,8 @@ func _report(label: String, usec: int, frames: int, worst: int, extra := "") -> 
 	for c in terrain.get_children():
 		if c is JarVoxelChunk and c.visible:
 			chunks += 1
+	if not terrain.population_terrain_features.is_empty():
+		extra += " features=%d" % terrain.get_features_near(camera.global_position, 2000.0).size()
 	print("RESULT %s ms=%.1f frames=%d worst_frame_ms=%.1f chunks=%d %s" % [
 		label, usec / 1000.0, frames, worst / 1000.0, chunks, extra])
 
