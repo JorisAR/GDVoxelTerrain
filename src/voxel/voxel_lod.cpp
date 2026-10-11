@@ -6,11 +6,12 @@
 #include <limits>
 
 JarVoxelLoD::JarVoxelLoD(bool automaticUpdate, float automaticUpdateDistance, int shellSize, float chunkMeters,
-                         float detailDistance)
+                         float detailDistance, int maxLod)
     : _automaticUpdateDistance(automaticUpdateDistance), _shellSize(std::max(1, shellSize)),
       _automaticUpdate(automaticUpdate), _chunkMeters(chunkMeters),
-      _detailChunks(std::max(0.0f, detailDistance) / chunkMeters)
+      _detailChunks(std::max(0.0f, detailDistance) / chunkMeters), _maxLod(std::max(0, maxLod))
 {
+    _maxChunkSize = _maxLod + JarVoxelVolume::ChunkSizeLog2;
 }
 
 std::vector<glm::vec3> JarVoxelLoD::gather_viewers(const JarVoxelVolume &volume)
@@ -103,9 +104,9 @@ int JarVoxelLoD::lod_for_viewer(const glm::vec3 &position, const glm::vec3 &view
 int JarVoxelLoD::lod_at(const glm::vec3 &position) const
 {
     if (_viewerPositions.empty())
-        return lod_for_viewer(position, glm::vec3(0.0f));
+        return std::min(lod_for_viewer(position, glm::vec3(0.0f)), _maxLod);
     int lod = std::numeric_limits<int>::max();
     for (const glm::vec3 &viewer : _viewerPositions)
         lod = std::min(lod, lod_for_viewer(position, viewer));
-    return lod;
+    return std::min(lod, _maxLod);
 }

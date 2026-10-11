@@ -621,7 +621,7 @@ void JarVoxelVolume::initialize()
     // that is at least one chunk deep.
     _depth = std::max(ChunkSizeLog2 + 1, int(std::ceil(std::log2(_extent / _voxelSize))));
     _voxelLod = JarVoxelLoD(_lod_automatic_update, _lod_automatic_update_distance, _lod_shell_size,
-                            get_chunk_size() * _voxelSize, _lodDetailDistance);
+                            get_chunk_size() * _voxelSize, _lodDetailDistance, _depth - ChunkSizeLog2);
     _meshComputeScheduler = std::make_unique<MeshComputeScheduler>();
     _voxelRoot = std::make_unique<VoxelOctreeNode>(_depth);
     _featureManager = std::make_unique<FeatureManager>(*this);

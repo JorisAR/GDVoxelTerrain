@@ -107,17 +107,17 @@ func _ground_distance(player: DemoPlayer, from: Vector3) -> float:
 ## Stands on the orbiting, spinning moon: the player must stay on its surface
 ## (moving with it) instead of being left behind.
 func _test_moon() -> void:
-	var scene: Node = load("res://demo/moon.tscn").instantiate()
+	var scene: Node = load("res://demo/planet.tscn").instantiate()
 	var moon: Node3D = scene.get_node("MoonOrbit/Moon")
 	var player: DemoPlayer = scene.get_node("Player")
 	# Speed the moon up so a few seconds cover a lot of motion.
-	scene.get_node("MoonOrbit").degrees_per_second = 6.0
+	scene.get_node("MoonOrbit").degrees_per_second = 1.3 # ~250 m/s at 11 km
 	moon.degrees_per_second = 20.0
 	add_child(scene)
 	await get_tree().physics_frame
-	player.global_position = moon.global_position + Vector3.UP * 330.0
+	player.global_position = moon.global_position + Vector3.UP * 360.0
 	await _wait_until(func(): return player._spawned and player.is_on_floor(), 20000)
-	_check("moon spawns on moon", player.is_on_floor() and player.global_position.distance_to(moon.global_position) < 300.0,
+	_check("moon spawns on moon", player.is_on_floor() and player.global_position.distance_to(moon.global_position) < 345.0,
 		"distance to moon center %.1f" % player.global_position.distance_to(moon.global_position))
 	var radius := player.global_position.distance_to(moon.global_position)
 	var moved := 0.0

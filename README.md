@@ -37,9 +37,8 @@ The compiled library is written straight into `demo/addons/jar_voxel_terrain/bin
 
 Open the `demo` project in Godot and run one of the scenes in `demo/demo`:
 
-- `planet.tscn` (the main scene): a 4 km planet with gravity and water.
-- `flat.tscn`: flat noise terrain with a crater carved by an SDF operation (`op_carve.tres`).
-- `moon.tscn`: a planet with an orbiting, spinning moon; you can land on the moon and it carries you along.
+- `planet.tscn` (the main scene): a 4 km forest planet with oceans, sporadic eroded mountains with snowy peaks and no trees, water, an atmosphere and a slowly orbiting moon you can fly to and land on (it carries you along). Its terrain, materials and population live in `demo/demo/planet/`; change the radius in `planet_terrain.tres` (and the volume's `extent`) and the water, atmosphere, materials and population rules follow.
+- `flat.tscn`: flat terrain with a crater carved by an SDF operation (`op_carve.tres`), water and the same population.
 
 Controls: `WASD` move, `Space` jump, `Shift` sprint, `Tab` toggle flying (`Space`/`Shift` up/down, `Ctrl` + scroll speed), `M` toggle surface nets / dual contouring, `Esc` release the mouse.
 Editing: `left click` dig, `right click` add, `Q` next brush (sphere, box, cone, prism, torus), `scroll` brush size, `E` smooth blending, `1`-`8` material (of the built-in set), `P` paint mode (left click paints instead of digging), `R` toggle the brush preview.
@@ -67,6 +66,7 @@ The editing scripts in `demo/demo/editing` are meant to be reused: `SdfEditor` e
 - Population rules: `minimum_slope` (a cosine) is replaced by `maximum_slope` in degrees (`minimum_slope = 0.85` becomes `maximum_slope = 32`); the unused `max_lod` is gone. Height ranges now default to unlimited.
 - `JarPlanetSdf` and the old `JarTerrainSdf` are merged into `JarTerrainSdf`: set `shape` to *Sphere* and `radius` for planets. The old `noise_scale` / `height_scale` become `height` (above zero) and `depth` (below); the old terrain used `height = 2 * height_scale`, `depth = height_scale`, the old planet `height = noise_scale`, `depth = noise_scale / 2`. Set `erosion = false` for the old look.
 - `up_mode` defaults to the new *Auto*; volumes that set *Axis* or *Radial* explicitly keep working.
+- `moon.tscn` is merged into `planet.tscn`; the old water material and the compositor atmosphere of the demo are replaced by `JarPlanetWater` and `JarAtmosphere`.
 - The chunk shader `chunk.gdshader` is replaced by the material-mode shaders (see [Materials](#materials)); the chunk scene no longer carries a material (the volume assigns one). Its `world_center` / `world_radius` parameters are gone (the volume's up field is used). Colors per material moved from shader parameters to `JarTerrainMaterial` resources in the volume's `materials`.
 
 ### Shaping worlds with SDFs
@@ -137,10 +137,19 @@ for f in volume.get_features_near(hit_position, 2.0):
 
 The demos use a generated low-poly pine and rock (`demo/demo/assets/population/features/`).
 
+### Water and atmosphere
+
+Two script nodes in `addons/jar_voxel_terrain/nodes/` dress up a volume. Add them next to (or under) the volume; they find it and the sun on their own, and read the volume's up field, so they follow its radius, sea level and movement:
+
+- **`JarPlanetWater`**: water at the volume's sea level, a sphere for planets or a plane for flat worlds. A dense patch follows the camera and is projected onto the exact sea level, so coasts are precise up close. The shader (`water.gdshader`) colors water by its depth, with waves, shore foam and transparency. `level_offset` raises or lowers it. It is deliberately separate from the volume, so it can be replaced by a simulation later.
+- **`JarAtmosphere`**: physically based single scattering (Rayleigh and Mie): blue sky and red sunsets from the ground, a glowing rim from space, and haze over distant terrain. It is drawn as a transparent shell after other transparent objects, so water gets hazed too, and several planets can each have one. Its `thickness` is a fraction of the planet radius. In `atmosphere.gdshader`, `aerial_perspective` scales the haze over terrain (game planets are small, so the physical amount washes the ground out) and `sky_occlusion` makes a bright day sky hide the stars.
+
+Both create their default material at runtime (not saved with the scene); assign your own `material` to tweak or replace the shaders.
+
 ### Resolution and level of detail
 
 - `voxel_size` sets the smallest detail (and edit) in meters; `extent` the size of the volume.
-- Detail is highest around viewers and falls off in rings: `lod_detail_distance` widens the full-detail region, `lod_shell_size` sets how quickly detail drops after it. Level of detail depends only on viewer and sample positions, and neighbouring chunks never differ by more than one level, so seams stay closed at any setting.
+- Detail is highest around viewers and falls off in rings: `lod_detail_distance` widens the full-detail region, `lod_shell_size` sets how quickly detail drops after it. Level of detail depends only on viewer and sample positions, and neighbouring chunks never differ by more than one level, so seams stay closed at any setting. Beyond the coarsest level the volume can make chunks for (set by its `extent`), detail stays at that level, so a planet stays visible from far away.
 
 ### Meshing
 

@@ -27,6 +27,7 @@ class JarVoxelLoD
     float _detailChunks = 0.0f;  // extra LOD 0 radius, in LOD 0 chunks
 
     int _maxChunkSize = 10; // nodes above this size always use LOD 0 (they are never chunks)
+    int _maxLod = 6;
     std::vector<glm::vec3> _viewerPositions; // local space, as of the last (re)build
 
     bool is_in_lod_shell(int lod, const glm::vec3 &pos, const glm::vec3 &viewer) const;
@@ -36,8 +37,11 @@ class JarVoxelLoD
     // Current viewer positions in the volume's local space (main thread).
     static std::vector<glm::vec3> gather_viewers(const JarVoxelVolume &volume);
     JarVoxelLoD() = default;
+    // maxLod: the coarsest level that still has chunks (octree depth minus the
+    // chunk size); everything further away is meshed at that level instead of
+    // not at all, so distant planets stay visible.
     JarVoxelLoD(bool automaticUpdate, float automaticUpdateDistance, int shellSize, float chunkMeters,
-                float detailDistance);
+                float detailDistance, int maxLod);
 
     // Main thread. Returns true when viewers moved far enough (or were added or
     // removed) that the octree should be rebuilt; positions are then updated.

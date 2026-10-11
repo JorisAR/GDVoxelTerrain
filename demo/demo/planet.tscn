@@ -1,75 +1,162 @@
 [gd_scene format=3 uid="uid://b81gow3g200oa"]
 
 [ext_resource type="PackedScene" uid="uid://c7kqgl1k10x14" path="res://addons/jar_voxel_terrain/src/chunk.tscn" id="1_chunk"]
-[ext_resource type="PackedScene" path="res://demo/player/player.tscn" id="3_player"]
-[ext_resource type="JarTerrainDetail" uid="uid://d0oay8xwjjuf3" path="res://demo/assets/population/details/grass_detail.tres" id="4_grass"]
-[ext_resource type="Material" uid="uid://bnto51e7djra7" path="res://demo/assets/water/water_material.tres" id="5_water"]
-[ext_resource type="Material" uid="uid://55tbedv6qxva" path="res://demo/assets/space/space_sky.tres" id="6_sky"]
-[ext_resource type="JarTerrainFeature" uid="uid://cr7mepb58kksy" path="res://demo/assets/population/features/pine.tres" id="7_pine"]
-[ext_resource type="JarTerrainFeature" path="res://demo/assets/population/features/rock.tres" id="8_rock"]
+[ext_resource type="JarTerrainSdf" uid="uid://dqn1tb1t75fft" path="res://demo/planet/planet_terrain.tres" id="2_terrain"]
+[ext_resource type="Material" path="res://demo/planet/planet_material.tres" id="3_material"]
+[ext_resource type="JarTerrainFeature" path="res://demo/planet/pine.tres" id="4_pine"]
+[ext_resource type="JarTerrainFeature" path="res://demo/planet/broadleaf.tres" id="5_broadleaf"]
+[ext_resource type="JarTerrainFeature" path="res://demo/planet/rock.tres" id="6_rock"]
+[ext_resource type="JarTerrainFeature" path="res://demo/planet/bush.tres" id="7_bush"]
+[ext_resource type="JarTerrainDetail" path="res://demo/planet/grass.tres" id="8_grass"]
+[ext_resource type="Script" uid="uid://557h1ey0uo8c" path="res://addons/jar_voxel_terrain/nodes/water/planet_water.gd" id="9_water"]
+[ext_resource type="Script" uid="uid://bdr052q72xws1" path="res://addons/jar_voxel_terrain/nodes/atmosphere/atmosphere.gd" id="10_atmosphere"]
+[ext_resource type="Script" uid="uid://ca8q8yfyo8l3h" path="res://demo/orbit.gd" id="11_orbit"]
+[ext_resource type="JarTerrainSdf" uid="uid://da7ojhqqhsfdd" path="res://demo/planet/moon_terrain.tres" id="12_moon"]
+[ext_resource type="Material" path="res://demo/planet/moon_material.tres" id="13_moon_material"]
+[ext_resource type="PackedScene" uid="uid://cupyeuv1xe20s" path="res://demo/player/player.tscn" id="14_player"]
+[ext_resource type="Material" uid="uid://55tbedv6qxva" path="res://demo/assets/space/space_sky.tres" id="15_sky"]
 
-[sub_resource type="FastNoiseLite" id="FastNoiseLite_f4yvl"]
-frequency = 0.0004
+[sub_resource type="JarTerrainMaterial" id="Grass"]
+albedo = Color(0.25, 0.35, 0.15, 1)
+roughness = 0.9
+variation = 0.4
 
-[sub_resource type="JarTerrainSdf" id="JarErodedTerrainSdf_f4yvl"]
-shape = 1
-radius = 4096.0
-noise = SubResource("FastNoiseLite_f4yvl")
-height = 200.0
+[sub_resource type="JarTerrainMaterial" id="Rock"]
+albedo = Color(0.47, 0.45, 0.42, 1)
+roughness = 0.8
+variation = 0.3
 
-[sub_resource type="SphereShape3D" id="GravityShape"]
-radius = 8000.0
+[sub_resource type="JarTerrainMaterial" id="Sand"]
+albedo = Color(0.78, 0.7, 0.5, 1)
+roughness = 0.9
+variation = 0.2
 
-[sub_resource type="SphereMesh" id="WaterMesh"]
-radius = 4096.0
-height = 8192.0
-radial_segments = 256
-rings = 128
+[sub_resource type="JarTerrainMaterial" id="Seabed"]
+albedo = Color(0.36, 0.33, 0.24, 1)
+roughness = 0.9
+variation = 0.3
+
+[sub_resource type="JarTerrainMaterial" id="Snow"]
+albedo = Color(0.9, 0.92, 0.95, 1)
+roughness = 0.55
+variation = 0.08
+
+[sub_resource type="JarTerrainMaterial" id="Dirt"]
+albedo = Color(0.38, 0.27, 0.17, 1)
+roughness = 0.95
+variation = 0.3
+
+[sub_resource type="JarTerrainMaterial" id="DarkStone"]
+albedo = Color(0.22, 0.22, 0.24, 1)
+roughness = 0.7
+variation = 0.2
+
+[sub_resource type="JarTerrainMaterial" id="Clay"]
+albedo = Color(0.72, 0.43, 0.22, 1)
+roughness = 0.6
+variation = 0.3
+
+[sub_resource type="SphereShape3D" id="PlanetGravityShape"]
+radius = 9000.0
+
+[sub_resource type="JarTerrainMaterial" id="Regolith"]
+albedo = Color(0.56, 0.55, 0.53, 1)
+roughness = 0.95
+variation = 0.3
+
+[sub_resource type="JarTerrainMaterial" id="MoonRock"]
+albedo = Color(0.3, 0.3, 0.31, 1)
+roughness = 0.8
+
+[sub_resource type="SphereShape3D" id="MoonGravityShape"]
+radius = 1000.0
 
 [sub_resource type="Sky" id="Sky"]
-sky_material = ExtResource("6_sky")
+sky_material = ExtResource("15_sky")
 
 [sub_resource type="Environment" id="Environment"]
 background_mode = 2
 sky = SubResource("Sky")
+ambient_light_source = 2
+ambient_light_color = Color(0.62, 0.68, 0.78, 1)
+ambient_light_energy = 0.35
 tonemap_mode = 3
+glow_enabled = true
+glow_intensity = 0.4
+glow_bloom = 0.05
 
-[node name="PlanetDemo" type="Node3D" unique_id=642987003]
+[node name="PlanetDemo" type="Node3D" unique_id=700940484]
 
-[node name="Planet" type="Node3D" parent="." unique_id=208202448]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -4196, 0)
+[node name="Planet" type="Node3D" parent="." unique_id=1486947439]
 
-[node name="JarVoxelVolume" type="JarVoxelVolume" parent="Planet" unique_id=1034945197]
+[node name="JarVoxelVolume" type="JarVoxelVolume" parent="Planet" unique_id=337742281]
+extent = 10000.0
 chunk_scene = ExtResource("1_chunk")
-sdf = SubResource("JarErodedTerrainSdf_f4yvl")
+materials = Array[JarTerrainMaterial]([SubResource("Grass"), SubResource("Rock"), SubResource("Sand"), SubResource("Seabed"), SubResource("Snow"), SubResource("Dirt"), SubResource("DarkStone"), SubResource("Clay")])
+material = ExtResource("3_material")
+sdf = ExtResource("2_terrain")
 meshing_algorithm = 1
 manifold = true
 lod_automatic_update_distance = 16.0
-up_mode = 1
-sea_level = 4096.0
-population_terrain_features = Array[JarTerrainFeature]([ExtResource("7_pine"), ExtResource("8_rock")])
-population_terrain_details = Array[JarTerrainDetail]([ExtResource("4_grass")])
+population_terrain_features = Array[JarTerrainFeature]([ExtResource("4_pine"), ExtResource("5_broadleaf"), ExtResource("6_rock"), ExtResource("7_bush")])
+population_terrain_details = Array[JarTerrainDetail]([ExtResource("8_grass")])
 
-[node name="Gravity" type="Area3D" parent="Planet" unique_id=822470123 groups=["gravity_frames"]]
+[node name="Water" type="Node3D" parent="Planet" unique_id=1585027726]
+script = ExtResource("9_water")
+
+[node name="Atmosphere" type="Node3D" parent="Planet" unique_id=1764051413]
+script = ExtResource("10_atmosphere")
+
+[node name="Gravity" type="Area3D" parent="Planet" unique_id=2147448440 groups=["gravity_frames"]]
 gravity_space_override = 3
 gravity_point = true
 gravity_point_unit_distance = 4096.0
 gravity_point_center = Vector3(0, 0, 0)
 gravity_direction = Vector3(0, 0, 0)
 
-[node name="CollisionShape3D" type="CollisionShape3D" parent="Planet/Gravity" unique_id=336188260]
-shape = SubResource("GravityShape")
+[node name="CollisionShape3D" type="CollisionShape3D" parent="Planet/Gravity" unique_id=2026785412]
+shape = SubResource("PlanetGravityShape")
 
-[node name="Water" type="MeshInstance3D" parent="Planet" unique_id=1786798836]
-mesh = SubResource("WaterMesh")
-surface_material_override/0 = ExtResource("5_water")
+[node name="MoonOrbit" type="Node3D" parent="." unique_id=1730493881]
+script = ExtResource("11_orbit")
+degrees_per_second = 0.4
+axis = Vector3(0.2, 1, 0)
 
-[node name="Player" parent="." unique_id=121442460 instance=ExtResource("3_player")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 120, 0)
+[node name="Moon" type="Node3D" parent="MoonOrbit" unique_id=1054570794]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 6000, 0, 0)
+script = ExtResource("11_orbit")
+axis = Vector3(0.3, 1, 0)
 
-[node name="WorldEnvironment" type="WorldEnvironment" parent="." unique_id=1256624684]
+[node name="JarVoxelVolume" type="JarVoxelVolume" parent="MoonOrbit/Moon" unique_id=1688426930]
+extent = 1024.0
+chunk_scene = ExtResource("1_chunk")
+materials = Array[JarTerrainMaterial]([SubResource("Regolith"), SubResource("MoonRock")])
+material = ExtResource("13_moon_material")
+sdf = ExtResource("12_moon")
+meshing_algorithm = 1
+manifold = true
+lod_automatic_update_distance = 16.0
+
+[node name="Gravity" type="Area3D" parent="MoonOrbit/Moon" unique_id=938206815 groups=["gravity_frames"]]
+priority = 1
+gravity_space_override = 3
+gravity_point = true
+gravity_point_unit_distance = 320.0
+gravity_point_center = Vector3(0, 0, 0)
+gravity_direction = Vector3(0, 0, 0)
+gravity = 3.0
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="MoonOrbit/Moon/Gravity" unique_id=763257741]
+shape = SubResource("MoonGravityShape")
+
+[node name="Player" parent="." unique_id=184981125 instance=ExtResource("14_player")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -274.4, 4146.4, -48.5)
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="." unique_id=1854622839]
 environment = SubResource("Environment")
 
-[node name="DirectionalLight3D" type="DirectionalLight3D" parent="." unique_id=2041357874]
-transform = Transform3D(1, 0, 0, 0, 0.7, 0.714, 0, -0.714, 0.7, 0, 0, 0)
+[node name="Sun" type="DirectionalLight3D" parent="." unique_id=705585350]
+transform = Transform3D(-0.6139, -0.6481, 0.4506, 0, 0.5708, 0.8211, -0.7894, 0.5041, -0.3505, 0, 0, 0)
+light_energy = 1.4
 shadow_enabled = true
+directional_shadow_max_distance = 400.0

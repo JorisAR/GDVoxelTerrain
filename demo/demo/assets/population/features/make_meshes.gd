@@ -8,6 +8,8 @@ const DIR := "res://demo/assets/population/features/"
 func _init() -> void:
 	ResourceSaver.save(_pine(), DIR + "pine_mesh.tres")
 	ResourceSaver.save(_rock(), DIR + "rock_mesh.tres")
+	ResourceSaver.save(_broadleaf(), DIR + "broadleaf_mesh.tres")
+	ResourceSaver.save(_bush(), DIR + "bush_mesh.tres")
 	quit()
 
 func _pine() -> ArrayMesh:
@@ -55,3 +57,41 @@ func _rock() -> ArrayMesh:
 		st.add_vertex(bumped + Vector3(0, 0.15, 0))
 	st.generate_normals()
 	return st.commit()
+
+## Round crowned tree: a trunk and a few lumpy blobs.
+func _broadleaf() -> ArrayMesh:
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	_cone(st, 0.0, 3.2, 0.35, 0.22, 6, Color(0.33, 0.22, 0.13))
+	_blob(st, Vector3(0, 4.4, 0), Vector3(2.4, 2.0, 2.4), Color(0.22, 0.40, 0.14), 1)
+	_blob(st, Vector3(1.0, 5.2, 0.4), Vector3(1.5, 1.3, 1.5), Color(0.26, 0.45, 0.16), 2)
+	_blob(st, Vector3(-0.8, 5.0, -0.6), Vector3(1.6, 1.4, 1.6), Color(0.20, 0.37, 0.13), 3)
+	st.generate_normals()
+	return st.commit()
+
+## Low shrub: two lumpy blobs on the ground.
+func _bush() -> ArrayMesh:
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	_blob(st, Vector3(0, 0.45, 0), Vector3(0.9, 0.6, 0.9), Color(0.20, 0.33, 0.13), 4)
+	_blob(st, Vector3(0.5, 0.35, 0.3), Vector3(0.6, 0.45, 0.6), Color(0.24, 0.38, 0.15), 5)
+	st.generate_normals()
+	return st.commit()
+
+## A noise-displaced low-poly ellipsoid.
+func _blob(st: SurfaceTool, center: Vector3, size: Vector3, color: Color, seed_value: int) -> void:
+	var sphere := SphereMesh.new()
+	sphere.radial_segments = 8
+	sphere.rings = 5
+	sphere.radius = 1.0
+	sphere.height = 2.0
+	var arrays := sphere.get_mesh_arrays()
+	var verts: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
+	var indices: PackedInt32Array = arrays[Mesh.ARRAY_INDEX]
+	var noise := FastNoiseLite.new()
+	noise.seed = seed_value
+	noise.frequency = 1.1
+	st.set_color(color)
+	for i in indices:
+		var v := verts[i]
+		st.add_vertex(center + v * size * (1.0 + 0.25 * noise.get_noise_3dv(v)))

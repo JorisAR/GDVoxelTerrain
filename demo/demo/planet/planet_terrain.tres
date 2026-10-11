@@ -1,0 +1,20 @@
+[gd_resource type="JarTerrainSdf" format=3 uid="uid://dqn1tb1t75fft"]
+
+[sub_resource type="FastNoiseLite" id="Mountains"]
+seed = 11
+frequency = 0.0006
+fractal_octaves = 3
+
+[sub_resource type="FastNoiseLite" id="Continents"]
+seed = 3
+frequency = 0.00035
+
+[resource]
+shape = 1
+radius = 4096.0
+sea_level = -5.0
+noise = SubResource("Continents")
+height = 90.0
+depth = 140.0
+mountain_noise = SubResource("Mountains")
+erosion_scale = 90.0

@@ -1,0 +1,23 @@
+[gd_resource type="JarTerrainFeature" load_steps=4 format=3]
+
+[ext_resource type="ArrayMesh" path="res://demo/assets/population/features/pine_mesh.tres" id="1_mesh"]
+[ext_resource type="Material" path="res://demo/assets/population/features/feature_material.tres" id="2_mat"]
+[ext_resource type="FastNoiseLite" path="res://demo/planet/forest_noise.tres" id="3_forest"]
+
+[resource]
+mesh = ExtResource("1_mesh")
+material = ExtResource("2_mat")
+density = 0.012
+footprint = 2.5
+draw_distance = 1200.0
+minimum_scale = 0.7
+maximum_scale = 1.4
+sink = 0.3
+minimum_height = 4.0
+maximum_height = 300.0
+height_falloff = 40.0
+maximum_slope = 30.0
+slope_falloff = 8.0
+mask_noise = ExtResource("3_forest")
+mask_threshold = 0.08
+mask_falloff = 0.25

@@ -6,10 +6,15 @@
 [resource]
 mesh = ExtResource("1_mesh")
 material = ExtResource("2_mat")
-density = 0.0015
-draw_distance = 400.0
-minimum_scale = 0.4
-maximum_scale = 2.0
+density = 0.004
+footprint = 2.0
+draw_distance = 500.0
+minimum_scale = 0.5
+maximum_scale = 2.5
 align_with_normal = true
+sink = 0.3
+minimum_height = -3.0
 maximum_slope = 60.0
-minimum_height = -5.0
+slope_falloff = 10.0
+cluster_spacing = 60.0
+cluster_radius = 14.0

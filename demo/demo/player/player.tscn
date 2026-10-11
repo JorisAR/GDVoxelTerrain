@@ -1,39 +1,39 @@
-[gd_scene format=3]
+[gd_scene format=3 uid="uid://cupyeuv1xe20s"]
 
-[ext_resource type="Script" path="res://demo/player/player.gd" id="1_player"]
-[ext_resource type="Script" path="res://demo/editing/brush_editor.gd" id="2_brush"]
+[ext_resource type="Script" uid="uid://dgeiqlbes51a0" path="res://demo/player/player.gd" id="1_player"]
+[ext_resource type="Script" uid="uid://bfq4ybkcbpbvp" path="res://demo/editing/brush_editor.gd" id="2_brush"]
 
 [sub_resource type="CapsuleShape3D" id="Capsule"]
 radius = 0.4
 height = 1.8
 
-[node name="Player" type="CharacterBody3D"]
+[node name="Player" type="CharacterBody3D" unique_id=279758596]
 script = ExtResource("1_player")
 
-[node name="CollisionShape3D" type="CollisionShape3D" parent="."]
+[node name="CollisionShape3D" type="CollisionShape3D" parent="." unique_id=2037713197]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.9, 0)
 shape = SubResource("Capsule")
 
-[node name="Head" type="Node3D" parent="."]
+[node name="Head" type="Node3D" parent="." unique_id=209150029]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.6, 0)
 
-[node name="Camera3D" type="Camera3D" parent="Head"]
+[node name="Camera3D" type="Camera3D" parent="Head" unique_id=2028406905]
 far = 32000.0
 
-[node name="Editor" type="Node3D" parent="Head/Camera3D"]
+[node name="Editor" type="Node3D" parent="Head/Camera3D" unique_id=981039118]
 script = ExtResource("2_brush")
 
-[node name="JarVoxelViewer" type="JarVoxelViewer" parent="."]
+[node name="JarVoxelViewer" type="JarVoxelViewer" parent="." unique_id=1284160407]
 
-[node name="HUD" type="CanvasLayer" parent="."]
+[node name="HUD" type="CanvasLayer" parent="." unique_id=922992183]
 
-[node name="Label" type="Label" parent="HUD"]
+[node name="Label" type="Label" parent="HUD" unique_id=1074620561]
 offset_left = 12.0
 offset_top = 8.0
 offset_right = 900.0
 offset_bottom = 60.0
 
-[node name="Crosshair" type="Label" parent="HUD"]
+[node name="Crosshair" type="Label" parent="HUD" unique_id=1755942397]
 anchors_preset = 8
 anchor_left = 0.5
 anchor_top = 0.5

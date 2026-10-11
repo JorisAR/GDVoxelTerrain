@@ -1,0 +1,13 @@
+[gd_resource type="ShaderMaterial" load_steps=2 format=3]
+
+[ext_resource type="Shader" path="res://addons/jar_voxel_terrain/src/shaders/terrain_weights.gdshader" id="1"]
+
+[resource]
+shader = ExtResource("1")
+shader_parameter/ground_material = 0
+shader_parameter/cliff_material = 1
+shader_parameter/shore_material = -1
+shader_parameter/seabed_material = -1
+shader_parameter/peak_material = -1
+shader_parameter/cliff_angle = 30.0
+shader_parameter/variation_size = 30.0

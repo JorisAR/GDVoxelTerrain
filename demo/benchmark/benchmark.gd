@@ -33,8 +33,8 @@ func _ready() -> void:
 		terrain.meshing_algorithm = JarVoxelVolume.MESHING_DUAL_CONTOURING
 	terrain.manifold = OS.get_environment("MANIFOLD") == "1"
 	if OS.get_environment("FEATURES") == "1":
-		terrain.population_terrain_features = [load("res://demo/assets/population/features/pine.tres"),
-			load("res://demo/assets/population/features/rock.tres")]
+		terrain.population_terrain_features = [load("res://demo/planet/pine.tres"),
+			load("res://demo/planet/rock.tres")]
 	planet.add_child(terrain)
 	camera = JarVoxelViewer.new()
 	camera.position = Vector3(-5, 20, 200)
