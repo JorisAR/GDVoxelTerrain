@@ -9,17 +9,15 @@
 
 void JarVoxelVolume::_bind_methods()
 {
-    ClassDB::bind_method(D_METHOD("get_octree_scale"), &JarVoxelVolume::get_octree_scale);
-    ClassDB::bind_method(D_METHOD("set_octree_scale", "value"), &JarVoxelVolume::set_octree_scale);
-    ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "octree_scale"), "set_octree_scale", "get_octree_scale");
+    ClassDB::bind_method(D_METHOD("get_voxel_size"), &JarVoxelVolume::get_voxel_size);
+    ClassDB::bind_method(D_METHOD("set_voxel_size", "meters"), &JarVoxelVolume::set_voxel_size);
+    ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "voxel_size", PROPERTY_HINT_RANGE, "0.05,16,0.01,or_greater,suffix:m"),
+                 "set_voxel_size", "get_voxel_size");
 
-    ClassDB::bind_method(D_METHOD("get_size"), &JarVoxelVolume::get_size);
-    ClassDB::bind_method(D_METHOD("set_size", "value"), &JarVoxelVolume::set_size);
-    ADD_PROPERTY(PropertyInfo(Variant::INT, "size"), "set_size", "get_size");
-
-    ClassDB::bind_method(D_METHOD("get_min_chunk_size"), &JarVoxelVolume::get_min_chunk_size);
-    ClassDB::bind_method(D_METHOD("set_min_chunk_size", "value"), &JarVoxelVolume::set_min_chunk_size);
-    ADD_PROPERTY(PropertyInfo(Variant::INT, "min_chunk_size"), "set_min_chunk_size", "get_min_chunk_size");
+    ClassDB::bind_method(D_METHOD("get_extent"), &JarVoxelVolume::get_extent);
+    ClassDB::bind_method(D_METHOD("set_extent", "meters"), &JarVoxelVolume::set_extent);
+    ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "extent", PROPERTY_HINT_RANGE, "64,1048576,1,or_greater,exp,suffix:m"),
+                 "set_extent", "get_extent");
 
     ClassDB::bind_method(D_METHOD("get_chunk_scene"), &JarVoxelVolume::get_chunk_scene);
     ClassDB::bind_method(D_METHOD("set_chunk_scene", "value"), &JarVoxelVolume::set_chunk_scene);
@@ -71,13 +69,15 @@ void JarVoxelVolume::_bind_methods()
 
     // -------------------------------------------------- LOD --------------------------------------------------
     ADD_GROUP("Level Of Detail", "lod_");
-    ClassDB::bind_method(D_METHOD("get_lod_level_count"), &JarVoxelVolume::get_lod_level_count);
-    ClassDB::bind_method(D_METHOD("set_lod_level_count", "value"), &JarVoxelVolume::set_lod_level_count);
-    ADD_PROPERTY(PropertyInfo(Variant::INT, "lod_level_count"), "set_lod_level_count", "get_lod_level_count");
+    ClassDB::bind_method(D_METHOD("get_lod_detail_distance"), &JarVoxelVolume::get_lod_detail_distance);
+    ClassDB::bind_method(D_METHOD("set_lod_detail_distance", "meters"), &JarVoxelVolume::set_lod_detail_distance);
+    ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "lod_detail_distance", PROPERTY_HINT_RANGE, "0,1024,1,or_greater,suffix:m"),
+                 "set_lod_detail_distance", "get_lod_detail_distance");
 
     ClassDB::bind_method(D_METHOD("get_lod_shell_size"), &JarVoxelVolume::get_lod_shell_size);
     ClassDB::bind_method(D_METHOD("set_lod_shell_size", "value"), &JarVoxelVolume::set_lod_shell_size);
-    ADD_PROPERTY(PropertyInfo(Variant::INT, "lod_shell_size"), "set_lod_shell_size", "get_lod_shell_size");
+    ADD_PROPERTY(PropertyInfo(Variant::INT, "lod_shell_size", PROPERTY_HINT_RANGE, "1,8,1"), "set_lod_shell_size",
+                 "get_lod_shell_size");
 
     ClassDB::bind_method(D_METHOD("get_lod_automatic_update"), &JarVoxelVolume::get_lod_automatic_update);
     ClassDB::bind_method(D_METHOD("set_lod_automatic_update", "value"), &JarVoxelVolume::set_lod_automatic_update);
@@ -139,10 +139,7 @@ void JarVoxelVolume::_bind_methods()
     ClassDB::bind_method(D_METHOD("is_meshing"), &JarVoxelVolume::is_meshing);
 }
 
-JarVoxelVolume::JarVoxelVolume() : _octreeScale(1.0f), _size(14)
-{
-    _chunkSize = (1 << _minChunkSize);
-}
+JarVoxelVolume::JarVoxelVolume() = default;
 
 JarVoxelVolume::~JarVoxelVolume()
 {
@@ -192,7 +189,7 @@ void JarVoxelVolume::build_octree()
     // The top of the tree is walked on this thread; subtrees below forkSize are
     // independent and built in parallel on the (idle) meshing pool.
     VoxelOctreeNode::BuildContext ctx;
-    ctx.forkSize = _minChunkSize + 4;
+    ctx.forkSize = ChunkSizeLog2 + 4;
     _voxelRoot->build(*this, &ctx);
     JobSystem::get_pool().parallel_for(
         ctx.subtrees.size(), [this, &ctx](size_t i) {
@@ -282,7 +279,7 @@ void JarVoxelVolume::queue_edit(const Ref<JarSignedDistanceField> &sdf, SDF::Ope
 
     // Region the edit can change: the SDF's solid part (plus room for smooth
     // blending and the mesher's sampling margin), clipped to `limit`.
-    const float margin = _octreeScale * 2.0f + std::max(0.0f, smoothness);
+    const float margin = _voxelSize * 2.0f + std::max(0.0f, smoothness);
     Bounds region = sdf->bounds();
     if (region.is_valid() && !region.is_infinite())
         region = region.transformed(toVolume).expanded(margin);
@@ -323,7 +320,7 @@ void JarVoxelVolume::modify(const Ref<JarSignedDistanceField> sdf, const Operati
     }
     const Vector3 local = to_local(position);
     const glm::vec3 center(local.x, local.y, local.z);
-    const glm::vec3 edge(radius + _octreeScale * 2.0f);
+    const glm::vec3 edge(radius + _voxelSize * 2.0f);
     queue_edit(s, static_cast<SDF::Operation>(operation), Transform3D(Basis(), position), material, 0.0f,
                Bounds(center - edge, center + edge));
 }
@@ -376,39 +373,25 @@ void JarVoxelVolume::set_sdf(const Ref<JarSignedDistanceField> &sdf)
 //     return _meshComputeScheduler;
 // }
 
-float JarVoxelVolume::get_octree_scale() const
+float JarVoxelVolume::get_voxel_size() const
 {
-    return _octreeScale;
+    return _voxelSize;
 }
 
-void JarVoxelVolume::set_octree_scale(float value)
+// Size settings shape the octree, so they apply when the volume initializes.
+void JarVoxelVolume::set_voxel_size(float value)
 {
-    _octreeScale = value;
+    _voxelSize = std::max(0.001f, value);
 }
 
-int JarVoxelVolume::get_size() const
+float JarVoxelVolume::get_extent() const
 {
-    return _size;
+    return _extent;
 }
 
-void JarVoxelVolume::set_size(int value)
+void JarVoxelVolume::set_extent(float value)
 {
-    _size = value;
-}
-
-int JarVoxelVolume::get_min_chunk_size() const
-{
-    return _minChunkSize;
-}
-
-void JarVoxelVolume::set_min_chunk_size(int value)
-{
-    _minChunkSize = value;
-}
-
-int JarVoxelVolume::get_chunk_size() const
-{
-    return _chunkSize;
+    _extent = std::max(1.0f, value);
 }
 
 Ref<PackedScene> JarVoxelVolume::get_chunk_scene() const
@@ -484,14 +467,14 @@ bool JarVoxelVolume::is_in_collider_range(const glm::vec3 &pos) const
     return _voxelLod.distance_to_nearest_viewer(pos) <= _colliderDistance;
 }
 
-int JarVoxelVolume::get_lod_level_count() const
+float JarVoxelVolume::get_lod_detail_distance() const
 {
-    return _lod_level_count;
+    return _lodDetailDistance;
 }
 
-void JarVoxelVolume::set_lod_level_count(int value)
+void JarVoxelVolume::set_lod_detail_distance(float value)
 {
-    _lod_level_count = value;
+    _lodDetailDistance = std::max(0.0f, value);
 }
 
 int JarVoxelVolume::get_lod_shell_size() const
@@ -568,11 +551,13 @@ void JarVoxelVolume::initialize()
         return;
     }
     _sdf->prepare(); // main thread: caches the SDF needs before workers sample it
-    _chunkSize = (1 << _minChunkSize);
-    _voxelLod =
-        JarVoxelLoD(_lod_automatic_update, _lod_automatic_update_distance, _lod_level_count, _lod_shell_size, _octreeScale);
+    // Smallest octree whose root (voxel_size * 2^depth) covers the extent, and
+    // that is at least one chunk deep.
+    _depth = std::max(ChunkSizeLog2 + 1, int(std::ceil(std::log2(_extent / _voxelSize))));
+    _voxelLod = JarVoxelLoD(_lod_automatic_update, _lod_automatic_update_distance, _lod_shell_size,
+                            get_chunk_size() * _voxelSize, _lodDetailDistance);
     _meshComputeScheduler = std::make_unique<MeshComputeScheduler>();
-    _voxelRoot = std::make_unique<VoxelOctreeNode>(_size);
+    _voxelRoot = std::make_unique<VoxelOctreeNode>(_depth);
     //_populationRoot = memnew(PopulationOctreeNode(_size));
     if (!_buildThread.joinable())
         _buildThread = std::thread([this] { build_worker(); });
@@ -711,25 +696,6 @@ void JarVoxelVolume::process_chunk_queue(float delta)
     _pendingColliders.clear();
     for (const auto &entry : byDistance)
         _pendingColliders.push_back(entry.second);
-}
-
-void JarVoxelVolume::generate_epsilons()
-{
-    int numElements = _size + 1;
-
-    std::vector<int> sizes(numElements);
-    for (int i = 0; i < numElements; i++)
-    {
-        sizes[i] = 1 << i;
-    }
-
-    _voxelEpsilons.resize(sizes.size());
-    for (int i = 0; i < sizes.size(); i++)
-    {
-        int size = sizes[i];
-        float x = size * _octreeScale;
-        _voxelEpsilons[i] = 1.75f * x;
-    }
 }
 
 void JarVoxelVolume::process_modify_queue()
@@ -878,7 +844,7 @@ Dictionary JarVoxelVolume::raycast_sdf(const Vector3 &from, const Vector3 &to) c
     dir /= length;
     // Sphere tracing; steps are shortened a little because noise-based fields
     // are not exact distances.
-    const float epsilon = 0.01f * _octreeScale;
+    const float epsilon = 0.01f * _voxelSize;
     float t = 0.0f;
     for (int i = 0; i < 1024 && t <= length; ++i)
     {

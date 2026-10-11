@@ -2,7 +2,9 @@
 #define JAR_QEF_H
 
 #include <cmath>
+#include <algorithm>
 #include <glm/glm.hpp>
+#include <limits>
 
 // Quadratic error function for dual contouring: accumulates tangent planes
 // (point + normal at each surface/edge crossing) and finds the point that is
@@ -29,6 +31,103 @@ class Qef
 
     int count() const { return _count; }
     glm::vec3 mass_point() const { return _count > 0 ? _massPoint / float(_count) : glm::vec3(0.0f); }
+
+    // Solves using only the `rank` strongest plane directions (1 = the dominant
+    // plane, 2 = an edge, 3 = a corner); weaker directions are left free.
+    // `threshold` caps the rank further: directions weaker than threshold *
+    // strongest are always free. Returns the point closest to the mass point
+    // that satisfies the used directions, and the free directions.
+    struct Solution
+    {
+        glm::vec3 point;
+        glm::vec3 free[3];
+        int freeCount = 0;
+    };
+
+    Solution solve_rank(int rank, float threshold = 0.1f) const
+    {
+        Solution result;
+        const glm::vec3 c = mass_point();
+        result.point = c;
+        glm::mat3 a(0.0f);
+        a[0][0] = _ata[0][0];
+        a[1][1] = _ata[1][1];
+        a[2][2] = _ata[2][2];
+        a[0][1] = a[1][0] = _ata[0][1];
+        a[0][2] = a[2][0] = _ata[0][2];
+        a[1][2] = a[2][1] = _ata[1][2];
+        const glm::vec3 rhs = _atb - a * c;
+        glm::mat3 v;
+        glm::vec3 eig;
+        jacobi_eigen(a, v, eig);
+        // Strongest directions first.
+        int order[3] = {0, 1, 2};
+        std::sort(order, order + 3, [&](int x, int y) { return std::abs(eig[x]) > std::abs(eig[y]); });
+        const float largest = std::abs(eig[order[0]]);
+        for (int k = 0; k < 3; ++k)
+        {
+            const int i = order[k];
+            const glm::vec3 vi = glm::normalize(glm::vec3(v[i]));
+            if (k >= rank || largest <= 0.0f || std::abs(eig[i]) < threshold * largest)
+            {
+                result.free[result.freeCount++] = vi;
+                continue;
+            }
+            result.point += vi * (glm::dot(vi, rhs) / eig[i]);
+        }
+        return result;
+    }
+
+    int rank(float threshold = 0.1f) const
+    {
+        return 3 - solve_rank(3, threshold).freeCount;
+    }
+
+    // Moves a solution along its free directions to the point closest to
+    // `target` (inside [lo, hi] if possible). Returns false if no point of the
+    // solution's feature (point / line / plane) lies inside the box.
+    static bool fit_into(Solution &s, const glm::vec3 &target, const glm::vec3 &lo, const glm::vec3 &hi)
+    {
+        auto inside = [&](const glm::vec3 &p) {
+            return !glm::any(glm::lessThan(p, lo)) && !glm::any(glm::greaterThan(p, hi));
+        };
+        if (s.freeCount == 0)
+            return inside(s.point);
+        if (s.freeCount == 1)
+        {
+            // Feature line p + t d: slab intersection with the box, then the
+            // valid t closest to the target.
+            const glm::vec3 d = s.free[0];
+            float tMin = -std::numeric_limits<float>::max(), tMax = std::numeric_limits<float>::max();
+            for (int i = 0; i < 3; ++i)
+            {
+                if (std::abs(d[i]) < 1e-6f)
+                {
+                    if (s.point[i] < lo[i] || s.point[i] > hi[i])
+                        return false;
+                    continue;
+                }
+                float t0 = (lo[i] - s.point[i]) / d[i], t1 = (hi[i] - s.point[i]) / d[i];
+                if (t0 > t1)
+                    std::swap(t0, t1);
+                tMin = std::max(tMin, t0);
+                tMax = std::min(tMax, t1);
+            }
+            if (tMin > tMax)
+                return false;
+            s.point += d * std::clamp(glm::dot(target - s.point, d), tMin, tMax);
+            return true;
+        }
+        // Plane (or nothing constrained): project the target onto it.
+        if (s.freeCount == 2)
+        {
+            const glm::vec3 n = glm::normalize(glm::cross(s.free[0], s.free[1]));
+            s.point = target - n * glm::dot(target - s.point, n);
+        }
+        else
+            s.point = target;
+        return inside(s.point);
+    }
 
     // `threshold`: eigenvalues below threshold * largest are treated as
     // unconstrained. Higher values snap less aggressively to features.

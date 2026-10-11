@@ -42,7 +42,13 @@ class StitchedSurfaceNets
     std::vector<glm::vec3> _gradients;
     std::vector<bool> _hasGradient;
     glm::vec3 gradient_at(int node_id);
-    glm::vec3 place_dual_contouring_vertex(const int node_id, const std::vector<int> &neighbours);
+    // Returns NaN if no dual contouring position fits the cell. `normal` gets the
+    // average surface normal of the cell's samples (exact, for shading).
+    glm::vec3 place_dual_contouring_vertex(const int node_id, const std::vector<int> &neighbours, glm::vec3 &normal);
+    // Dual contouring: splits quads along the diagonal that best matches the
+    // vertex normals, and gives sharp creases their own normals.
+    void add_quad(int n0, int n1, int n2, int n3, bool flip);
+    void split_creases();
 
     void add_tri(int n0, int n1, int n2, bool flip);
     void add_tri_fix_normal(int n0, int n1, int n2);

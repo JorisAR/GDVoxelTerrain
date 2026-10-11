@@ -218,7 +218,7 @@ uint16_t VoxelOctreeNode::compute_boundaries(const JarVoxelVolume &terrain) cons
         glm::vec3(0, 0, 1), glm::vec3(0, 0, -1)};
 
     uint16_t boundaries = 0;
-    const float el = edge_length(terrain.get_octree_scale());
+    const float el = edge_length(terrain.get_voxel_size());
     for (size_t i = 0; i < offsets.size(); ++i)
     {
         int l = terrain.lod_at(_center + el * offsets[i]);
@@ -241,7 +241,7 @@ void VoxelOctreeNode::build(JarVoxelVolume &terrain, BuildContext *ctx)
         set_value(value);
         if (has_surface(terrain, value) && (_size > LoD))
         {
-            subdivide(terrain.get_octree_scale());
+            subdivide(terrain.get_voxel_size());
             _isGenerated = true;
         }
         // if we don't subdivide further, we mark it as a fully realized subtree
@@ -290,12 +290,12 @@ void VoxelOctreeNode::build_post(JarVoxelVolume &terrain)
 bool VoxelOctreeNode::has_surface(const JarVoxelVolume &terrain, const float value)
 {
     //(3*(1/2)^3)^(1/3) = 1.44224957 for d instead of r
-    return std::abs(value) < (1 << _size) * terrain.get_octree_scale() * 1.44224957f * 1.75f; 
+    return std::abs(value) < (1 << _size) * terrain.get_voxel_size() * 1.44224957f * 1.75f; 
 }
 
 void VoxelOctreeNode::modify_sdf_in_bounds(JarVoxelVolume &terrain, const ModifySettings &settings)
 {
-    auto bounds = get_bounds(terrain.get_octree_scale());
+    auto bounds = get_bounds(terrain.get_voxel_size());
     if (!settings.bounds.intersects(bounds))
         return;
 
@@ -305,7 +305,7 @@ void VoxelOctreeNode::modify_sdf_in_bounds(JarVoxelVolume &terrain, const Modify
 
     float old_value = get_value();
     float sdf_value = settings.sample(_center);
-    const float k = settings.smoothness > 0.0f ? settings.smoothness : terrain.get_octree_scale();
+    const float k = settings.smoothness > 0.0f ? settings.smoothness : terrain.get_voxel_size();
     float new_value = SDF::apply_operation(settings.operation, old_value, sdf_value, k);
 
     // Where the edit changes the field, record the resulting surface normal
@@ -324,7 +324,7 @@ void VoxelOctreeNode::modify_sdf_in_bounds(JarVoxelVolume &terrain, const Modify
 
     // ensure the node has children if it contains a surface
     if (has_surface(terrain, new_value)) // || has_surface(terrain, sdf_value)
-        subdivide(terrain.get_octree_scale());
+        subdivide(terrain.get_voxel_size());
     else
         if(settings.bounds.encloses(bounds))
             prune_children();
@@ -405,7 +405,7 @@ void VoxelOctreeNode::delete_chunk()
 void VoxelOctreeNode::get_voxel_leaves_in_bounds(const JarVoxelVolume &terrain, const Bounds &bounds,
                                                  std::vector<VoxelOctreeNode *> &result)
 {
-    if (!get_bounds(terrain.get_octree_scale()).intersects(bounds))
+    if (!get_bounds(terrain.get_voxel_size()).intersects(bounds))
         return;
 
     // LoD = terrain.get_lod()->desired_lod(*this);
@@ -427,7 +427,7 @@ void VoxelOctreeNode::get_voxel_leaves_in_bounds(const JarVoxelVolume &terrain, 
 void VoxelOctreeNode::get_voxel_leaves_in_bounds(const JarVoxelVolume &terrain, const Bounds &bounds, const int LOD,
                                                  std::vector<VoxelOctreeNode *> &result)
 {
-    if (!get_bounds(terrain.get_octree_scale()).intersects(bounds) || (is_leaf() && _size > LOD))
+    if (!get_bounds(terrain.get_voxel_size()).intersects(bounds) || (is_leaf() && _size > LOD))
         return;
 
     if (_size == LOD)
@@ -445,7 +445,7 @@ void VoxelOctreeNode::get_voxel_leaves_in_bounds_excluding_bounds(const JarVoxel
                                                                   const Bounds &rejection_bounds, const int LOD,
                                                                   std::vector<VoxelOctreeNode *> &result)
 {
-    auto bounds = get_bounds(terrain.get_octree_scale());
+    auto bounds = get_bounds(terrain.get_voxel_size());
     if (!acceptance_bounds.intersects(bounds) || (is_leaf() && _size > LOD))
         return;
 

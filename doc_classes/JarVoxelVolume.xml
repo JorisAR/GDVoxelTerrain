@@ -119,26 +119,23 @@
 		<member name="dual_contouring_feature_threshold" type="float" setter="set_dual_contouring_feature_threshold" getter="get_dual_contouring_feature_threshold" default="0.1">
 			How eagerly dual contouring snaps vertices to sharp features, as a fraction of the strongest surface direction in a cell. Lower values sharpen subtler creases but can add noise on curved surfaces; higher values behave more like surface nets.
 		</member>
+		<member name="extent" type="float" setter="set_extent" getter="get_extent" default="16384.0">
+			Edge length, in meters, of the cube the volume covers (centered on the volume's origin). Make it larger than the shape, e.g. at least twice the radius plus the noise height for a planet. Together with [member voxel_size] this sets the octree depth. Applied when the volume enters the tree.
+		</member>
 		<member name="lod_automatic_update" type="bool" setter="set_lod_automatic_update" getter="get_lod_automatic_update" default="true">
 			Enables/disables automatic LOD updates when a [JarVoxelViewer] moves.
 		</member>
 		<member name="lod_automatic_update_distance" type="float" setter="set_lod_automatic_update_distance" getter="get_lod_automatic_update_distance" default="64.0">
 			Distance in world units used to determine whether LODs need to be updated based on player movement.
 		</member>
-		<member name="lod_level_count" type="int" setter="set_lod_level_count" getter="get_lod_level_count" default="20">
-			Determines number of different LOD levels. Higher number means smoother transition between close and far LODs.
+		<member name="lod_detail_distance" type="float" setter="set_lod_detail_distance" getter="get_lod_detail_distance" default="0.0">
+			Extra distance, in meters, around each viewer that is kept at full detail before the levels of detail start to fall off.
 		</member>
 		<member name="lod_shell_size" type="int" setter="set_lod_shell_size" getter="get_lod_shell_size" default="2">
-			Number of LOD rings (shells) around the player. Affects how much terrain is loaded based on proximity.
+			How quickly detail falls off: each level of detail is a ring this many chunks (of that level) wide. 1 falls off fastest; larger values keep more detail at a distance. Neighbouring chunks never differ by more than one level, whatever the value.
 		</member>
 		<member name="meshing_algorithm" type="int" setter="set_meshing_algorithm" getter="get_meshing_algorithm" enum="JarVoxelVolume.MeshingAlgorithm" default="0">
 			How chunks are turned into triangles. [constant MESHING_SURFACE_NETS] gives smooth, rounded surfaces; [constant MESHING_DUAL_CONTOURING] reproduces sharp edges and corners (stamped boxes, meshes, carved tunnels). Can be changed at runtime; all chunks are then remeshed.
-		</member>
-		<member name="min_chunk_size" type="int" setter="set_min_chunk_size" getter="get_min_chunk_size" default="4">
-			Number of vertices in the smallest subdivision of the chunk.
-		</member>
-		<member name="octree_scale" type="float" setter="set_octree_scale" getter="get_octree_scale" default="1.0">
-			Scaling factor for the octree used in terrain chunk management and LOD computation.
 		</member>
 		<member name="performance_collider_budget_ms" type="float" setter="set_collider_budget_ms" getter="get_collider_budget_ms" default="2.0">
 			Main-thread time per frame, in milliseconds, spent uploading chunk colliders to the physics engine. Colliders nearest the player are uploaded first. Higher values make collision available sooner after the terrain changes, at the cost of frame time.
@@ -158,9 +155,6 @@
 		<member name="sea_level" type="float" setter="set_sea_level" getter="get_sea_level" default="0.0">
 			Height 0 for [method get_height_at] and population height ranges: the planet radius for [constant UP_MODE_RADIAL], or the offset along [member up_axis] for [constant UP_MODE_AXIS].
 		</member>
-		<member name="size" type="int" setter="set_size" getter="get_size" default="14">
-			Size of the terrain grid in chunks. Increasing this value expands the rendered area.
-		</member>
 		<member name="up_axis" type="Vector3" setter="set_up_axis" getter="get_up_axis" default="Vector3(0, 1, 0)">
 			Local up direction when [member up_mode] is [constant UP_MODE_AXIS]; also the fallback at the exact center of a radial volume.
 		</member>
@@ -169,6 +163,9 @@
 		</member>
 		<member name="up_mode" type="int" setter="set_up_mode" getter="get_up_mode" enum="JarVoxelVolume.UpMode" default="0">
 			How "up" is defined inside the volume, used for population rules (slope and height ranges) and [method get_up_direction_at]. [constant UP_MODE_AXIS] for flat worlds, [constant UP_MODE_RADIAL] for planets.
+		</member>
+		<member name="voxel_size" type="float" setter="set_voxel_size" getter="get_voxel_size" default="1.0">
+			Edge length of a voxel at full detail (LOD 0), in meters: the smallest feature and edit the volume can represent. Halving it doubles the detail near viewers and costs roughly 8 times more work there. Applied when the volume enters the tree.
 		</member>
 	</members>
 	<constants>

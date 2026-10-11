@@ -5,10 +5,11 @@
 #include <godot_cpp/classes/viewport.hpp>
 #include <limits>
 
-JarVoxelLoD::JarVoxelLoD(const bool automaticUpdate, const float automaticUpdateDistance, const int lodLevelCount,
-                         const int shellSize, const float octreeScale)
-    : _automaticUpdateDistance(automaticUpdateDistance), _octreeScale(octreeScale), _lodLevelCount(lodLevelCount),
-      _shellSize(shellSize), _automaticUpdate(automaticUpdate)
+JarVoxelLoD::JarVoxelLoD(bool automaticUpdate, float automaticUpdateDistance, int shellSize, float chunkMeters,
+                         float detailDistance)
+    : _automaticUpdateDistance(automaticUpdateDistance), _shellSize(std::max(1, shellSize)),
+      _automaticUpdate(automaticUpdate), _chunkMeters(chunkMeters),
+      _detailChunks(std::max(0.0f, detailDistance) / chunkMeters)
 {
 }
 
@@ -71,39 +72,32 @@ int JarVoxelLoD::desired_lod(const VoxelOctreeNode &node) const
     return node._size > _maxChunkSize ? 0 : lod_at(node._center);
 }
 
-float JarVoxelLoD::lod_to_grid_size(const int lod) const
+// Positions in LOD 0 chunk units. A level's cube is centered on the viewer
+// snapped to that level's grid, so its boundaries move in whole chunks.
+bool JarVoxelLoD::is_in_lod_shell(int lod, const glm::vec3 &pos, const glm::vec3 &viewer) const
 {
-    return (1 << (long)(lod + 1)) * _octreeScale;
-}
-
-glm::vec3 JarVoxelLoD::snap_to_grid(const glm::vec3 pos, const float grid_size) const
-{
-    return floor(pos / grid_size) * grid_size;
-}
-
-bool JarVoxelLoD::is_in_lod_shell(int lod, glm::vec3 pos, glm::vec3 cam_pos) const
-{
-    float grid_size = lod_to_grid_size(lod) * 2.0;
-    glm::vec3 lod_cam_pos = snap_to_grid(cam_pos, grid_size);
-    glm::vec3 delta = abs(pos - lod_cam_pos);
-    float dist = glm::max(delta.x, glm::max(delta.y, delta.z));
-    return dist < (grid_size * _shellSize);
+    const float grid = float(1 << (lod + 2));
+    const glm::vec3 snapped = glm::floor(viewer / grid) * grid;
+    const glm::vec3 delta = glm::abs(pos - snapped);
+    const float dist = std::max(delta.x, std::max(delta.y, delta.z));
+    return dist < grid * _shellSize + _detailChunks;
 }
 
 int JarVoxelLoD::lod_for_viewer(const glm::vec3 &position, const glm::vec3 &viewer) const
 {
-    constexpr float rChunksize = 1.0f / 16.0f;
-    glm::vec3 pos = position * rChunksize;
-    glm::vec3 cam_pos = viewer * rChunksize;
+    const glm::vec3 pos = position / _chunkMeters;
+    const glm::vec3 cam = viewer / _chunkMeters;
 
-    // log2 estimate of the shell, then correct the (at most one level) error.
-    glm::vec3 delta = glm::abs(pos - cam_pos) / (2.0f * _shellSize);
-    int lod = glm::max(0, int(floor(glm::log2(glm::max(1.0f, glm::max(delta.x, glm::max(delta.y, delta.z)))))));
-    if (!is_in_lod_shell(lod, pos, cam_pos))
-        return lod + 1;
-    if (lod <= 0 || !is_in_lod_shell(lod - 1, pos, cam_pos))
-        return lod;
-    return lod - 1;
+    // log2 estimate of the shell, then step to the exact level (snapping and the
+    // detail offset can move it by a level or so).
+    const glm::vec3 d = glm::abs(pos - cam);
+    const float dist = std::max(0.0f, std::max(d.x, std::max(d.y, d.z)) - _detailChunks) / (2.0f * _shellSize);
+    int lod = std::max(0, int(std::floor(std::log2(std::max(1.0f, dist)))));
+    for (int i = 0; i < 4 && !is_in_lod_shell(lod, pos, cam); ++i)
+        lod++;
+    for (int i = 0; i < 4 && lod > 0 && is_in_lod_shell(lod - 1, pos, cam); ++i)
+        lod--;
+    return lod;
 }
 
 int JarVoxelLoD::lod_at(const glm::vec3 &position) const

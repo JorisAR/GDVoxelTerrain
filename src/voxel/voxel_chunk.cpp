@@ -23,6 +23,7 @@ void JarVoxelChunk::_bind_methods()
                  "set_static_body", "get_static_body");
 
     ClassDB::bind_method(D_METHOD("get_volume"), &JarVoxelChunk::get_volume);
+    ClassDB::bind_method(D_METHOD("get_lod"), &JarVoxelChunk::get_lod);
 
     ClassDB::bind_method(D_METHOD("get_collider_lod_threshold"), &JarVoxelChunk::get_collider_lod_threshold);
     ClassDB::bind_method(D_METHOD("set_collider_lod_threshold", "collider_lod_threshold"),
@@ -194,7 +195,7 @@ void JarVoxelChunk::update_chunk(JarVoxelVolume &terrain, VoxelOctreeNode *node,
         // The chunks this one replaces lose their colliders right now (see
         // VoxelOctreeNode::update_chunk), so near a viewer build the collider
         // immediately: a queued one leaves a gap a character can fall through.
-        const float nearDistance = 2.0f * terrain.get_chunk_size() * terrain.get_octree_scale();
+        const float nearDistance = 2.0f * terrain.get_chunk_size() * terrain.get_voxel_size();
         if (terrain.distance_to_nearest_viewer(position) < nearDistance)
             update_collision_mesh();
         else

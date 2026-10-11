@@ -10,6 +10,11 @@
 	<tutorials>
 	</tutorials>
 	<methods>
+		<method name="get_lod" qualifiers="const">
+			<return type="int" />
+			<description>
+			</description>
+		</method>
 		<method name="get_volume" qualifiers="const">
 			<return type="JarVoxelVolume" />
 			<description>

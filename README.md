@@ -63,6 +63,7 @@ The editing scripts in `demo/demo/editing` are meant to be reused: `SdfEditor` e
 - `JarWorld`, `JarPlanarWorld` and `JarSphericalWorld` are gone: use a plain `Node3D` and set the volume's `up_mode`, `up_center` and `sea_level` (radius) instead. For gravity, use Godot's `Area3D` point gravity.
 - `performance_max_concurrent_tasks` is gone: all volumes share one worker pool sized to the CPU.
 - Operation constants are now `JarVoxelVolume.SDF_OPERATION_UNION` etc.
+- `octree_scale` + `size` are replaced by `voxel_size` (meters per voxel at full detail) and `extent` (meters the volume covers); `size = n` corresponds to `extent = 2^n * voxel_size`. `min_chunk_size` and the unused `lod_level_count` are gone (chunks are always 16 voxels).
 
 ### Shaping worlds with SDFs
 
@@ -85,12 +86,17 @@ volume.edit(box, JarVoxelVolume.SDF_OPERATION_UNION, Transform3D(Basis(Vector3.U
 
 In the demos, `Q` cycles the brush (sphere, box, cone, prism mesh) and `E` toggles smooth blending. See `demo/demo/flat.tscn` + `demo/demo/op_carve.tres` for a crater carved out of noise terrain with a single resource.
 
+### Resolution and level of detail
+
+- `voxel_size` sets the smallest detail (and edit) in meters; `extent` the size of the volume.
+- Detail is highest around viewers and falls off in rings: `lod_detail_distance` widens the full-detail region, `lod_shell_size` sets how quickly detail drops after it. Level of detail depends only on viewer and sample positions, and neighbouring chunks never differ by more than one level, so seams stay closed at any setting.
+
 ### Meshing
 
 `meshing_algorithm` selects the mesher per volume, and can be switched at runtime:
 
 - **Surface Nets** (default): smooth, rounded surfaces.
-- **Dual Contouring**: reproduces sharp edges and corners (stamped boxes, meshes, carved tunnels). Edits store the exact surface normal of the shape they apply, and untouched terrain uses the SDF's gradient, so vertices land exactly on creases and corners. Seams between LOD levels use the same stitching as surface nets.
+- **Dual Contouring**: reproduces sharp edges and corners (stamped boxes, meshes, carved tunnels). Edits store the exact surface normal of the shape they apply, and untouched terrain uses the SDF's gradient, so vertices land on creases and corners; quads are split along sharp edges and creases get their own normals. Seams between LOD levels use the same stitching as surface nets.
 
 ### Tests
 
@@ -100,6 +106,7 @@ Headless checks live in `demo/tests` and exit with a non-zero code on failure:
 godot --headless --path demo res://tests/sdf_tests.tscn
 godot --headless --path demo res://tests/edit_tests.tscn
 godot --headless --path demo res://tests/mesher_tests.tscn
+godot --headless --path demo res://tests/lod_tests.tscn
 godot --headless --fixed-fps 60 --path demo res://tests/player_tests.tscn
 ```
 

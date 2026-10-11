@@ -49,11 +49,11 @@ StitchedMeshChunk::StitchedMeshChunk(const JarVoxelVolume &terrain, const VoxelO
 {
     glm::vec3 chunkCenter = chunk._center;
 
-    float leafSize = ((1 << chunk.get_lod()) * terrain.get_octree_scale());
-    Bounds bounds = chunk.get_bounds(terrain.get_octree_scale()).expanded(leafSize - 0.001f);
+    float leafSize = ((1 << chunk.get_lod()) * terrain.get_voxel_size());
+    Bounds bounds = chunk.get_bounds(terrain.get_voxel_size()).expanded(leafSize - 0.001f);
     nodes.clear();
     terrain.get_voxel_leaves_in_bounds(bounds, chunk.get_lod(), nodes);
-    // terrain.get_voxel_leaves_in_bounds(chunk.get_bounds(terrain.get_octree_scale()).expanded( - 0.001f), chunk.get_lod(), nodes);
+    // terrain.get_voxel_leaves_in_bounds(chunk.get_bounds(terrain.get_voxel_size()).expanded( - 0.001f), chunk.get_lod(), nodes);
     innerNodeCount = nodes.size();
     bounds = bounds.expanded(0.001f);
 
@@ -61,7 +61,7 @@ StitchedMeshChunk::StitchedMeshChunk(const JarVoxelVolume &terrain, const VoxelO
         return;
 
     // find if there are any lod boundaries
-    const float edge_length = chunk.edge_length(terrain.get_octree_scale());
+    const float edge_length = chunk.edge_length(terrain.get_voxel_size());
     uint16_t boundaries = chunk.compute_boundaries(terrain);
     _lodH2LBoundaries = boundaries & 0xFF;
     _lodL2HBoundaries = (boundaries >> 8) & 0xFF;
@@ -102,7 +102,7 @@ StitchedMeshChunk::StitchedMeshChunk(const JarVoxelVolume &terrain, const VoxelO
         // rejection_bounds = inner radius
         // acception_bounds = union of the 6 rings, should capture 8x8x2 nodes per side
         Bounds acceptance_bounds;
-        Bounds rejection_bounds = chunk.get_bounds(terrain.get_octree_scale());
+        Bounds rejection_bounds = chunk.get_bounds(terrain.get_voxel_size());
         for (size_t i = 0; i < CheckLodOffsets.size(); i++)
         {
             if (((_lodH2LBoundaries >> i) & 0b1) != 1)

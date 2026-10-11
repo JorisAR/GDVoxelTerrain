@@ -37,7 +37,6 @@ class JarVoxelVolume : public Node3D
   private:
     std::unique_ptr<MeshComputeScheduler> _meshComputeScheduler;
 
-    std::vector<float> _voxelEpsilons;
 
     Ref<JarSignedDistanceField> _sdf;
     std::unique_ptr<VoxelOctreeNode> _voxelRoot;
@@ -55,15 +54,14 @@ class JarVoxelVolume : public Node3D
     // std::queue<VoxelOctreeNode*> _deleteChunkQueue;
 
     // Exported variables
-    float _octreeScale = 1.0f;
-    int _size = 8;
-    int _minChunkSize = 4; // each chunk is 2^4 = 16*16*16 voxels
+    float _voxelSize = 1.0f;  // meters per voxel at full detail (LOD 0)
+    float _extent = 16384.0f; // edge length of the cube the volume covers, centered on its origin
+    int _depth = 14;          // octree levels, derived from extent / voxel size in initialize()
 
     Ref<PackedScene> _chunkScene;
 
     std::atomic<bool> _isBuilding{false};
     bool _initialBuildRequested = false; // first build waits for process(), when the player is in the tree
-    int _chunkSize = 0;
     bool _cubicVoxels = false;
     std::atomic<int> _meshingAlgorithm{0}; // MeshingAlgorithm; read by mesh threads
     std::atomic<float> _dcFeatureThreshold{0.1f};
@@ -104,8 +102,8 @@ class JarVoxelVolume : public Node3D
 
     // LOD
     JarVoxelLoD _voxelLod;
-    int _lod_level_count = 20;
     int _lod_shell_size = 2;
+    float _lodDetailDistance = 0.0f;
     bool _lod_automatic_update = true;
     float _lod_automatic_update_distance = 64.0f;
 
@@ -122,7 +120,6 @@ class JarVoxelVolume : public Node3D
     void initialize();
     void process();
     void process_chunk_queue(float delta);
-    void generate_epsilons();
     void process_modify_queue();
     // Resolves an edit into volume space and queues it. `limit` (volume-local)
     // further restricts the affected region, e.g. modify()'s radius.
@@ -210,16 +207,18 @@ class JarVoxelVolume : public Node3D
     }
     void set_sdf(const Ref<JarSignedDistanceField> &sdf);
 
-    float get_octree_scale() const;
-    void set_octree_scale(float value);
+    // Chunks are 2^ChunkSizeLog2 voxels along each axis at every LOD (the
+    // mesher's lookup tables are built for 16).
+    static constexpr int ChunkSizeLog2 = 4;
 
-    int get_size() const;
-    void set_size(int value);
+    float get_voxel_size() const;
+    void set_voxel_size(float value);
+    float get_extent() const;
+    void set_extent(float value);
+    int get_depth() const { return _depth; }
 
-    int get_min_chunk_size() const;
-    void set_min_chunk_size(int value);
-
-    int get_chunk_size() const;
+    int get_min_chunk_size() const { return ChunkSizeLog2; }
+    int get_chunk_size() const { return 1 << ChunkSizeLog2; }
 
     Ref<PackedScene> get_chunk_scene() const;
     void set_chunk_scene(const Ref<PackedScene> &value);
@@ -253,8 +252,8 @@ class JarVoxelVolume : public Node3D
 
     // LOD
 
-    int get_lod_level_count() const;
-    void set_lod_level_count(int value);
+    float get_lod_detail_distance() const;
+    void set_lod_detail_distance(float value);
 
     int get_lod_shell_size() const;
     void set_lod_shell_size(int value);

@@ -38,7 +38,7 @@ func _ready() -> void:
 
 ## Octree covering 2^20 m at 1 m voxels.
 func _configure_size(volume: JarVoxelVolume) -> void:
-	volume.size = 20
+	volume.extent = 1048576.0
 
 func _run() -> void:
 	await _measure_until_idle("initial_build")

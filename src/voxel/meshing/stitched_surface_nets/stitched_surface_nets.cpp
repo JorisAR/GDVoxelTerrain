@@ -31,7 +31,8 @@ glm::vec3 StitchedSurfaceNets::gradient_at(int node_id)
     return _gradients[node_id];
 }
 
-glm::vec3 StitchedSurfaceNets::place_dual_contouring_vertex(const int node_id, const std::vector<int> &neighbours)
+glm::vec3 StitchedSurfaceNets::place_dual_contouring_vertex(const int node_id, const std::vector<int> &neighbours,
+                                                             glm::vec3 &averageNormal)
 {
     // Every corner sample near the surface is a distance d along normal n, so
     // the surface passes through (center - d n) with normal n: one tangent
@@ -54,17 +55,40 @@ glm::vec3 StitchedSurfaceNets::place_dual_contouring_vertex(const int node_id, c
             continue; // too far for its closest feature to be in this cell
         const glm::vec3 normal = gradient_at(neighbours[i]);
         qef.add(n->_center - d * normal, normal);
+        averageNormal += normal;
     }
+    const float normalLength = glm::length(averageNormal);
+    averageNormal = normalLength > 1e-6f ? averageNormal / normalLength : glm::vec3(0.0f);
     if (qef.count() == 0)
         return glm::vec3(std::numeric_limits<float>::quiet_NaN());
-    // A solution outside the cell belongs to a feature of a neighbouring cell;
-    // clamping it would leave a vertex floating off the surface, so fall back
-    // to the surface-nets position (always inside the cell) instead.
-    const glm::vec3 x = qef.solve(_featureThreshold);
+    // Where the surface crosses the cell's edges: always inside the cell, the
+    // target the solution is pulled towards along unconstrained directions.
+    glm::vec3 crossings(0.0f);
+    int crossingCount = 0;
+    for (const auto &edge : StitchedMeshChunk::Edges)
+    {
+        const VoxelOctreeNode *na = _meshChunk.nodes[neighbours[edge.x]];
+        const VoxelOctreeNode *nb = _meshChunk.nodes[neighbours[edge.y]];
+        const float va = const_cast<VoxelOctreeNode *>(na)->get_value();
+        const float vb = const_cast<VoxelOctreeNode *>(nb)->get_value();
+        if (glm::sign(va) == glm::sign(vb))
+            continue;
+        crossings += glm::mix(na->_center, nb->_center, std::abs(va) / (std::abs(va) + std::abs(vb)));
+        crossingCount++;
+    }
+    const glm::vec3 target = crossingCount > 0 ? crossings / float(crossingCount) : qef.mass_point();
+
+    // Try the full feature first (corner), then simpler ones (edge, plane):
+    // a corner or edge outside the cell belongs to a neighbouring cell, and
+    // this cell's vertex then lies on the remaining edge or face.
     const glm::vec3 tolerance(cellSize * 0.01f);
-    if (glm::any(glm::lessThan(x, cellMin - tolerance)) || glm::any(glm::greaterThan(x, cellMax + tolerance)))
-        return glm::vec3(std::numeric_limits<float>::quiet_NaN());
-    return glm::clamp(x, cellMin, cellMax);
+    for (int rank = qef.rank(_featureThreshold); rank >= 1; --rank)
+    {
+        Qef::Solution solution = qef.solve_rank(rank, _featureThreshold);
+        if (Qef::fit_into(solution, target, cellMin - tolerance, cellMax + tolerance))
+            return glm::clamp(solution.point, cellMin, cellMax);
+    }
+    return glm::vec3(std::numeric_limits<float>::quiet_NaN());
 }
 
 void StitchedSurfaceNets::create_vertex(const int node_id, const std::vector<int> &neighbours, const bool on_ring)
@@ -118,13 +142,18 @@ void StitchedSurfaceNets::create_vertex(const int node_id, const std::vector<int
     normal = glm::normalize(normal);
     if (_cubicVoxels)
         vertexPosition = _meshChunk.nodes[node_id]->_center;
-    else if (_dualContouring && !on_ring)
+    else if (_dualContouring)
     {
-        // Ring (LOD seam) vertices keep the surface-nets position, so seams
-        // stay watertight against the neighbouring coarser chunk.
-        const glm::vec3 dc = place_dual_contouring_vertex(node_id, neighbours);
+        // Ring (LOD seam) vertices are copies of the neighbouring coarser
+        // chunk's vertices; they must be placed exactly as that chunk places
+        // them (a vertex depends only on its cell's corner samples), or the
+        // seam cracks.
+        glm::vec3 exactNormal(0.0f);
+        const glm::vec3 dc = place_dual_contouring_vertex(node_id, neighbours, exactNormal);
         if (!glm::any(glm::isnan(dc)))
             vertexPosition = dc;
+        if (glm::dot(exactNormal, exactNormal) > 0.5f)
+            normal = exactNormal; // exact surface normal instead of the value-difference estimate
     }
 
     vertexPosition -= _chunk->_center;
@@ -225,16 +254,7 @@ ChunkMeshData *StitchedSurfaceNets::generate_mesh_data(const JarVoxelVolume &ter
                 int n1 = _meshChunk.vertexIndices[neighbours[1]];
                 int n2 = _meshChunk.vertexIndices[neighbours[2]];
                 int n3 = _meshChunk.vertexIndices[neighbours[3]];
-                if (_verts[n0].distance_squared_to(_verts[n3]) < _verts[n1].distance_squared_to(_verts[n2]))
-                {
-                    add_tri(n0, n1, n3, flipFace == -1);
-                    add_tri(n0, n3, n2, flipFace == -1);
-                }
-                else
-                {
-                    add_tri(n1, n3, n2, flipFace == -1);
-                    add_tri(n1, n2, n0, flipFace == -1);
-                }
+                add_quad(n0, n1, n2, n3, flipFace == -1);
             }
         }
     }
@@ -292,6 +312,9 @@ ChunkMeshData *StitchedSurfaceNets::generate_mesh_data(const JarVoxelVolume &ter
         }
     }
 
+    if (_dualContouring && !_cubicVoxels)
+        split_creases();
+
     Array meshData;
     meshData.resize(Mesh::ARRAY_MAX);
     meshData[Mesh::ARRAY_VERTEX] = _verts;
@@ -300,7 +323,7 @@ ChunkMeshData *StitchedSurfaceNets::generate_mesh_data(const JarVoxelVolume &ter
     meshData[Mesh::ARRAY_INDEX] = _indices;
 
     ChunkMeshData *output =
-        new ChunkMeshData(meshData, _chunk->get_lod(), _meshChunk.is_edge_chunk(), _chunk->get_bounds(terrain.get_octree_scale()));
+        new ChunkMeshData(meshData, _chunk->get_lod(), _meshChunk.is_edge_chunk(), _chunk->get_bounds(terrain.get_voxel_size()));
     output->boundaries = _meshChunk._lodH2LBoundaries | (_meshChunk._lodL2HBoundaries << 8);
     output->mesh_version = terrain.get_mesh_version();
 
@@ -355,6 +378,103 @@ std::vector<std::vector<int>> StitchedSurfaceNets::find_ring_nodes(const glm::iv
 }
 
 //I'd rather not base the winding order on the normal, but it works for now. Only required for the edge chunk.
+// Quad n0 n1 / n2 n3 (n0-n3 and n1-n2 are the diagonals).
+void StitchedSurfaceNets::add_quad(int n0, int n1, int n2, int n3, bool flip)
+{
+    bool splitAlong03 = _verts[n0].distance_squared_to(_verts[n3]) < _verts[n1].distance_squared_to(_verts[n2]);
+    if (_dualContouring)
+    {
+        // Pick the diagonal whose triangles agree best with their vertices'
+        // surface normals: across a sharp edge that is the diagonal along it.
+        auto agreement = [this](int a, int b, int c) {
+            const Vector3 n = (_verts[b] - _verts[a]).cross(_verts[c] - _verts[a]);
+            const real_t len = n.length();
+            if (len <= 1e-12f)
+                return real_t(0);
+            const Vector3 u = n / len;
+            return std::min(std::abs(u.dot(_normals[a])), std::min(std::abs(u.dot(_normals[b])), std::abs(u.dot(_normals[c]))));
+        };
+        const real_t along03 = std::min(agreement(n0, n1, n3), agreement(n0, n3, n2));
+        const real_t along12 = std::min(agreement(n1, n3, n2), agreement(n1, n2, n0));
+        splitAlong03 = along03 >= along12;
+    }
+    if (splitAlong03)
+    {
+        add_tri(n0, n1, n3, flip);
+        add_tri(n0, n3, n2, flip);
+    }
+    else
+    {
+        add_tri(n1, n3, n2, flip);
+        add_tri(n1, n2, n0, flip);
+    }
+}
+
+// Smooth normals within a surface, but not across sharp creases: each triangle
+// corner averages only the neighbouring faces within CreaseAngle of its own
+// face, and vertices whose corners disagree are duplicated.
+void StitchedSurfaceNets::split_creases()
+{
+    constexpr float CreaseCos = 0.82f; // ~35 degrees
+    const int64_t triCount = _indices.size() / 3;
+    const int64_t vertCount = _verts.size();
+    std::vector<Vector3> faceNormals(triCount);
+    std::vector<std::vector<int>> vertexTris(vertCount);
+    for (int64_t t = 0; t < triCount; ++t)
+    {
+        const int a = _indices[3 * t], b = _indices[3 * t + 1], c = _indices[3 * t + 2];
+        // Area weighted, outward: Godot's front faces are wound clockwise.
+        faceNormals[t] = (_verts[c] - _verts[a]).cross(_verts[b] - _verts[a]);
+        vertexTris[a].push_back(int(t));
+        vertexTris[b].push_back(int(t));
+        vertexTris[c].push_back(int(t));
+    }
+    int32_t *indices = _indices.ptrw();
+    for (int64_t v = 0; v < vertCount; ++v)
+    {
+        const std::vector<int> &tris = vertexTris[v];
+        if (tris.empty())
+            continue;
+        // Normals already assigned to this vertex (first) and its copies.
+        std::vector<std::pair<Vector3, int>> variants;
+        for (int t : tris)
+        {
+            const Vector3 own = faceNormals[t].normalized();
+            Vector3 sum;
+            for (int o : tris)
+                if (faceNormals[o].normalized().dot(own) >= CreaseCos)
+                    sum += faceNormals[o];
+            const Vector3 n = sum.length_squared() > 0.0f ? sum.normalized() : own;
+
+            int target = -1;
+            for (const auto &[normal, index] : variants)
+                if (normal.dot(n) > 0.999f)
+                {
+                    target = index;
+                    break;
+                }
+            if (target < 0)
+            {
+                if (variants.empty())
+                    target = int(v);
+                else
+                {
+                    target = int(_verts.size());
+                    _verts.push_back(_verts[v]);
+                    _colors.push_back(_colors[v]);
+                    _normals.push_back(n);
+                }
+                variants.emplace_back(n, target);
+                if (target == v)
+                    _normals.set(v, n);
+            }
+            for (int k = 0; k < 3; ++k)
+                if (indices[3 * t + k] == v)
+                    indices[3 * t + k] = target;
+        }
+    }
+}
+
 void StitchedSurfaceNets::add_tri_fix_normal(int n0, int n1, int n2)
 {
     godot::Vector3 normal = (_verts[n1] - _verts[n0]).cross(_verts[n2] - _verts[n0]);

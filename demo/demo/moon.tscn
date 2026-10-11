@@ -41,7 +41,7 @@ tonemap_mode = 3
 [node name="Planet" type="Node3D" parent="."]
 
 [node name="JarVoxelVolume" type="JarVoxelVolume" parent="Planet"]
-size = 16
+extent = 4096.0
 chunk_scene = ExtResource("1_chunk")
 sdf = SubResource("Sdf_planet")
 lod_automatic_update_distance = 16.0
@@ -69,7 +69,7 @@ degrees_per_second = 4.0
 axis = Vector3(0.3, 1, 0)
 
 [node name="JarVoxelVolume" type="JarVoxelVolume" parent="MoonOrbit/Moon"]
-size = 14
+extent = 1024.0
 chunk_scene = ExtResource("1_chunk")
 sdf = SubResource("Sdf_moon")
 lod_automatic_update_distance = 16.0
