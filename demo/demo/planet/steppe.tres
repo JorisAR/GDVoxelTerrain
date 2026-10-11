@@ -1,0 +1,13 @@
+[gd_resource type="JarBiome" load_steps=4 format=3]
+
+[ext_resource type="JarTerrainFeature" path="res://demo/planet/broadleaf_savanna.tres" id="1"]
+[ext_resource type="JarTerrainFeature" path="res://demo/planet/bush.tres" id="2"]
+[ext_resource type="JarTerrainDetail" path="res://demo/planet/grass_dry.tres" id="3"]
+
+[resource]
+resource_name = "Dry steppe"
+temperature = 0.45
+moisture = -0.35
+features = Array[JarTerrainFeature]([ExtResource("1"), ExtResource("2")])
+details = Array[JarTerrainDetail]([ExtResource("3")])
+ground_material = 9

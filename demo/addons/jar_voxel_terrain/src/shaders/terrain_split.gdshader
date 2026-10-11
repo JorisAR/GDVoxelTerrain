@@ -12,7 +12,7 @@ void vertex() {
 }
 
 void fragment() {
-	JarContext c = jar_context(jar_position, jar_normal, -VERTEX.z);
+	JarContext c = jar_context(jar_position, jar_normal, jar_biomes, -VERTEX.z);
 	JarSurface s = JarSurface(vec3(0.0), vec3(0.0), 0.0, 0.0);
 	if (v_material == 255)
 		jar_add_ground(s, c, 1.0);

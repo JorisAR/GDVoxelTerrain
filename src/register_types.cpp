@@ -14,6 +14,7 @@
 #include "sphere_sdf.h"
 #include "terrain_detail.h"
 #include "terrain_material.h"
+#include "biome_map.h"
 #include "terrain_feature.h"
 #include "terrain_populator.h"
 #include "terrain_sdf.h"
@@ -51,6 +52,8 @@ void initialize_jar_voxel_terrain_module(ModuleInitializationLevel p_level)
         GDREGISTER_ABSTRACT_CLASS(JarTerrainPopulator);
         GDREGISTER_CLASS(JarTerrainDetail);
         GDREGISTER_CLASS(JarTerrainMaterial);
+        GDREGISTER_CLASS(JarBiome);
+        GDREGISTER_CLASS(JarBiomeMap);
         GDREGISTER_CLASS(JarTerrainFeature);
 
         // TERRAIN

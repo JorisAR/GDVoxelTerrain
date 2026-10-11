@@ -37,7 +37,7 @@ The compiled library is written straight into `demo/addons/jar_voxel_terrain/bin
 
 Open the `demo` project in Godot and run one of the scenes in `demo/demo`:
 
-- `planet.tscn` (the main scene): a 4 km forest planet with oceans, sporadic eroded mountains with snowy peaks and no trees, water, an atmosphere and a slowly orbiting moon you can fly to and land on (it carries you along). Its terrain, materials and population live in `demo/demo/planet/`; change the radius in `planet_terrain.tres` (and the volume's `extent`) and the water, atmosphere, materials and population rules follow.
+- `planet.tscn` (the main scene): a 4 km forest planet with oceans, sporadic eroded mountains with snowy peaks and no trees, tundra and steppe biomes, water, an atmosphere, clouds and a slowly orbiting cratered moon you can fly to and land on (it carries you along). Its terrain, materials and population live in `demo/demo/planet/`; change the radius in `planet_terrain.tres` (and the volume's `extent`) and the water, atmosphere, materials and population rules follow.
 - `flat.tscn`: flat terrain with a crater carved by an SDF operation (`op_carve.tres`), water and the same population.
 
 Controls: `WASD` move, `Space` jump, `Shift` sprint, `Tab` toggle flying (`Space`/`Shift` up/down, `Ctrl` + scroll speed), `M` toggle surface nets / dual contouring, `Esc` release the mouse.
@@ -137,6 +137,15 @@ for f in volume.get_features_near(hit_position, 2.0):
 ```
 
 The demos use a generated low-poly pine and rock (`demo/demo/assets/population/features/`).
+
+### Biomes
+
+A `JarBiomeMap` (`population_biome_map`) places `JarBiome`s with a simple climate model: temperature from a noise, colder with height above sea level and towards a planet's poles, and moisture from a second noise. Each biome sits at a point in (temperature, moisture) space and positions belong to the biomes nearest their climate, blended smoothly, so borders follow the climate rather than a grid. A biome brings:
+
+- its own **features and details**, placed where it occurs and faded by how strongly it is present (the volume's own population grows everywhere);
+- its own **ground materials** for the shader's ground rules (ground, cliff, shore, seabed, peaks; `-1` keeps the shader's). The mesher passes per-vertex weights of the first 4 biomes in `CUSTOM1`.
+
+`get_biome_weights_at(position)` tells scripts which biomes are where. The demo planet has a temperate forest (most of it), alpine tundra (high ground and poles) and a dry steppe (`demo/demo/planet/biomes.tres`).
 
 ### Water, atmosphere and clouds
 

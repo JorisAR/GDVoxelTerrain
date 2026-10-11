@@ -8,6 +8,7 @@ var _failures := 0
 func _ready() -> void:
 	await _test_features()
 	await _test_details()
+	await _test_biomes()
 	print("Population tests: %s" % ("ALL PASSED" if _failures == 0 else "%d FAILED" % _failures))
 	get_tree().quit(1 if _failures > 0 else 0)
 
@@ -201,3 +202,48 @@ func _settle(volume: JarVoxelVolume) -> void:
 	while idle < 60 and Time.get_ticks_msec() - start < 60000:
 		await get_tree().process_frame
 		idle = idle + 1 if not volume.is_building() and not volume.is_meshing() else 0
+
+## Two biomes (cold / warm), each with its own feature: weights sum to 1, and
+## each feature only grows where its biome is.
+func _test_biomes() -> void:
+	var temperature := FastNoiseLite.new()
+	temperature.frequency = 0.01
+	var cold := JarBiome.new()
+	cold.temperature = -0.6
+	var warm := JarBiome.new()
+	warm.temperature = 0.6
+	var cold_feature := _box_feature(0.01)
+	var warm_feature := _box_feature(0.01)
+	cold.features = [cold_feature]
+	warm.features = [warm_feature]
+	var map := JarBiomeMap.new()
+	map.temperature_noise = temperature
+	map.biomes = [cold, warm]
+	var world := TestWorld.flat(self, Vector3(3, 30, 5), func(v: JarVoxelVolume):
+		v.population_biome_map = map)
+	var volume: JarVoxelVolume = world.volume
+	await _settle(volume)
+	var center := Vector3(3, 0, 5)
+	var sums_ok := true
+	for i in 50:
+		var w: Dictionary = volume.get_biome_weights_at(center + Vector3(i * 3.1, 0, i * 1.7))
+		var total := 0.0
+		for b in w:
+			total += w[b]
+		sums_ok = sums_ok and absf(total - 1.0) < 0.01
+	_check("biome weights sum to 1", sums_ok)
+	var counts := {cold_feature: 0, warm_feature: 0}
+	var misplaced := 0
+	for f in volume.get_features_near(center, 150.0):
+		counts[f.feature] += 1
+		var biome: JarBiome = cold if f.feature == cold_feature else warm
+		var w: Dictionary = volume.get_biome_weights_at(f.transform.origin)
+		if w.get(biome, 0.0) < 0.02:
+			misplaced += 1
+	_check("each biome grows its features", counts[cold_feature] > 10 and counts[warm_feature] > 10,
+		"cold %d, warm %d" % [counts[cold_feature], counts[warm_feature]])
+	_check("features stay in their biome", misplaced == 0, "%d outside their biome" % misplaced)
+	world.volume.queue_free()
+	world.viewer.queue_free()
+	await get_tree().process_frame
+

@@ -168,6 +168,11 @@ void JarVoxelVolume::_bind_methods()
     ClassDB::bind_method(D_METHOD("get_features_near", "global_position", "radius"),
                          &JarVoxelVolume::get_features_near);
     ClassDB::bind_method(D_METHOD("regenerate_population"), &JarVoxelVolume::regenerate_population);
+    ClassDB::bind_method(D_METHOD("get_biome_map"), &JarVoxelVolume::get_biome_map);
+    ClassDB::bind_method(D_METHOD("set_biome_map", "value"), &JarVoxelVolume::set_biome_map);
+    ADD_PROPERTY(PropertyInfo(Variant::OBJECT, "population_biome_map", PROPERTY_HINT_RESOURCE_TYPE, "JarBiomeMap"),
+                 "set_biome_map", "get_biome_map");
+    ClassDB::bind_method(D_METHOD("get_biome_weights_at", "global_position"), &JarVoxelVolume::get_biome_weights_at);
     ClassDB::bind_method(D_METHOD("get_terrain_details"), &JarVoxelVolume::get_terrain_details);
     ClassDB::bind_method(D_METHOD("set_terrain_details", "value"), &JarVoxelVolume::set_terrain_details);
     ADD_PROPERTY(PropertyInfo(Variant::ARRAY, "population_terrain_details", PROPERTY_HINT_TYPE_STRING,
@@ -1041,7 +1046,8 @@ void JarVoxelVolume::rebuild_materials()
     {
         Ref<ShaderMaterial> copy = shader->duplicate();
         TerrainMaterialPalette::apply(
-            _terrainMaterials.is_empty() ? TerrainMaterialPalette::default_materials() : _terrainMaterials, copy);
+            _terrainMaterials.is_empty() ? TerrainMaterialPalette::default_materials() : _terrainMaterials, _biomeMap,
+            copy);
         _runtimeMaterial = copy;
     }
     else
@@ -1113,6 +1119,82 @@ int JarVoxelVolume::lod_at(const glm::vec3 &position) const
     return _voxelLod.lod_at(position);
 }
 
+std::vector<JarVoxelVolume::PopulationEntry<JarTerrainFeature>> JarVoxelVolume::population_features() const
+{
+    std::vector<PopulationEntry<JarTerrainFeature>> result;
+    for (int64_t i = 0; i < _terrainFeatures.size(); ++i)
+        result.push_back({_terrainFeatures[i], -1});
+    if (_biomeMap.is_valid())
+    {
+        const TypedArray<JarBiome> biomes = _biomeMap->get_biomes();
+        for (int64_t b = 0; b < biomes.size(); ++b)
+        {
+            Ref<JarBiome> biome = biomes[b];
+            if (biome.is_null())
+                continue;
+            const TypedArray<JarTerrainFeature> features = biome->get_features();
+            for (int64_t i = 0; i < features.size(); ++i)
+                result.push_back({features[i], int(b)});
+        }
+    }
+    return result;
+}
+
+std::vector<JarVoxelVolume::PopulationEntry<JarTerrainDetail>> JarVoxelVolume::population_details() const
+{
+    std::vector<PopulationEntry<JarTerrainDetail>> result;
+    for (int64_t i = 0; i < _terrainDetails.size(); ++i)
+        result.push_back({_terrainDetails[i], -1});
+    if (_biomeMap.is_valid())
+    {
+        const TypedArray<JarBiome> biomes = _biomeMap->get_biomes();
+        for (int64_t b = 0; b < biomes.size(); ++b)
+        {
+            Ref<JarBiome> biome = biomes[b];
+            if (biome.is_null())
+                continue;
+            const TypedArray<JarTerrainDetail> details = biome->get_details();
+            for (int64_t i = 0; i < details.size(); ++i)
+                result.push_back({details[i], int(b)});
+        }
+    }
+    return result;
+}
+
+void JarVoxelVolume::on_biome_map_changed()
+{
+    update_materials();
+    regenerate_population();
+}
+
+void JarVoxelVolume::set_biome_map(const Ref<JarBiomeMap> &value)
+{
+    const Callable callback = callable_mp(this, &JarVoxelVolume::on_biome_map_changed);
+    if (_biomeMap.is_valid() && _biomeMap->is_connected("changed", callback))
+        _biomeMap->disconnect("changed", callback);
+    _biomeMap = value;
+    if (_biomeMap.is_valid())
+        _biomeMap->connect("changed", callback, Object::CONNECT_DEFERRED);
+    update_materials(); // biome ground materials live in the palette
+    if (_featureManager)
+        _featureManager->reset();
+    remesh_all(); // per-vertex biome weights and details
+}
+
+Dictionary JarVoxelVolume::get_biome_weights_at(const Vector3 &global_position) const
+{
+    Dictionary result;
+    if (_biomeMap.is_null())
+        return result;
+    const Vector3 l = to_local(global_position);
+    const BiomeWeights w = _biomeMap->evaluate(glm::vec3(l.x, l.y, l.z), get_up_field());
+    const TypedArray<JarBiome> biomes = _biomeMap->get_biomes();
+    for (int i = 0; i < w.count; ++i)
+        if (w.ids[i] < biomes.size())
+            result[biomes[w.ids[i]]] = w.weights[i];
+    return result;
+}
+
 void JarVoxelVolume::set_terrain_features(const TypedArray<JarTerrainFeature> &features)
 {
     _terrainFeatures = features;
@@ -1153,7 +1235,7 @@ TypedArray<Dictionary> JarVoxelVolume::get_features_near(const Vector3 &global_p
          _featureManager->instances_near(glm::vec3(local.x, local.y, local.z), radius))
     {
         Dictionary d;
-        d["feature"] = _terrainFeatures[instance.feature];
+        d["feature"] = _featureManager->feature_at(instance.feature);
         d["transform"] = get_global_transform() * instance.transform;
         result.push_back(d);
     }

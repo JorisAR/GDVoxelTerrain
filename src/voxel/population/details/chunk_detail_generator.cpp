@@ -14,9 +14,10 @@ uint32_t float_bits(float f)
 } // namespace
 
 std::vector<PackedFloat32Array> ChunkDetailGenerator::generate_detail_buffers(
-    const TypedArray<JarTerrainDetail> &details, const ChunkMeshData &chunkMeshData)
+    const std::vector<Ref<JarTerrainDetail>> &details, const std::vector<int> &detailBiomes,
+    const Ref<JarBiomeMap> &biomeMap, const ChunkMeshData &chunkMeshData)
 {
-    if (details.size() <= 0)
+    if (details.empty())
         return {};
     const PackedVector3Array verts = chunkMeshData.mesh_array[Mesh::ARRAY_VERTEX];
     const PackedInt32Array indices = chunkMeshData.mesh_array[Mesh::ARRAY_INDEX];
@@ -28,9 +29,10 @@ std::vector<PackedFloat32Array> ChunkDetailGenerator::generate_detail_buffers(
     auto painted = [&](int v) { return v < paintedAmount.size() ? paintedAmount[v] : 0.0f; };
 
     std::vector<std::vector<Transform3D>> transforms(details.size());
-    for (int64_t d = 0; d < details.size(); d++)
+    for (int64_t d = 0; d < int64_t(details.size()); d++)
     {
         Ref<JarTerrainDetail> detail = details[d];
+        const int biome = d < int64_t(detailBiomes.size()) ? detailBiomes[d] : -1;
         if (detail.is_null() || detail->get_density() <= 0.0f)
             continue;
         const float density = detail->get_density();
@@ -65,7 +67,10 @@ std::vector<PackedFloat32Array> ChunkDetailGenerator::generate_detail_buffers(
                 const Vector3 n = (normals[ia] * r0 + normals[ib] * r1 + normals[ic] * r2).normalized();
                 const glm::vec3 normal(n.x, n.y, n.z);
                 const glm::vec3 up = _upField.up(position);
-                if (keep >= detail->probability(position, _upField.height(position), normal, up))
+                float chance = detail->probability(position, _upField.height(position), normal, up);
+                if (biome >= 0 && biomeMap.is_valid())
+                    chance *= biomeMap->evaluate(position, _upField).weight_of(biome);
+                if (keep >= chance)
                     continue;
                 // Chunk-relative: the MultiMesh lives under the chunk node.
                 Transform3D t = detail->build_transform(position, up, normal, rotation, scale);

@@ -1,0 +1,13 @@
+[gd_resource type="JarBiome" load_steps=5 format=3]
+
+[ext_resource type="JarTerrainFeature" path="res://demo/planet/pine.tres" id="1"]
+[ext_resource type="JarTerrainFeature" path="res://demo/planet/broadleaf.tres" id="2"]
+[ext_resource type="JarTerrainFeature" path="res://demo/planet/bush.tres" id="3"]
+[ext_resource type="JarTerrainDetail" path="res://demo/planet/grass.tres" id="4"]
+
+[resource]
+resource_name = "Temperate forest"
+temperature = 0.1
+moisture = 0.2
+features = Array[JarTerrainFeature]([ExtResource("1"), ExtResource("2"), ExtResource("3")])
+details = Array[JarTerrainDetail]([ExtResource("4")])

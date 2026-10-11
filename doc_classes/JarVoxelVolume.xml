@@ -34,6 +34,13 @@
 				Rebuilds the level of detail around the current viewers as soon as the volume is idle, even if they moved less than [member lod_automatic_update_distance]. Call it after teleporting a viewer.
 			</description>
 		</method>
+		<method name="get_biome_weights_at" qualifiers="const">
+			<return type="Dictionary" />
+			<param index="0" name="global_position" type="Vector3" />
+			<description>
+				Returns the biomes present at [param global_position] as a dictionary of [JarBiome] to weight (weights sum to 1). Empty without a [member population_biome_map].
+			</description>
+		</method>
 		<method name="get_features_near" qualifiers="const">
 			<return type="Dictionary[]" />
 			<param index="0" name="global_position" type="Vector3" />
@@ -212,6 +219,9 @@
 		</member>
 		<member name="performance_updated_colliders_per_second" type="int" setter="set_updated_colliders_per_second" getter="get_updated_colliders_per_second" default="0">
 			Optional hard cap on how many chunk colliders are uploaded per second. [code]0[/code] means no cap: uploads are limited only by [member performance_collider_budget_ms].
+		</member>
+		<member name="population_biome_map" type="JarBiomeMap" setter="set_biome_map" getter="get_biome_map">
+			Biomes of this volume: each biome adds its own features and details where it occurs, and its own ground materials in the terrain shader. The volume's own [member population_terrain_features] and [member population_terrain_details] grow everywhere.
 		</member>
 		<member name="population_feature_cell_size" type="float" setter="set_feature_cell_size" getter="get_feature_cell_size" default="64.0">
 			Edge length in meters of the cells features are generated in. Smaller cells follow the surface more closely and stream in finer steps; larger cells mean fewer, bigger jobs and nodes.

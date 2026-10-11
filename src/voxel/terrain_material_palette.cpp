@@ -81,12 +81,33 @@ TypedArray<JarTerrainMaterial> TerrainMaterialPalette::default_materials()
     return result;
 }
 
-void TerrainMaterialPalette::apply(const TypedArray<JarTerrainMaterial> &materials, const Ref<ShaderMaterial> &target)
+void TerrainMaterialPalette::apply(const TypedArray<JarTerrainMaterial> &materials, const Ref<JarBiomeMap> &biomes,
+                                   const Ref<ShaderMaterial> &target)
 {
     if (target.is_null())
         return;
     const int count = std::min<int>(int(materials.size()), 255);
-    Ref<Image> palette = Image::create_empty(256, 2, false, Image::FORMAT_RGBAF);
+    Ref<Image> palette = Image::create_empty(256, 4, false, Image::FORMAT_RGBAF);
+    int biomeCount = 0;
+    if (biomes.is_valid())
+    {
+        const TypedArray<JarBiome> list = biomes->get_biomes();
+        biomeCount = int(list.size());
+        for (int b = 0; b < std::min(biomeCount, 4); ++b)
+        {
+            Ref<JarBiome> biome = list[b];
+            if (biome.is_null())
+            {
+                palette->set_pixel(b, 2, Color(-1, -1, -1, -1));
+                palette->set_pixel(b, 3, Color(-1, 0, 0, 0));
+                continue;
+            }
+            palette->set_pixel(b, 2, Color(biome->get_ground_material(), biome->get_cliff_material(),
+                                           biome->get_shore_material(), biome->get_seabed_material()));
+            palette->set_pixel(b, 3, Color(biome->get_peak_material(), 0, 0, 0));
+        }
+    }
+    target->set_shader_parameter("jar_biome_count", biomeCount);
     LayerBuilder albedo, normal;
     for (int i = 0; i < count; ++i)
     {

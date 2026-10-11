@@ -4,6 +4,7 @@
 #include "bounds.h"
 #include "signed_distance_field.h"
 #include "terrain_feature.h"
+#include "biome_map.h"
 #include "up_field.h"
 #include <atomic>
 #include <glm/glm.hpp>
@@ -55,6 +56,10 @@ class FeatureManager
     void reset();
     std::vector<Instance> instances_near(const glm::vec3 &position, float radius) const;
     int cell_count() const { return int(_cells.size()); }
+    Ref<JarTerrainFeature> feature_at(int index) const
+    {
+        return index >= 0 && index < int(_features.size()) ? _features[index] : Ref<JarTerrainFeature>();
+    }
 
   private:
     struct Shared
@@ -77,6 +82,8 @@ class FeatureManager
     std::unordered_map<glm::ivec3, Cell> _cells;
     std::vector<Bounds> _removed; // edits and explicit removals, volume space
     std::vector<Ref<JarTerrainFeature>> _features;
+    std::vector<int> _featureBiomes; // per feature: biome index, -1 = everywhere
+    Ref<JarBiomeMap> _biomeMap;
     float _cellSize = 64.0f;
     float _range = 0.0f; // largest draw distance
     std::vector<glm::vec3> _scanViewers;
@@ -96,6 +103,7 @@ class FeatureManager
 
     static std::vector<Instance> generate_cell(const glm::ivec3 &key, float cellSize,
                                                const std::vector<Ref<JarTerrainFeature>> &features,
+                                               const std::vector<int> &featureBiomes, const Ref<JarBiomeMap> &biomes,
                                                const Ref<JarSignedDistanceField> &sdf, const UpField &up);
     static std::vector<glm::ivec3> scan_cells(const std::vector<glm::vec3> &viewers, float range, float cellSize,
                                               const Ref<JarSignedDistanceField> &sdf);

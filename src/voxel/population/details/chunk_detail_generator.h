@@ -6,6 +6,7 @@
 #include <vector>
 
 #include "terrain_detail.h"
+#include "biome_map.h"
 #include "up_field.h"
 
 using namespace godot;
@@ -23,7 +24,10 @@ class ChunkDetailGenerator
 
     // Thread-safe given read-only details: one MultiMesh buffer per detail
     // (see ChunkMeshData::detail_buffers), with chunk-relative transforms.
-    std::vector<PackedFloat32Array> generate_detail_buffers(const TypedArray<JarTerrainDetail> &details,
+    // details[i] grows everywhere for biomes[i] == -1, else weighted by that biome.
+    std::vector<PackedFloat32Array> generate_detail_buffers(const std::vector<Ref<JarTerrainDetail>> &details,
+                                                            const std::vector<int> &detailBiomes,
+                                                            const Ref<JarBiomeMap> &biomeMap,
                                                             const ChunkMeshData &chunkMeshData);
 };
 

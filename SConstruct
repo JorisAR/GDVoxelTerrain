@@ -19,6 +19,7 @@ env.Append(CPPPATH=[
     "src/voxel/population",
     "src/voxel/population/details",
     "src/voxel/population/features",
+    "src/voxel/population/biomes",
 ])
 
 sources = (
@@ -31,6 +32,7 @@ sources = (
     + Glob("src/voxel/population/*.cpp")
     + Glob("src/voxel/population/details/*.cpp")
     + Glob("src/voxel/population/features/*.cpp")
+    + Glob("src/voxel/population/biomes/*.cpp")
 )
 
 if env["target"] != "template_release":

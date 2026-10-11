@@ -1,0 +1,23 @@
+[gd_resource type="JarBiomeMap" load_steps=6 format=3]
+
+[ext_resource type="JarBiome" path="res://demo/planet/temperate.tres" id="1"]
+[ext_resource type="JarBiome" path="res://demo/planet/tundra.tres" id="2"]
+[ext_resource type="JarBiome" path="res://demo/planet/steppe.tres" id="3"]
+
+[sub_resource type="FastNoiseLite" id="Temperature"]
+seed = 31
+frequency = 0.0004
+fractal_octaves = 3
+
+[sub_resource type="FastNoiseLite" id="Moisture"]
+seed = 47
+frequency = 0.0005
+fractal_octaves = 3
+
+[resource]
+biomes = Array[JarBiome]([ExtResource("1"), ExtResource("2"), ExtResource("3")])
+temperature_noise = SubResource("Temperature")
+moisture_noise = SubResource("Moisture")
+temperature_lapse = 0.2
+latitude_effect = 0.5
+blend = 0.25

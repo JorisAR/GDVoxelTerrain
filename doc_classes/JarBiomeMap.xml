@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="JarBiomeMap" inherits="Resource" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
+	<brief_description>
+		Places biomes on a volume from a simple climate model.
+	</brief_description>
+	<description>
+		Gives every position a climate: a temperature (from [member temperature_noise], lowered by [member temperature_lapse] with height above sea level and, on planets, by [member latitude_effect] towards the poles) and a moisture (from [member moisture_noise]). Each [JarBiome] sits at a point in that climate space; a position belongs to the biomes nearest to its climate, blended smoothly over [member blend], so biome borders follow the climate instead of a grid. Mountains get colder biomes, poles get colder biomes, and two noises are enough for varied, plausible regions.
+		Assign it to [member JarVoxelVolume.population_biome_map]. Everything is evaluated per point on worker threads; changing the map regenerates the population and remeshes.
+	</description>
+	<tutorials>
+	</tutorials>
+	<members>
+		<member name="biomes" type="JarBiome[]" setter="set_biomes" getter="get_biomes" default="[]">
+			The biomes. The first 4 can have their own ground materials in the default terrain shaders.
+		</member>
+		<member name="blend" type="float" setter="set_blend" getter="get_blend" default="0.25">
+			Distance in climate space over which neighbouring biomes blend. Small values give sharper borders.
+		</member>
+		<member name="latitude_effect" type="float" setter="set_latitude_effect" getter="get_latitude_effect" default="0.6">
+			Planets: how much colder it gets towards the poles (temperature drop at a pole).
+		</member>
+		<member name="moisture_noise" type="FastNoiseLite" setter="set_moisture_noise" getter="get_moisture_noise">
+			Noise for moisture (-1 dry to 1 wet). Without it, moisture is 0 everywhere.
+		</member>
+		<member name="pole_axis" type="Vector3" setter="set_pole_axis" getter="get_pole_axis" default="Vector3(0, 1, 0)">
+			Planets: the axis through the poles, in the volume's space.
+		</member>
+		<member name="temperature_lapse" type="float" setter="set_temperature_lapse" getter="get_temperature_lapse" default="0.2">
+			Temperature drop per 100 m above sea level, so mountains get colder biomes.
+		</member>
+		<member name="temperature_noise" type="FastNoiseLite" setter="set_temperature_noise" getter="get_temperature_noise">
+			Noise for temperature (-1 cold to 1 hot), before height and latitude. Without it, temperature only depends on those.
+		</member>
+	</members>
+</class>

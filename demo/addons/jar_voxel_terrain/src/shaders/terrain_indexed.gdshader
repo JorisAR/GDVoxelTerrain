@@ -13,7 +13,7 @@ void vertex() {
 }
 
 void fragment() {
-	JarContext c = jar_context(jar_position, jar_normal, -VERTEX.z);
+	JarContext c = jar_context(jar_position, jar_normal, jar_biomes, -VERTEX.z);
 	JarSurface s = JarSurface(vec3(0.0), vec3(0.0), 0.0, 0.0);
 	vec4 w = COLOR;
 	float painted = w.r + w.g + w.b + w.a;

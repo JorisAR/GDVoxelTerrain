@@ -111,8 +111,10 @@ func _test_moon() -> void:
 	var moon: Node3D = scene.get_node("MoonOrbit/Moon")
 	var player: DemoPlayer = scene.get_node("Player")
 	# Speed the moon up so a few seconds cover a lot of motion.
-	scene.get_node("MoonOrbit").degrees_per_second = 1.3 # ~250 m/s at 11 km
-	moon.degrees_per_second = 20.0
+	# Fast, but the orbit's centripetal acceleration must stay well below the
+	# moon's gravity (3 m/s²), or the player floats: ~60 m/s at 6 km.
+	scene.get_node("MoonOrbit").degrees_per_second = 0.6
+	moon.degrees_per_second = 10.0 # fast, but slow enough not to bounce off crater rims
 	add_child(scene)
 	await get_tree().physics_frame
 	player.global_position = moon.global_position + Vector3.UP * 360.0

@@ -397,6 +397,32 @@ ChunkMeshData *StitchedSurfaceNets::generate_mesh_data(const JarVoxelVolume &ter
     meshData[Mesh::ARRAY_NORMAL] = _normals;
     meshData[Mesh::ARRAY_COLOR] = colors;
     meshData[Mesh::ARRAY_CUSTOM0] = custom0;
+    // Biome weights for biomes 0-3 (CUSTOM1, RGBA8): the shader picks each
+    // biome's ground materials.
+    PackedByteArray custom1;
+    custom1.resize(_verts.size() * 4);
+    {
+        const Ref<JarBiomeMap> biomes = terrain.get_biome_map();
+        const UpField up = terrain.get_up_field();
+        const glm::vec3 origin = _chunk->_center;
+        uint8_t *w = custom1.ptrw();
+        for (int64_t v = 0; v < _verts.size(); ++v)
+        {
+            float weights[4] = {1.0f, 0.0f, 0.0f, 0.0f};
+            if (biomes.is_valid() && biomes->biome_count() > 1)
+            {
+                const Vector3 p = _verts[v];
+                const BiomeWeights b = biomes->evaluate(glm::vec3(p.x, p.y, p.z) + origin, up);
+                weights[0] = 0.0f;
+                for (int i = 0; i < b.count; ++i)
+                    if (b.ids[i] < 4)
+                        weights[b.ids[i]] += b.weights[i];
+            }
+            for (int i = 0; i < 4; ++i)
+                w[4 * v + i] = uint8_t(std::clamp(weights[i], 0.0f, 1.0f) * 255.0f + 0.5f);
+        }
+    }
+    meshData[Mesh::ARRAY_CUSTOM1] = custom1;
     meshData[Mesh::ARRAY_INDEX] = _indices;
 
     ChunkMeshData *output =

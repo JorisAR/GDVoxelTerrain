@@ -1,0 +1,18 @@
+[gd_resource type="JarTerrainDetail" load_steps=4 format=3]
+
+[ext_resource type="ArrayMesh" path="res://demo/assets/population/details/grass_clump_mesh.tres" id="1_mesh"]
+[ext_resource type="Material" path="res://demo/planet/grass_dry_material.tres" id="2_mat"]
+[ext_resource type="FastNoiseLite" path="res://demo/planet/forest_noise.tres" id="3_forest"]
+
+[resource]
+mesh = ExtResource("1_mesh")
+material = ExtResource("2_mat")
+density = 2.0
+draw_distance = 60.0
+minimum_scale = 0.6
+maximum_scale = 1.0
+align_with_normal = true
+minimum_height = 2.0
+height_falloff = 2.0
+maximum_slope = 32.0
+slope_falloff = 6.0

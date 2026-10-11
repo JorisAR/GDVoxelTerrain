@@ -7,6 +7,7 @@
 #include "terrain_detail.h"
 #include "terrain_material.h"
 #include "terrain_feature.h"
+#include "biome_map.h"
 #include "feature_manager.h"
 #include "up_field.h"
 #include "voxel_lod.h"
@@ -69,6 +70,7 @@ class JarVoxelVolume : public Node3D
     bool _materialsDirty = true;
     void apply_rendering_to_chunks();
     void on_terrain_material_changed();
+    void on_biome_map_changed();
     void rebuild_materials(); // main thread
 
     std::atomic<bool> _isBuilding{false};
@@ -124,6 +126,7 @@ class JarVoxelVolume : public Node3D
     // POPULATION
     TypedArray<JarTerrainDetail> _terrainDetails;
     TypedArray<JarTerrainFeature> _terrainFeatures;
+    Ref<JarBiomeMap> _biomeMap;
     float _featureCellSize = 64.0f;
     std::unique_ptr<FeatureManager> _featureManager;
     UpField _upField; // manual settings (UP_MODE_AXIS / UP_MODE_RADIAL)
@@ -316,6 +319,19 @@ class JarVoxelVolume : public Node3D
     int lod_at(const glm::vec3 &position) const;
 
     // POPULATION
+    // Population in effect: the volume's own features / details (biome -1,
+    // everywhere) followed by those of each biome of the biome map (weighted by
+    // that biome). Indices into these lists identify features and details.
+    template <typename T> struct PopulationEntry
+    {
+        Ref<T> item;
+        int biome;
+    };
+    std::vector<PopulationEntry<JarTerrainFeature>> population_features() const;
+    std::vector<PopulationEntry<JarTerrainDetail>> population_details() const;
+    Ref<JarBiomeMap> get_biome_map() const { return _biomeMap; }
+    void set_biome_map(const Ref<JarBiomeMap> &value);
+    Dictionary get_biome_weights_at(const Vector3 &global_position) const;
     void set_terrain_features(const TypedArray<JarTerrainFeature> &features);
     TypedArray<JarTerrainFeature> get_terrain_features() const { return _terrainFeatures; }
     void set_feature_cell_size(float value);

@@ -187,40 +187,29 @@ void JarVoxelChunk::update_chunk(JarVoxelVolume &terrain, VoxelOctreeNode *node,
     set_position({position.x, position.y, position.z});
 
     array_mesh->clear_surfaces();
-    // CUSTOM0 holds material weights 4..7 as 4 bytes per vertex.
+    // CUSTOM0 and CUSTOM1 hold 4 bytes per vertex (materials, biome weights).
     array_mesh->add_surface_from_arrays(Mesh::PRIMITIVE_TRIANGLES, chunk_mesh_data->mesh_array, Array(), Dictionary(),
-                                        Mesh::ARRAY_CUSTOM_RGBA8_UNORM << Mesh::ARRAY_FORMAT_CUSTOM0_SHIFT);
+                                        (Mesh::ARRAY_CUSTOM_RGBA8_UNORM << Mesh::ARRAY_FORMAT_CUSTOM0_SHIFT) |
+                                            (Mesh::ARRAY_CUSTOM_RGBA8_UNORM << Mesh::ARRAY_FORMAT_CUSTOM1_SHIFT));
     apply_rendering(terrain);
-
-    bool generate_collider = lod <= collider_lod_threshold && terrain.is_in_collider_range(position);
-
-    if (generate_collider)
-    {
-        // The chunks this one replaces lose their colliders right now (see
-        // VoxelOctreeNode::update_chunk), so near a viewer build the collider
-        // immediately: a queued one leaves a gap a character can fall through.
-        const float nearDistance = 2.0f * terrain.get_chunk_size() * terrain.get_voxel_size();
-        if (terrain.distance_to_nearest_viewer(position) < nearDistance)
-            update_collision_mesh();
-        else
-            terrain.enqueue_chunk_collider(this);
-    }
-    else
-    {
-        set_collider_active(false);
-    }
 
     //generate details. Chunks are pooled and change LOD, so anything that should
     //not show details must drop the instances left over from its previous use.
     // Transforms were computed on the mesh thread; only the upload happens here.
     const std::vector<PackedFloat32Array> &buffers = chunk_mesh_data->detail_buffers;
-    TypedArray<JarTerrainDetail> terrain_details = terrain.get_terrain_details();
+    const auto terrain_details = terrain.population_details();
     const int detail_count = lod > 0 ? 0 : std::min<int>(buffers.size(), terrain_details.size());
     _update_multi_mesh_instances(detail_count);
     for (int i = 0; i < detail_count; i++)
     {
         MultiMeshInstance3D *multi_mesh_instance = multi_mesh_instances[i];
-        Ref<JarTerrainDetail> detail = terrain_details[i];
+        Ref<JarTerrainDetail> detail = terrain_details[i].item;
+        if (detail.is_null())
+        {
+            if (multi_mesh_instance->get_multimesh().is_valid())
+                multi_mesh_instance->get_multimesh()->set_instance_count(0);
+            continue;
+        }
         Ref<MultiMesh> multi_mesh = multi_mesh_instance->get_multimesh();
         if (multi_mesh.is_null())
         {
@@ -239,10 +228,27 @@ void JarVoxelChunk::update_chunk(JarVoxelVolume &terrain, VoxelOctreeNode *node,
                                                           : MeshInstance3D::SHADOW_CASTING_SETTING_OFF);
     }
 
-    // The CPU copy of the mesh is only needed for a collider that is still to
-    // be built (update_collision_mesh releases it); the renderer keeps its own.
-    if (!generate_collider)
+    // Colliders last: building one releases the mesh data (chunk_mesh_data),
+    // which nothing above may then read.
+    bool generate_collider = lod <= collider_lod_threshold && terrain.is_in_collider_range(position);
+    if (generate_collider)
+    {
+        // The chunks this one replaces lose their colliders right now (see
+        // VoxelOctreeNode::update_chunk), so near a viewer build the collider
+        // immediately: a queued one leaves a gap a character can fall through.
+        const float nearDistance = 2.0f * terrain.get_chunk_size() * terrain.get_voxel_size();
+        if (terrain.distance_to_nearest_viewer(position) < nearDistance)
+            update_collision_mesh();
+        else
+            terrain.enqueue_chunk_collider(this);
+    }
+    else
+    {
+        set_collider_active(false);
+        // The CPU copy of the mesh is only needed for a collider that is still
+        // to be built (update_collision_mesh releases it); the renderer has its own.
         _chunk_mesh_data.reset();
+    }
 
     // Ref<StandardMaterial3D> stitch_material;
     // stitch_material.instantiate();

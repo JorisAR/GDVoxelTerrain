@@ -44,15 +44,16 @@ FeatureManager::~FeatureManager()
 void FeatureManager::refresh_features()
 {
     _features.clear();
+    _featureBiomes.clear();
     _range = 0.0f;
-    const TypedArray<JarTerrainFeature> features = _volume.get_terrain_features();
-    for (int64_t i = 0; i < features.size(); ++i)
+    for (const auto &entry : _volume.population_features())
     {
-        Ref<JarTerrainFeature> f = features[i];
-        _features.push_back(f);
-        if (f.is_valid())
-            _range = std::max(_range, f->get_draw_distance());
+        _features.push_back(entry.item);
+        _featureBiomes.push_back(entry.biome);
+        if (entry.item.is_valid())
+            _range = std::max(_range, entry.item->get_draw_distance());
     }
+    _biomeMap = _volume.get_biome_map();
     _cellSize = _volume.get_feature_cell_size();
 }
 
@@ -196,9 +197,11 @@ void FeatureManager::start_generation(const glm::ivec3 &key)
     shared->activeJobs++;
     const float cellSize = _cellSize;
     const std::vector<Ref<JarTerrainFeature>> features = _features;
+    const std::vector<int> featureBiomes = _featureBiomes;
+    const Ref<JarBiomeMap> biomes = _biomeMap;
     const UpField up = _volume.get_up_field();
-    JobSystem::get_pool().enqueue([shared, key, cellSize, features, sdf, up]() {
-        std::vector<Instance> instances = generate_cell(key, cellSize, features, sdf, up);
+    JobSystem::get_pool().enqueue([shared, key, cellSize, features, featureBiomes, biomes, sdf, up]() {
+        std::vector<Instance> instances = generate_cell(key, cellSize, features, featureBiomes, biomes, sdf, up);
         {
             std::lock_guard<std::mutex> lock(shared->mutex);
             shared->generated.emplace_back(key, std::move(instances));
@@ -401,7 +404,8 @@ std::vector<glm::ivec3> FeatureManager::scan_cells(const std::vector<glm::vec3> 
 
 std::vector<FeatureManager::Instance> FeatureManager::generate_cell(
     const glm::ivec3 &key, float cellSize, const std::vector<Ref<JarTerrainFeature>> &features,
-    const Ref<JarSignedDistanceField> &sdf, const UpField &upField)
+    const std::vector<int> &featureBiomes, const Ref<JarBiomeMap> &biomes, const Ref<JarSignedDistanceField> &sdf,
+    const UpField &upField)
 {
     std::vector<Instance> result;
     std::vector<glm::vec3> placed;    // positions of result
@@ -466,7 +470,12 @@ std::vector<FeatureManager::Instance> FeatureManager::generate_cell(
             const glm::vec3 onPlane = center + t1 * (s.x - side * 0.5f) + t2 * (s.y - side * 0.5f);
             // Mask and clusters only depend on the position: test them on the
             // sample's projection before paying for the ray march.
-            const float spread = feature.distribution(onPlane, up);
+            const int biome = f < int(featureBiomes.size()) ? featureBiomes[f] : -1;
+            // Biome features grow where their biome is, fading with its weight.
+            const auto biome_weight = [&](const glm::vec3 &at) {
+                return biome < 0 || biomes.is_null() ? 1.0f : biomes->evaluate(at, upField).weight_of(biome);
+            };
+            const float spread = feature.distribution(onPlane, up) * biome_weight(onPlane);
             if (keep >= spread)
                 continue;
             glm::vec3 p = onPlane + up * (side * 0.5f);
@@ -494,7 +503,7 @@ std::vector<FeatureManager::Instance> FeatureManager::generate_cell(
             // Ground fit, and the mask at the exact position (the projection
             // above was only an estimate): keep with the combined probability.
             const float fit = feature.terrain_fit(upField.height(p), normal, localUp);
-            const float exact = feature.distribution(p, localUp);
+            const float exact = feature.distribution(p, localUp) * biome_weight(p);
             if (keep >= fit * exact)
                 continue;
             bool blocked = false;

@@ -74,7 +74,15 @@ void MeshComputeScheduler::run_task(const JarVoxelVolume &terrain, VoxelOctreeNo
         if (chunkMeshData != nullptr && chunkMeshData->lod <= 0)
         {
             ChunkDetailGenerator generator(terrain.get_up_field());
-            chunkMeshData->detail_buffers = generator.generate_detail_buffers(terrain.get_terrain_details(), *chunkMeshData);
+            std::vector<Ref<JarTerrainDetail>> details;
+            std::vector<int> biomes;
+            for (const auto &entry : terrain.population_details())
+            {
+                details.push_back(entry.item);
+                biomes.push_back(entry.biome);
+            }
+            chunkMeshData->detail_buffers =
+                generator.generate_detail_buffers(details, biomes, terrain.get_biome_map(), *chunkMeshData);
         }
         ChunksToProcess.push(std::make_pair(&(chunk), chunkMeshData));
         _activeTasks--; // after the push, so is_meshing() never sees a gap

@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="JarBiome" inherits="Resource" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
+	<brief_description>
+		A biome of a [JarBiomeMap]: where it occurs in climate space, and its own features, details and ground materials.
+	</brief_description>
+	<description>
+		A biome sits at a point in climate space ([member temperature], [member moisture]); a [JarBiomeMap] gives every position on a volume a climate and blends the biomes nearest to it. Inside a biome, its [member features] and [member details] grow (weighted by how strongly the biome is present), and the terrain shader's ground rules use its ground materials. In the default terrain shaders the first 4 biomes of a map can have their own ground materials; any number can have their own population.
+	</description>
+	<tutorials>
+	</tutorials>
+	<members>
+		<member name="cliff_material" type="int" setter="set_cliff_material" getter="get_cliff_material" default="-1">
+			Material ([member JarVoxelVolume.materials] index) for steep ground in this biome; [code]-1[/code] keeps the shader's [code]cliff_material[/code].
+		</member>
+		<member name="details" type="JarTerrainDetail[]" setter="set_details" getter="get_details" default="[]">
+			Details that grow in this biome, in addition to the volume's own [member JarVoxelVolume.population_terrain_details].
+		</member>
+		<member name="features" type="JarTerrainFeature[]" setter="set_features" getter="get_features" default="[]">
+			Features placed in this biome, in addition to the volume's own [member JarVoxelVolume.population_terrain_features]. They are placed after the volume's features, as layers in this order.
+		</member>
+		<member name="ground_material" type="int" setter="set_ground_material" getter="get_ground_material" default="-1">
+			Material for flat ground in this biome; [code]-1[/code] keeps the shader's [code]ground_material[/code].
+		</member>
+		<member name="moisture" type="float" setter="set_moisture" getter="get_moisture" default="0.0">
+			Moisture of this biome's climate point, -1 (dry) to 1 (wet).
+		</member>
+		<member name="peak_material" type="int" setter="set_peak_material" getter="get_peak_material" default="-1">
+			Material for high ground (peaks) in this biome; [code]-1[/code] keeps the shader's [code]peak_material[/code].
+		</member>
+		<member name="seabed_material" type="int" setter="set_seabed_material" getter="get_seabed_material" default="-1">
+			Material under water in this biome; [code]-1[/code] keeps the shader's [code]seabed_material[/code].
+		</member>
+		<member name="shore_material" type="int" setter="set_shore_material" getter="get_shore_material" default="-1">
+			Material near sea level in this biome; [code]-1[/code] keeps the shader's [code]shore_material[/code].
+		</member>
+		<member name="temperature" type="float" setter="set_temperature" getter="get_temperature" default="0.0">
+			Temperature of this biome's climate point, -1 (cold) to 1 (hot).
+		</member>
+	</members>
+</class>

@@ -24,6 +24,9 @@ uniform sampler2DArray jar_normal_textures : hint_normal, filter_linear_mipmap_a
 uniform bool jar_has_albedo_textures = false;
 uniform bool jar_has_normal_textures = false;
 uniform int jar_material_count = 0;
+// Biomes (JarBiomeMap): count, and per-vertex weights of biomes 0-3 (CUSTOM1).
+// Biome b's ground rule materials are in the palette at (b, 2) and (b, 3).
+uniform int jar_biome_count = 0;
 
 // Unpainted ground is covered by rules. Values are indices into the volume's
 // materials; -1 disables a rule.
@@ -63,10 +66,11 @@ group_uniforms;
 
 varying vec3 jar_position; // volume space
 varying vec3 jar_normal;   // volume space
+varying vec4 jar_biomes;   // weights of biomes 0-3
 
 // Use in vertex(): fills jar_position and jar_normal (varyings may only be
 // written in the stage functions themselves).
-#define JAR_VERTEX jar_position = jar_chunk_origin + VERTEX; jar_normal = NORMAL;
+#define JAR_VERTEX jar_position = jar_chunk_origin + VERTEX; jar_normal = NORMAL; jar_biomes = CUSTOM1;
 
 // --- Noise ------------------------------------------------------------------
 
@@ -102,11 +106,13 @@ struct JarContext {
 	float hue;      // 0..1 large patches
 	float detail;   // 0..1 fine detail, faded with distance
 	float fade;     // fine detail strength (1 near, 0 far)
+	vec4 biomes;    // weights of biomes 0-3
 };
 
-// Use in fragment(): JarContext c = jar_context(jar_position, jar_normal, -VERTEX.z);
-JarContext jar_context(vec3 position, vec3 normal, float view_distance) {
+// Use in fragment(): JarContext c = jar_context(jar_position, jar_normal, jar_biomes, -VERTEX.z);
+JarContext jar_context(vec3 position, vec3 normal, vec4 biomes, float view_distance) {
 	JarContext c;
+	c.biomes = biomes;
 	c.position = position;
 	c.normal = normalize(normal);
 	bool radial = jar_up_axis.w > 0.5;
@@ -171,7 +177,18 @@ void jar_add_material(inout JarSurface s, JarContext c, int id, float w) {
 	s.weight += w;
 }
 
-// Covers `amount` of the surface with the ground rules.
+// Rule material of a biome: its own (palette rows 2-3), or the shader's.
+int jar_biome_material(int biome, int rule, int fallback) {
+	if (biome >= jar_biome_count || biome > 3)
+		return fallback;
+	vec4 a = texelFetch(jar_palette, ivec2(biome, 2), 0);
+	float id = rule == 0 ? a.x : rule == 1 ? a.y : rule == 2 ? a.z : rule == 3 ? a.w : texelFetch(jar_palette, ivec2(biome, 3), 0).x;
+	return id < -0.5 ? fallback : int(round(id));
+}
+
+// Covers `amount` of the surface with the ground rules: ground, cliff, shore,
+// seabed and peaks by slope and height. With biomes, each biome present here
+// uses its own materials for the same rules.
 void jar_add_ground(inout JarSurface s, JarContext c, float amount) {
 	if (amount < 0.004)
 		return;
@@ -181,26 +198,36 @@ void jar_add_ground(inout JarSurface s, JarContext c, float amount) {
 	float cliff_cos = cos(radians(cliff_angle));
 	float blend_cos = sin(radians(cliff_angle)) * radians(cliff_blend) * 0.5;
 	float cliff = 1.0 - smoothstep(cliff_cos - blend_cos, cliff_cos + blend_cos, slope_cos);
-	float seabed = seabed_material >= 0
-		? 1.0 - smoothstep(-seabed_depth - seabed_blend, -seabed_depth + seabed_blend, h) : 0.0;
-	float shore = shore_material >= 0
-		? 1.0 - smoothstep(shore_height - shore_blend, shore_height + shore_blend, h) : 0.0;
-	float peak = peak_material >= 0
-		? smoothstep(peak_height - peak_blend, peak_height + peak_blend, c.height + r * peak_blend) : 0.0;
-	cliff = cliff_material >= 0 ? cliff : 0.0;
+	float seabed = 1.0 - smoothstep(-seabed_depth - seabed_blend, -seabed_depth + seabed_blend, h);
+	float shore = 1.0 - smoothstep(shore_height - shore_blend, shore_height + shore_blend, h);
+	float peak = smoothstep(peak_height - peak_blend, peak_height + peak_blend, c.height + r * peak_blend);
 
-	float w_seabed = seabed;
-	float above = 1.0 - w_seabed;
-	float w_cliff = above * cliff;
-	float flat_ground = above * (1.0 - cliff);
-	float w_shore = flat_ground * shore;
-	float w_peak = flat_ground * (1.0 - shore) * peak;
-	float w_ground = flat_ground * (1.0 - shore) * (1.0 - peak);
-	jar_add_material(s, c, seabed_material, w_seabed * amount);
-	jar_add_material(s, c, cliff_material, w_cliff * amount);
-	jar_add_material(s, c, shore_material, w_shore * amount);
-	jar_add_material(s, c, peak_material, w_peak * amount);
-	jar_add_material(s, c, ground_material, w_ground * amount);
+	int biome_count = jar_biome_count > 0 ? min(jar_biome_count, 4) : 1;
+	for (int b = 0; b < biome_count; b++) {
+		float weight = jar_biome_count > 0 ? c.biomes[b] : 1.0;
+		if (weight < 0.004)
+			continue;
+		int m_ground = jar_biome_material(b, 0, ground_material);
+		int m_cliff = jar_biome_material(b, 1, cliff_material);
+		int m_shore = jar_biome_material(b, 2, shore_material);
+		int m_seabed = jar_biome_material(b, 3, seabed_material);
+		int m_peak = jar_biome_material(b, 4, peak_material);
+		// A rule without a material leaves its share to the next rule down.
+		float w_seabed = m_seabed >= 0 ? seabed : 0.0;
+		float above = 1.0 - w_seabed;
+		float w_cliff = m_cliff >= 0 ? above * cliff : 0.0;
+		float flat_ground = above - w_cliff;
+		float w_shore = m_shore >= 0 ? flat_ground * shore : 0.0;
+		float rest = flat_ground - w_shore;
+		float w_peak = m_peak >= 0 ? rest * peak : 0.0;
+		float w_ground = rest - w_peak;
+		float k = amount * weight;
+		jar_add_material(s, c, m_seabed, w_seabed * k);
+		jar_add_material(s, c, m_cliff, w_cliff * k);
+		jar_add_material(s, c, m_shore, w_shore * k);
+		jar_add_material(s, c, m_peak, w_peak * k);
+		jar_add_material(s, c, m_ground, w_ground * k);
+	}
 }
 
 // Writes the blended surface. Fine procedural detail bumps the normal (screen

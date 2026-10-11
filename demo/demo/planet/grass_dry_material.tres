@@ -1,0 +1,8 @@
+[gd_resource type="ShaderMaterial" load_steps=2 format=3]
+
+[ext_resource type="Shader" path="res://demo/assets/population/details/grass.gdshader" id="1"]
+
+[resource]
+shader = ExtResource("1")
+shader_parameter/base_color = Color(0.24, 0.2, 0.08, 1)
+shader_parameter/tip_color = Color(0.62, 0.55, 0.28, 1)
