@@ -73,10 +73,19 @@ func _run(camera: Node3D) -> void:
 	await _settle()
 	_check("paint keeps shape", absf(_ground_height(paint_spot) - paint_ground) < 0.05,
 		"%.3f -> %.3f" % [paint_ground, _ground_height(paint_spot)])
-	var weights := _material_weights_near(Vector3(paint_spot.x, paint_ground, paint_spot.z), 1.5)
-	_check("paint sets material", weights.size() > 0 and weights.min() > 0.9, "material 5 weight near center: %s" % [weights.slice(0, 4)])
-	var outside := _material_weights_near(Vector3(paint_spot.x + 8, _ground_height(paint_spot + Vector3(8, 0, 0)), paint_spot.z), 1.5)
-	_check("paint stays inside", outside.size() > 0 and outside.max() < 0.01, "%s" % [outside.slice(0, 4)])
+	var center := Vector3(paint_spot.x, paint_ground, paint_spot.z)
+	var away := Vector3(paint_spot.x + 8, _ground_height(paint_spot + Vector3(8, 0, 0)), paint_spot.z)
+	# Every material mode encodes material 5 differently; decode each.
+	for mode in [JarVoxelVolume.MATERIAL_MODE_WEIGHTS, JarVoxelVolume.MATERIAL_MODE_SPLIT, JarVoxelVolume.MATERIAL_MODE_INDEXED]:
+		volume.material_mode = mode
+		await _settle()
+		var label: String = ["weights", "split", "indexed"][mode]
+		var weights := _material_weights_near(center, 1.5, mode)
+		_check("paint sets material (%s)" % label, weights.size() > 0 and weights.min() > 0.9, "material 5 weight near center: %s" % [weights.slice(0, 4)])
+		var outside := _material_weights_near(away, 1.5, mode)
+		_check("paint stays inside (%s)" % label, outside.size() > 0 and outside.max() < 0.01, "%s" % [outside.slice(0, 4)])
+	volume.material_mode = JarVoxelVolume.MATERIAL_MODE_WEIGHTS
+	await _settle()
 
 	# 5. Unbounded SDFs are rejected by edit() instead of editing the whole world.
 	volume.edit(JarPlaneSdf.new(), JarVoxelVolume.SDF_OPERATION_UNION, Transform3D())
@@ -105,8 +114,10 @@ func _ground_height(at: Vector3) -> float:
 	var hit := space.intersect_ray(query)
 	return hit.position.y if hit else NAN
 
-## CUSTOM0 green (material 5) of chunk vertices within `radius` of `at`.
-func _material_weights_near(at: Vector3, radius: float) -> Array:
+## Weight of material 5 at chunk vertices within `radius` of `at`, decoded per
+## material mode (weights: CUSTOM0.g; split: CUSTOM0.r is the triangle's id;
+## indexed: CUSTOM0 holds 4 ids, COLOR their weights).
+func _material_weights_near(at: Vector3, radius: float, mode := 0) -> Array:
 	var result := []
 	for c in volume.get_children():
 		if not (c is JarVoxelChunk and c.visible and c.get_lod() == 0):
@@ -116,9 +127,23 @@ func _material_weights_near(at: Vector3, radius: float) -> Array:
 			continue
 		var arrays := mesh.surface_get_arrays(0)
 		var verts: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
+		var colors: PackedColorArray = arrays[Mesh.ARRAY_COLOR]
 		var custom: PackedByteArray = arrays[Mesh.ARRAY_CUSTOM0]
 		for i in verts.size():
-			if (c.position + verts[i]).distance_to(at) < radius:
-				result.append(custom[4 * i + 1] / 255.0)
+			if (c.position + verts[i]).distance_to(at) >= radius:
+				continue
+			match mode:
+				0:
+					result.append(custom[4 * i + 1] / 255.0)
+				1:
+					result.append(1.0 if custom[4 * i] == 5 else 0.0)
+				2:
+					var w := 0.0
+					var col := colors[i]
+					var ws := [col.r, col.g, col.b, col.a]
+					for k in 4:
+						if custom[4 * i + k] == 5:
+							w = ws[k]
+							break
+					result.append(w)
 	return result
-

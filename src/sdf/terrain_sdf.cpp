@@ -106,10 +106,10 @@ glm::vec3 JarTerrainSdf::height_gradient(const glm::vec3 &surface, const glm::ve
     return t1 * ((at(t1 * e) - at(-t1 * e)) / (2.0f * e)) + t2 * ((at(t2 * e) - at(-t2 * e)) / (2.0f * e));
 }
 
-JarTerrainSdf::Sample JarTerrainSdf::evaluate(const glm::vec3 &surface, const glm::vec3 &up) const
+JarTerrainSdf::Sample JarTerrainSdf::evaluate(const glm::vec3 &surface, const glm::vec3 &up, bool localGradient) const
 {
     const float h = layered_height(surface);
-    Sample result{h, height_gradient(surface, up, h, 0.5f)};
+    Sample result{h, localGradient ? height_gradient(surface, up, h, 0.5f) : glm::vec3(0.0f), h};
     const float range = max_layered_height();
     if (!_erosion || _octaves <= 0 || _erosionStrength <= 0.0f || range <= 0.0f)
         return result;
@@ -228,14 +228,18 @@ float JarTerrainSdf::distance(const glm::vec3 &pos) const
     // Far from the surface the terrain cannot matter: return a lower bound,
     // blended in over a band so the field stays continuous.
     const float reach = max_deviation();
-    const float band = 0.5f * reach + 1.0f;
+    const float band = 2.0f * reach + 1.0f; // wide enough to keep the blend shallow
     const float far = std::abs(above) - reach;
     const float bound = above > 0.0f ? far : -far;
     if (far >= band)
         return bound;
 
-    const Sample terrain = evaluate(surface, up);
-    // Height difference divided by the slope: close to a true distance.
+    // Height difference divided by the slope is close to a true distance. Only
+    // the erosion's slope is used (it comes for free and makes the steep
+    // gullies); the layers' own slope would cost two more noise samples per
+    // sample, and gentle noise terrain stays within the octree's margin
+    // without it (dual contouring corrects distances by the gradient anyway).
+    const Sample terrain = evaluate(surface, up, false);
     const float d = (above - terrain.height) / std::sqrt(1.0f + glm::dot(terrain.gradient, terrain.gradient));
     if (far <= 0.0f)
         return d;

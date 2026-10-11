@@ -1,4 +1,5 @@
 #include "stitched_surface_nets.h"
+#include "material_mesh_builder.h"
 #include <unordered_set>
 #include <godot_cpp/classes/array_mesh.hpp>
 #include <godot_cpp/core/class_db.hpp>
@@ -13,7 +14,8 @@ StitchedSurfaceNets::StitchedSurfaceNets(const JarVoxelVolume &terrain, const Vo
     : _chunk(&chunk), _cubicVoxels(terrain.get_cubic_voxels()),
       _dualContouring(terrain.get_meshing_algorithm() == JarVoxelVolume::MESHING_DUAL_CONTOURING),
       _manifold(terrain.get_manifold() && !terrain.get_cubic_voxels()),
-      _featureThreshold(terrain.get_dual_contouring_feature_threshold()), _sdf(terrain.get_sdf_ptr()),
+      _featureThreshold(terrain.get_dual_contouring_feature_threshold()),
+      _materialMode(static_cast<MaterialMode>(terrain.get_material_mode())), _sdf(terrain.get_sdf_ptr()),
       _meshChunk(StitchedMeshChunk(terrain, chunk))
 {
     if (_manifold)
@@ -139,7 +141,7 @@ glm::vec3 StitchedSurfaceNets::place_dual_contouring_vertex(const int node_id, c
 void StitchedSurfaceNets::create_vertex(const int node_id, const std::vector<int> &neighbours, const bool on_ring)
 {
     glm::vec3 vertexPosition(0.0f);
-    glm::vec4 color(0, 0, 0, 0), color2(0, 0, 0, 0);
+    MaterialAccumulator materials;
     glm::vec3 normal(0.0f);
     int duplicates = 0, edge_crossings = 0;
     for (auto &edge : StitchedMeshChunk::Edges)
@@ -161,9 +163,8 @@ void StitchedSurfaceNets::create_vertex(const int node_id, const std::vector<int
         float t = glm::abs(valueA) / (glm::abs(valueA) + glm::abs(valueB));
         vertexPosition += glm::mix(posA, posB, t);
         edge_crossings++;
-        const MaterialWeights ma = na->get_materials(), mb = nb->get_materials();
-        color += glm::mix(ma.low(), mb.low(), t);
-        color2 += glm::mix(ma.high(), mb.high(), t);
+        materials.add(na->get_materials(), 1.0f - t);
+        materials.add(nb->get_materials(), t);
     }
 
     if (edge_crossings <= 0)
@@ -192,8 +193,7 @@ void StitchedSurfaceNets::create_vertex(const int node_id, const std::vector<int
     }
 
     vertexPosition /= static_cast<float>(edge_crossings);
-    color /= static_cast<float>(edge_crossings);
-    color2 /= static_cast<float>(edge_crossings);
+    materials.scale(1.0f / static_cast<float>(edge_crossings));
     normal = glm::normalize(normal);
     if (_cubicVoxels)
         vertexPosition = _meshChunk.nodes[node_id]->_center;
@@ -219,14 +219,7 @@ void StitchedSurfaceNets::create_vertex(const int node_id, const std::vector<int
     _sharp.push_back(_dualContouring && _lastVertexSharp ? 1 : 0);
     _verts.push_back({vertexPosition.x, vertexPosition.y, vertexPosition.z});
     _normals.push_back({normal.x, normal.y, normal.z});
-    push_materials(color, color2);
-}
-
-void StitchedSurfaceNets::push_materials(const glm::vec4 &low, const glm::vec4 &high)
-{
-    _colors.push_back({low.r, low.g, low.b, low.a});
-    for (int i = 0; i < 4; ++i)
-        _custom0.push_back(uint8_t(std::clamp(high[i], 0.0f, 1.0f) * 255.0f + 0.5f));
+    _vertexMaterials.push_back(VertexMaterials::from(materials));
 }
 
 ChunkMeshData *StitchedSurfaceNets::generate_mesh_data(const JarVoxelVolume &terrain)
@@ -396,14 +389,21 @@ ChunkMeshData *StitchedSurfaceNets::generate_mesh_data(const JarVoxelVolume &ter
     meshData.resize(Mesh::ARRAY_MAX);
     meshData[Mesh::ARRAY_VERTEX] = _verts;
     meshData[Mesh::ARRAY_NORMAL] = _normals;
-    meshData[Mesh::ARRAY_COLOR] = _colors;
-    meshData[Mesh::ARRAY_CUSTOM0] = _custom0;
+    PackedColorArray colors;
+    PackedByteArray custom0;
+    PackedFloat32Array painted;
+    MaterialMeshBuilder::build(_materialMode, _verts, _normals, _indices, _vertexMaterials, colors, custom0, painted);
+    meshData[Mesh::ARRAY_VERTEX] = _verts; // the builder may have split vertices
+    meshData[Mesh::ARRAY_NORMAL] = _normals;
+    meshData[Mesh::ARRAY_COLOR] = colors;
+    meshData[Mesh::ARRAY_CUSTOM0] = custom0;
     meshData[Mesh::ARRAY_INDEX] = _indices;
 
     ChunkMeshData *output =
         new ChunkMeshData(meshData, _chunk->get_lod(), _meshChunk.is_edge_chunk(), _chunk->get_bounds(terrain.get_voxel_size()));
     output->boundaries = _meshChunk._lodH2LBoundaries | (_meshChunk._lodL2HBoundaries << 8);
     output->mesh_version = terrain.get_mesh_version();
+    output->painted = painted;
 
     return output;
 }
@@ -602,7 +602,7 @@ void StitchedSurfaceNets::create_component_vertices(const int node_id, const std
     {
         uint16_t edgeMask = 0;
         glm::vec3 position(0.0f), normal(0.0f);
-        glm::vec4 color(0.0f), color2(0.0f);
+        MaterialAccumulator materials;
         int crossings = 0;
         for (int e = 0; e < 12; ++e)
         {
@@ -614,15 +614,13 @@ void StitchedSurfaceNets::create_component_vertices(const int node_id, const std
             const float va = na->get_value(), vb = nb->get_value();
             const float t = std::abs(va) / (std::abs(va) + std::abs(vb));
             position += glm::mix(na->_center, nb->_center, t);
-            const MaterialWeights ma = na->get_materials(), mb = nb->get_materials();
-            color += glm::mix(ma.low(), mb.low(), t);
-            color2 += glm::mix(ma.high(), mb.high(), t);
+            materials.add(na->get_materials(), 1.0f - t);
+            materials.add(nb->get_materials(), t);
             normal += (vb - va) * (nb->_center - na->_center);
             crossings++;
         }
         position /= float(crossings);
-        color /= float(crossings);
-        color2 /= float(crossings);
+        materials.scale(1.0f / float(crossings));
         normal = glm::length(normal) > 0.0f ? glm::normalize(normal) : glm::vec3(0.0f, 1.0f, 0.0f);
         if (_dualContouring)
         {
@@ -637,7 +635,7 @@ void StitchedSurfaceNets::create_component_vertices(const int node_id, const std
         _sharp.push_back(_dualContouring && _lastVertexSharp ? 1 : 0);
         _verts.push_back({position.x, position.y, position.z});
         _normals.push_back({normal.x, normal.y, normal.z});
-        push_materials(color, color2);
+        _vertexMaterials.push_back(VertexMaterials::from(materials));
     }
 }
 
@@ -741,9 +739,7 @@ void StitchedSurfaceNets::split_creases()
                 {
                     target = int(_verts.size());
                     _verts.push_back(_verts[v]);
-                    _colors.push_back(_colors[v]);
-                    for (int i = 0; i < 4; ++i)
-                        _custom0.push_back(_custom0[4 * v + i]);
+                    _vertexMaterials.push_back(_vertexMaterials[v]);
                     _normals.push_back(n);
                 }
                 variants.emplace_back(n, target);

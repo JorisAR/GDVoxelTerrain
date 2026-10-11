@@ -1,7 +1,0 @@
-[gd_resource type="ShaderMaterial" load_steps=2 format=3 uid="uid://bxgska12d7p0a"]
-
-[ext_resource type="Shader" path="res://addons/jar_voxel_terrain/src/shaders/terrain.gdshader" id="1_skge8"]
-
-[resource]
-render_priority = 0
-shader = ExtResource("1_skge8")

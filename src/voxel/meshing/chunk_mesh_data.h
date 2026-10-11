@@ -29,6 +29,8 @@ class ChunkMeshData
     // One MultiMesh buffer (TRANSFORM_3D layout, 12 floats per instance) per
     // terrain detail, filled on the mesh thread. Empty when the chunk shows none.
     std::vector<PackedFloat32Array> detail_buffers;
+    // Painted amount per vertex (0 = ground): details avoid painted ground.
+    PackedFloat32Array painted;
     // ChunkDetailData chunk_detail_data;
 
     bool has_collision_mesh() const

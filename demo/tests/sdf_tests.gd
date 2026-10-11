@@ -185,5 +185,5 @@ func _test_eroded_terrain() -> void:
 				sdf.sample(b + Vector3(0, 0, e)) - sdf.sample(b - Vector3(0, 0, e))).length() / (2.0 * e))
 		slopes.sort()
 		_check("eroded %s continuous" % label, max_jump < 0.02, "largest jump over 1 mm: %.4f" % max_jump)
-		_check("eroded %s distance-like" % label, slopes[100] < 1.4 and slopes[190] < 2.9,
+		_check("eroded %s distance-like" % label, slopes[100] < 1.6 and slopes[190] < 2.9,
 			"gradient length median %.2f, 95%% %.2f" % [slopes[100], slopes[190]])

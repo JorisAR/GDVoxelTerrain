@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="JarTerrainMaterial" inherits="Resource" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
+	<brief_description>
+		One surface material of a [JarVoxelVolume]: grass, rock, sand, painted stone...
+	</brief_description>
+	<description>
+		Materials are listed in [member JarVoxelVolume.materials]; a material's index is the id that edits and [method JarVoxelVolume.paint] write, and that the shader's ground rules ([code]ground_material[/code], [code]cliff_material[/code], ...) refer to.
+		The volume packs all its materials into a palette texture and texture arrays for the terrain shader, so the default shaders and your own shaders see the same materials. Without textures a material is shaded procedurally: [member albedo] with large-scale brightness and hue variation and fine detail, controlled by [member variation] and the shader's [code]look[/code] settings.
+	</description>
+	<tutorials>
+	</tutorials>
+	<members>
+		<member name="albedo" type="Color" setter="set_albedo" getter="get_albedo" default="Color(0.5, 0.5, 0.5, 1)">
+			Base color (sRGB). With an [member albedo_texture] it tints the texture.
+		</member>
+		<member name="albedo_texture" type="Texture2D" setter="set_albedo_texture" getter="get_albedo_texture">
+			Optional color texture, applied with triplanar mapping. All textures of a volume are converted to the size of the first one and packed into a texture array.
+		</member>
+		<member name="normal_texture" type="Texture2D" setter="set_normal_texture" getter="get_normal_texture">
+			Optional normal map, applied with triplanar mapping.
+		</member>
+		<member name="roughness" type="float" setter="set_roughness" getter="get_roughness" default="0.85">
+			Surface roughness.
+		</member>
+		<member name="texture_size" type="float" setter="set_texture_size" getter="get_texture_size" default="4.0">
+			Meters covered by one tile of the textures.
+		</member>
+		<member name="variation" type="float" setter="set_variation" getter="get_variation" default="0.25">
+			Strength of the procedural variation (large brightness and warm/cool patches, fine detail). [code]0[/code] gives a flat color.
+		</member>
+	</members>
+</class>

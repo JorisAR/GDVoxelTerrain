@@ -5,6 +5,7 @@
 #include "modify_settings.h"
 #include "signed_distance_field.h"
 #include "terrain_detail.h"
+#include "terrain_material.h"
 #include "terrain_feature.h"
 #include "feature_manager.h"
 #include "up_field.h"
@@ -61,8 +62,14 @@ class JarVoxelVolume : public Node3D
     int _depth = 14;          // octree levels, derived from extent / voxel size in initialize()
 
     Ref<PackedScene> _chunkScene;
-    Ref<Material> _material; // overrides the chunk scene's material when set
+    Ref<Material> _material;          // user material; empty uses the default for the material mode
+    Ref<Material> _runtimeMaterial;   // what chunks use: a per-volume copy with the material palette
+    TypedArray<JarTerrainMaterial> _terrainMaterials;
+    std::atomic<int> _materialMode{0}; // MaterialMode; read by mesh threads
+    bool _materialsDirty = true;
     void apply_rendering_to_chunks();
+    void on_terrain_material_changed();
+    void rebuild_materials(); // main thread
 
     std::atomic<bool> _isBuilding{false};
     bool _initialBuildRequested = false; // first build waits for process(), when the player is in the tree
@@ -230,8 +237,22 @@ class JarVoxelVolume : public Node3D
     int get_min_chunk_size() const { return ChunkSizeLog2; }
     int get_chunk_size() const { return 1 << ChunkSizeLog2; }
 
+    enum MaterialMode
+    {
+        MATERIAL_MODE_WEIGHTS = 0, // materials 0-7, smooth blends (COLOR + CUSTOM0)
+        MATERIAL_MODE_SPLIT = 1,   // one material per triangle, crisp borders, 255 materials
+        MATERIAL_MODE_INDEXED = 2, // per triangle the 4 strongest of 255 materials, smooth blends
+    };
     Ref<Material> get_material() const { return _material; }
     void set_material(const Ref<Material> &value);
+    Ref<Material> get_runtime_material() const { return _runtimeMaterial; }
+    // Rebuilds the per-volume material (palette, textures, defaults) before the
+    // next frame. Call after changing materials from code.
+    void update_materials();
+    MaterialMode get_material_mode() const { return static_cast<MaterialMode>(_materialMode.load()); }
+    void set_material_mode(MaterialMode mode);
+    TypedArray<JarTerrainMaterial> get_terrain_materials() const { return _terrainMaterials; }
+    void set_terrain_materials(const TypedArray<JarTerrainMaterial> &materials);
     Ref<PackedScene> get_chunk_scene() const;
     void set_chunk_scene(const Ref<PackedScene> &value);
 
@@ -302,6 +323,7 @@ class JarVoxelVolume : public Node3D
 
 VARIANT_ENUM_CAST(JarVoxelVolume::Operation);
 VARIANT_ENUM_CAST(JarVoxelVolume::UpMode);
+VARIANT_ENUM_CAST(JarVoxelVolume::MaterialMode);
 VARIANT_ENUM_CAST(JarVoxelVolume::MeshingAlgorithm);
 
 #endif // VOXEL_VOLUME_H

@@ -57,7 +57,8 @@ class JarTerrainSdf : public JarSignedDistanceField
     struct Sample
     {
         float height;       // eroded height above the base surface
-        glm::vec3 gradient; // tangent gradient of the height
+        glm::vec3 gradient; // tangent gradient of the height (see evaluate)
+        float layered;      // height before erosion
     };
 
     void frame(const glm::vec3 &pos, glm::vec3 &surface, glm::vec3 &up, float &above) const;
@@ -65,7 +66,9 @@ class JarTerrainSdf : public JarSignedDistanceField
     float max_layered_height() const;
     glm::vec3 height_gradient(const glm::vec3 &surface, const glm::vec3 &up, float h, float step) const;
     float max_deviation() const;
-    Sample evaluate(const glm::vec3 &surface, const glm::vec3 &up) const;
+    // Without `localGradient` the gradient only holds the erosion's part (the
+    // layers' slope costs two more noise samples); add it with height_gradient.
+    Sample evaluate(const glm::vec3 &surface, const glm::vec3 &up, bool localGradient = true) const;
 
     template <typename T> void set_shape_property(T &field, const T &value)
     {

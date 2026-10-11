@@ -321,7 +321,7 @@ void VoxelOctreeNode::modify_sdf_in_bounds(JarVoxelVolume &terrain, const Modify
         const float inside = -settings.sample(_center) / terrain.get_voxel_size();
         if (inside > -1.0f && settings.material >= 0)
         {
-            _materials = MaterialWeights::mix(_materials, MaterialWeights::one_hot(settings.material),
+            _materials = MaterialWeights::mix(_materials, settings.material,
                                               std::clamp(inside + 1.0f, 0.0f, 1.0f));
             set_flag(FlagGenerated, true);
             mark_edited();

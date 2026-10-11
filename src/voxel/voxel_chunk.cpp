@@ -269,7 +269,7 @@ void JarVoxelChunk::update_chunk(JarVoxelVolume &terrain, VoxelOctreeNode *node,
 // chunk's origin in the volume and the volume's up field.
 void JarVoxelChunk::apply_rendering(const JarVoxelVolume &terrain)
 {
-    const Ref<Material> volumeMaterial = terrain.get_material();
+    const Ref<Material> volumeMaterial = terrain.get_runtime_material();
     if (volumeMaterial.is_valid() && mesh_instance->get_material_override() != volumeMaterial)
         mesh_instance->set_material_override(volumeMaterial);
     const UpField &up = terrain.get_up_field();

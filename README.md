@@ -42,7 +42,7 @@ Open the `demo` project in Godot and run one of the scenes in `demo/demo`:
 - `moon.tscn`: a planet with an orbiting, spinning moon; you can land on the moon and it carries you along.
 
 Controls: `WASD` move, `Space` jump, `Shift` sprint, `Tab` toggle flying (`Space`/`Shift` up/down, `Ctrl` + scroll speed), `M` toggle surface nets / dual contouring, `Esc` release the mouse.
-Editing: `left click` dig, `right click` add, `Q` next brush (sphere, box, cone, prism, torus), `scroll` brush size, `E` smooth blending, `1`-`8` material, `P` paint mode (left click paints instead of digging), `R` toggle the brush preview.
+Editing: `left click` dig, `right click` add, `Q` next brush (sphere, box, cone, prism, torus), `scroll` brush size, `E` smooth blending, `1`-`8` material (of the built-in set), `P` paint mode (left click paints instead of digging), `R` toggle the brush preview.
 
 The editing scripts in `demo/demo/editing` are meant to be reused: `SdfEditor` edits with any SDF resource you assign (plus an optional preview mesh), `BrushEditor` adds the built-in brushes. `demo/demo/player` contains the character controller, which follows Godot's gravity (an `Area3D` with point gravity makes a planet). Put gravity areas in the `gravity_frames` group to have the player move along with their parent (e.g. an orbiting moon).
 
@@ -67,7 +67,7 @@ The editing scripts in `demo/demo/editing` are meant to be reused: `SdfEditor` e
 - Population rules: `minimum_slope` (a cosine) is replaced by `maximum_slope` in degrees (`minimum_slope = 0.85` becomes `maximum_slope = 32`); the unused `max_lod` is gone. Height ranges now default to unlimited.
 - `JarPlanetSdf` and the old `JarTerrainSdf` are merged into `JarTerrainSdf`: set `shape` to *Sphere* and `radius` for planets. The old `noise_scale` / `height_scale` become `height` (above zero) and `depth` (below); the old terrain used `height = 2 * height_scale`, `depth = height_scale`, the old planet `height = noise_scale`, `depth = noise_scale / 2`. Set `erosion = false` for the old look.
 - `up_mode` defaults to the new *Auto*; volumes that set *Axis* or *Radial* explicitly keep working.
-- The chunk shader `chunk.gdshader` is replaced by `terrain.gdshader` (see [Materials](#materials)); its `world_center` / `world_radius` parameters are gone (the volume's up settings are used). Materials go up to 8 (`0`-`7`); weights 4-7 arrive in `CUSTOM0`.
+- The chunk shader `chunk.gdshader` is replaced by the material-mode shaders (see [Materials](#materials)); the chunk scene no longer carries a material (the volume assigns one). Its `world_center` / `world_radius` parameters are gone (the volume's up field is used). Colors per material moved from shader parameters to `JarTerrainMaterial` resources in the volume's `materials`.
 
 ### Shaping worlds with SDFs
 
@@ -92,7 +92,9 @@ In the demos, `Q` cycles the brush (sphere, box, cone, prism mesh) and `E` toggl
 
 ### Materials
 
-Every voxel stores blend weights for 8 paintable materials. Edits paint their `material` argument (0-7, or `-1` to keep what is there), and `volume.paint(sdf, transform, material)` paints inside a shape without changing it:
+A volume's `materials` is a list of `JarTerrainMaterial` resources (color, roughness, procedural variation, optional albedo / normal textures); the index is the material id. Without any, a built-in set is used: 0 grass, 1 rock, 2 sand, 3 seabed, 4 snow, 5 dirt, 6 dark stone, 7 clay.
+
+Unpainted ground is covered by **ground rules** in the shader: ground (flat), cliff (steeper than `cliff_angle`), shore (up to `shore_height` above sea level), seabed (below sea level) and peaks (above `peak_height`), with noise-broken borders. All heights are relative to the volume's sea level, so they stay right when you change a planet's radius. Edits paint their `material` argument (`-1` keeps what is there), and `volume.paint(sdf, transform, material)` paints inside a shape without changing it:
 
 ```gdscript
 var brush := JarSphereSdf.new()
@@ -100,12 +102,17 @@ brush.radius = 4.0
 volume.paint(brush, Transform3D(Basis(), hit_position), 5)
 ```
 
-The default chunk material uses `addons/jar_voxel_terrain/src/shaders/terrain.gdshader`:
+Each voxel keeps its 4 strongest materials. `material_mode` picks how they reach the shader, each with a default shader in `addons/jar_voxel_terrain/src/shaders/`:
 
-- Layers 0-7 are the painted materials. Unpainted ground is covered by three rule layers: 8 top (flat), 9 cliff (steeper than `cliff_angle`) and 10 shore (below `shore_height` above the volume's `sea_level`).
-- Each layer has a tint, a texture scale and a roughness. Assign `Texture2DArray`s to `albedo_textures` / `normal_textures` (layer *i* uses array layer *i*) and enable `use_albedo_textures` / `use_normal_textures` for triplanar texturing; without textures the tints are used.
-- Everything is computed in the volume's own space, with "up" taken from its `up_mode`, so textures and rules follow moving volumes and work on planets and moons alike.
-- Give a volume its own look with its `material` property (e.g. a duplicate of `chunk_material.tres` with other tints), or write your own shader: chunks pass `jar_chunk_origin`, `jar_up_center` and `jar_up_axis` as instance uniforms, material weights 0-3 arrive in `COLOR` and 4-7 in `CUSTOM0`.
+| Mode | Materials | Borders | Vertex data |
+|---|---|---|---|
+| **Weights** (default) | 0-7 | smooth blends | 8 weights (`COLOR` + `CUSTOM0`) |
+| **Split** | 0-254 | crisp, one material per triangle | id in `CUSTOM0.r` (vertices split at borders) |
+| **Indexed** | 0-254 | smooth blends | 4 ids per triangle in `CUSTOM0`, weights in `COLOR` (vertices split where id sets differ, so no seams) |
+
+The default shaders are procedural (no textures needed): large brightness / hue variation, fine detail and bump, fading with distance. Give materials textures and they are applied with triplanar mapping. Everything is computed in the volume's own space, so textures and rules follow moving volumes and work on planets and flat worlds alike.
+
+To customize, set the volume's `material` to your own `ShaderMaterial` (a copy of a default material to tweak its rule and look settings, or your own shader). The volume copies it per volume and fills in the material palette and texture arrays; chunks pass their origin and the volume's up field as instance uniforms. The easiest way to write a new shader is to include `terrain_common.gdshaderinc` like the defaults do; the inputs are documented there and on `JarVoxelVolume.material`.
 
 ### Population
 

@@ -1,0 +1,6 @@
+[gd_resource type="ShaderMaterial" load_steps=2 format=3]
+
+[ext_resource type="Shader" path="res://addons/jar_voxel_terrain/src/shaders/terrain_indexed.gdshader" id="1"]
+
+[resource]
+shader = ExtResource("1")

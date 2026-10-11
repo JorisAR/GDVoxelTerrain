@@ -1,10 +1,4 @@
-[gd_scene load_steps=5 format=3 uid="uid://c7kqgl1k10x14"]
-
-[ext_resource type="Shader" path="res://addons/jar_voxel_terrain/src/shaders/terrain.gdshader" id="1_xkp0y"]
-
-[sub_resource type="ShaderMaterial" id="ShaderMaterial_ut1dc"]
-render_priority = 0
-shader = ExtResource("1_xkp0y")
+[gd_scene format=3 uid="uid://c7kqgl1k10x14"]
 
 [sub_resource type="ArrayMesh" id="ArrayMesh_yhpwu"]
 resource_local_to_scene = true
@@ -18,7 +12,6 @@ collision_shape = NodePath("StaticBody3D/CollisionShape3D")
 static_body = NodePath("StaticBody3D")
 
 [node name="MeshInstance3D" type="MeshInstance3D" parent="."]
-material_override = SubResource("ShaderMaterial_ut1dc")
 mesh = SubResource("ArrayMesh_yhpwu")
 
 [node name="StaticBody3D" type="StaticBody3D" parent="."]

@@ -21,19 +21,11 @@ std::vector<PackedFloat32Array> ChunkDetailGenerator::generate_detail_buffers(
     const PackedVector3Array verts = chunkMeshData.mesh_array[Mesh::ARRAY_VERTEX];
     const PackedInt32Array indices = chunkMeshData.mesh_array[Mesh::ARRAY_INDEX];
     const PackedVector3Array normals = chunkMeshData.mesh_array[Mesh::ARRAY_NORMAL];
-    const PackedColorArray colors = chunkMeshData.mesh_array[Mesh::ARRAY_COLOR];
-    const PackedByteArray custom0 = chunkMeshData.mesh_array[Mesh::ARRAY_CUSTOM0];
+    const PackedFloat32Array &paintedAmount = chunkMeshData.painted;
     const glm::vec3 chunkCenter = chunkMeshData.bounds.get_center();
 
     // Painted weight of a vertex: details only grow on unpainted ground.
-    auto painted = [&](int v) {
-        const Color &c = colors[v];
-        float sum = c.r + c.g + c.b + c.a;
-        if (custom0.size() >= 4 * (v + 1))
-            for (int i = 0; i < 4; ++i)
-                sum += custom0[4 * v + i] / 255.0f;
-        return sum;
-    };
+    auto painted = [&](int v) { return v < paintedAmount.size() ? paintedAmount[v] : 0.0f; };
 
     std::vector<std::vector<Transform3D>> transforms(details.size());
     for (int64_t d = 0; d < details.size(); d++)

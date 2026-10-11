@@ -19,7 +19,7 @@
 			<param index="3" name="material" type="int" default="0" />
 			<param index="4" name="smoothness" type="float" default="0.0" />
 			<description>
-				Combines [param sdf], placed with the global [param transform] (position, rotation and uniform scale), with the volume using [param operation]. The affected region is derived from [method JarSignedDistanceField.get_bounds], so the SDF must be bounded. [param material] (0-7) is painted onto changed voxels, [code]-1[/code] keeps existing materials. [param smoothness] is the blend radius of the smooth operations; [code]0[/code] uses the voxel size.
+				Combines [param sdf], placed with the global [param transform] (position, rotation and uniform scale), with the volume using [param operation]. The affected region is derived from [method JarSignedDistanceField.get_bounds], so the SDF must be bounded. [param material] (an index into [member materials]) is painted onto changed voxels, [code]-1[/code] keeps existing materials. [param smoothness] is the blend radius of the smooth operations; [code]0[/code] uses the voxel size.
 				Edits are queued and applied on a background thread.
 				[codeblock]
 				var box := JarBoxSdf.new()
@@ -47,6 +47,12 @@
 			<param index="0" name="global_position" type="Vector3" />
 			<description>
 				Returns the height of [param global_position] above [member sea_level], measured along the volume's up direction (see [member up_mode]).
+			</description>
+		</method>
+		<method name="get_runtime_material" qualifiers="const">
+			<return type="Material" />
+			<description>
+				Returns the material the chunks use: the per-volume copy of [member material] (or the default) with the palette filled in. Set shader parameters on it to tweak this volume only at runtime.
 			</description>
 		</method>
 		<method name="get_up_direction_at" qualifiers="const">
@@ -84,7 +90,7 @@
 			<description>
 				Modifies the terrain using another [JarSignedDistanceField] instance at a given [code]position[/code], with the specified [code]operation[/code].
 				The [code]radius[/code] determines the affected area. If [code]sdf[/code] is [code]null[/code], a sphere of [code]radius[/code] is used.
-				[code]material[/code] (0-7) is painted onto the affected voxels; the mesher passes the weights of materials 0-3 in vertex [code]COLOR[/code] and 4-7 in [code]CUSTOM0[/code], and the terrain shader blends them. Pass [code]-1[/code] to keep the existing material weights.
+				[code]material[/code] (an index into [member materials]) is painted onto the affected voxels (see [member material_mode]); pass [code]-1[/code] to keep the existing materials.
 			</description>
 		</method>
 		<method name="paint">
@@ -93,7 +99,7 @@
 			<param index="1" name="transform" type="Transform3D" />
 			<param index="2" name="material" type="int" />
 			<description>
-				Paints [param material] (0-7) onto the surface inside [param sdf] (placed by [param transform], like [method edit]) without changing the shape. The weight fades out over one voxel outside the shape, so repeated strokes blend. Painted voxels are kept when level of detail drops.
+				Paints [param material] (an index into [member materials], 0-254) onto the surface inside [param sdf] (placed by [param transform], like [method edit]) without changing the shape. The weight fades out over one voxel outside the shape, so repeated strokes blend. Each voxel keeps its 4 strongest materials. Painted voxels are kept when level of detail drops.
 			</description>
 		</method>
 		<method name="raycast_sdf" qualifiers="const">
@@ -142,7 +148,13 @@
 				Adds or subtracts a spherical volume from the terrain.
 				The center is defined by [code]position[/code], and [code]radius[/code] defines its size.
 				Set [code]union[/code] to [code]true[/code] to add, or [code]false[/code] to subtract.
-				[code]material[/code] (0-7) selects the material painted onto the edited voxels (see [method modify]); pass [code]-1[/code] to keep the existing material.
+				[code]material[/code] (an index into [member materials]) selects the material painted onto the edited voxels (see [method modify]); pass [code]-1[/code] to keep the existing material.
+			</description>
+		</method>
+		<method name="update_materials">
+			<return type="void" />
+			<description>
+				Rebuilds the runtime material (palette and texture arrays) before the next frame. Changes to [member materials] and its resources do this automatically.
 			</description>
 		</method>
 	</methods>
@@ -175,7 +187,13 @@
 			If [code]true[/code], every separate piece of surface inside a voxel gets its own vertex (with either mesher), so thin walls and features smaller than a voxel stay closed and 2-manifold instead of collapsing into a single vertex. Can be changed at runtime; all chunks are then remeshed.
 		</member>
 		<member name="material" type="Material" setter="set_material" getter="get_material">
-			Material for all chunks of this volume, replacing the one in [member chunk_scene]. Lets volumes that share a chunk scene look different (a planet and its moon). The default chunk material uses [code]addons/jar_voxel_terrain/src/shaders/terrain.gdshader[/code]: 8 paintable materials plus top, cliff and shore layers, triplanar texture arrays and per-layer tints. Each chunk passes [code]jar_chunk_origin[/code], [code]jar_up_center[/code] (xyz center, w [member sea_level]) and [code]jar_up_axis[/code] (xyz [member up_axis], w [member up_mode]) as instance uniforms, which custom shaders can declare too.
+			Material for all chunks of this volume. Empty uses the default material of [member material_mode] ([code]addons/jar_voxel_terrain/materials/terrain_*.tres[/code]). The volume makes a copy per volume and fills in its materials: [code]jar_palette[/code], [code]jar_albedo_textures[/code], [code]jar_normal_textures[/code], [code]jar_has_albedo_textures[/code], [code]jar_has_normal_textures[/code] and [code]jar_material_count[/code]. Each chunk passes [code]jar_chunk_origin[/code], [code]jar_up_center[/code] and [code]jar_up_axis[/code] as instance uniforms. Write your own shader by including [code]terrain_common.gdshaderinc[/code] (see the default shaders) or by declaring those inputs.
+		</member>
+		<member name="material_mode" type="int" setter="set_material_mode" getter="get_material_mode" enum="JarVoxelVolume.MaterialMode" default="0">
+			How voxel materials reach the shader. [constant MATERIAL_MODE_WEIGHTS]: materials 0-7 blend smoothly (cheapest shader). [constant MATERIAL_MODE_SPLIT]: one material per triangle, crisp borders, up to 255 materials. [constant MATERIAL_MODE_INDEXED]: per triangle the 4 strongest of up to 255 materials, blended smoothly. Unpainted ground is covered by the shader's ground rules in every mode. Can be changed at runtime; all chunks are then remeshed.
+		</member>
+		<member name="materials" type="JarTerrainMaterial[]" setter="set_terrain_materials" getter="get_terrain_materials" default="[]">
+			[JarTerrainMaterial]s of this volume; the index is the material id. Empty uses a built-in set: 0 grass, 1 rock, 2 sand, 3 seabed, 4 snow (the default ground rules), 5 dirt, 6 dark stone, 7 clay.
 		</member>
 		<member name="meshing_algorithm" type="int" setter="set_meshing_algorithm" getter="get_meshing_algorithm" enum="JarVoxelVolume.MeshingAlgorithm" default="0">
 			How chunks are turned into triangles. [constant MESHING_SURFACE_NETS] gives smooth, rounded surfaces; [constant MESHING_DUAL_CONTOURING] reproduces sharp edges and corners (stamped boxes, meshes, carved tunnels). Can be changed at runtime; all chunks are then remeshed.
@@ -218,6 +236,15 @@
 		</member>
 	</members>
 	<constants>
+		<constant name="MATERIAL_MODE_WEIGHTS" value="0" enum="MaterialMode">
+			Materials 0-7 as 8 smooth blend weights per vertex (vertex [code]COLOR[/code] = materials 0-3, [code]CUSTOM0[/code] = 4-7).
+		</constant>
+		<constant name="MATERIAL_MODE_SPLIT" value="1" enum="MaterialMode">
+			One material per triangle ([code]CUSTOM0.r[/code], 255 = ground), vertices duplicated where materials meet: crisp borders, up to 255 materials.
+		</constant>
+		<constant name="MATERIAL_MODE_INDEXED" value="2" enum="MaterialMode">
+			Per triangle the 4 strongest of up to 255 materials (ids in [code]CUSTOM0[/code], weights in [code]COLOR[/code]); vertices are duplicated where the id sets differ, so blends have no seams.
+		</constant>
 		<constant name="MESHING_SURFACE_NETS" value="0" enum="MeshingAlgorithm">
 			Smooth surfaces: each vertex sits at the average of its cell's surface crossings.
 		</constant>

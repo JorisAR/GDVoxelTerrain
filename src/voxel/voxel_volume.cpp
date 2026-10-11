@@ -1,4 +1,7 @@
 #include "voxel_volume.h"
+#include "terrain_material_palette.h"
+#include <godot_cpp/classes/resource_loader.hpp>
+#include <godot_cpp/classes/shader_material.hpp>
 #include "modify_settings.h"
 #include "plane_sdf.h"
 #include "sphere_sdf.h"
@@ -23,11 +26,28 @@ void JarVoxelVolume::_bind_methods()
     ClassDB::bind_method(D_METHOD("set_chunk_scene", "value"), &JarVoxelVolume::set_chunk_scene);
     ADD_PROPERTY(PropertyInfo(Variant::OBJECT, "chunk_scene", PROPERTY_HINT_RESOURCE_TYPE, "PackedScene"),
                  "set_chunk_scene", "get_chunk_scene");
+    ADD_GROUP("Materials", "");
+    BIND_ENUM_CONSTANT(MATERIAL_MODE_WEIGHTS);
+    BIND_ENUM_CONSTANT(MATERIAL_MODE_SPLIT);
+    BIND_ENUM_CONSTANT(MATERIAL_MODE_INDEXED);
+    ClassDB::bind_method(D_METHOD("get_material_mode"), &JarVoxelVolume::get_material_mode);
+    ClassDB::bind_method(D_METHOD("set_material_mode", "mode"), &JarVoxelVolume::set_material_mode);
+    ADD_PROPERTY(PropertyInfo(Variant::INT, "material_mode", PROPERTY_HINT_ENUM, "Weights,Split,Indexed"),
+                 "set_material_mode", "get_material_mode");
+    ClassDB::bind_method(D_METHOD("get_terrain_materials"), &JarVoxelVolume::get_terrain_materials);
+    ClassDB::bind_method(D_METHOD("set_terrain_materials", "materials"), &JarVoxelVolume::set_terrain_materials);
+    ADD_PROPERTY(PropertyInfo(Variant::ARRAY, "materials", PROPERTY_HINT_TYPE_STRING,
+                              String::num(Variant::OBJECT) + "/" + String::num(PROPERTY_HINT_RESOURCE_TYPE) +
+                                  ":JarTerrainMaterial"),
+                 "set_terrain_materials", "get_terrain_materials");
     ClassDB::bind_method(D_METHOD("get_material"), &JarVoxelVolume::get_material);
     ClassDB::bind_method(D_METHOD("set_material", "value"), &JarVoxelVolume::set_material);
     ADD_PROPERTY(PropertyInfo(Variant::OBJECT, "material", PROPERTY_HINT_RESOURCE_TYPE,
                               "ShaderMaterial,StandardMaterial3D,ORMMaterial3D"),
                  "set_material", "get_material");
+    ClassDB::bind_method(D_METHOD("get_runtime_material"), &JarVoxelVolume::get_runtime_material);
+    ClassDB::bind_method(D_METHOD("update_materials"), &JarVoxelVolume::update_materials);
+    ADD_GROUP("", "");
 
     ClassDB::bind_method(D_METHOD("get_sdf"), &JarVoxelVolume::get_sdf);
     ClassDB::bind_method(D_METHOD("set_sdf", "sdf"), &JarVoxelVolume::set_sdf);
@@ -605,6 +625,7 @@ void JarVoxelVolume::initialize()
     _meshComputeScheduler = std::make_unique<MeshComputeScheduler>();
     _voxelRoot = std::make_unique<VoxelOctreeNode>(_depth);
     _featureManager = std::make_unique<FeatureManager>(*this);
+    rebuild_materials();
     //_populationRoot = memnew(PopulationOctreeNode(_size));
     if (!_buildThread.joinable())
         _buildThread = std::thread([this] { build_worker(); });
@@ -620,6 +641,8 @@ void JarVoxelVolume::process()
     // the same nodes the worker is mutating. Letting any of them run concurrently
     // was the heap-corruption / nondeterministic-SIGSEGV race. So bail the whole
     // frame until the build finishes.
+    if (_materialsDirty && _voxelRoot)
+        rebuild_materials();
     if (_featureManager)
         _featureManager->process(); // independent of the octree: runs during builds too
     if (_isBuilding || !_meshComputeScheduler)
@@ -925,6 +948,71 @@ void JarVoxelVolume::set_sea_level(float value)
 void JarVoxelVolume::set_material(const Ref<Material> &value)
 {
     _material = value;
+    update_materials();
+}
+
+void JarVoxelVolume::set_material_mode(MaterialMode mode)
+{
+    _materialMode = mode;
+    update_materials();
+    remesh_all();
+}
+
+void JarVoxelVolume::set_terrain_materials(const TypedArray<JarTerrainMaterial> &materials)
+{
+    const Callable callback = callable_mp(this, &JarVoxelVolume::on_terrain_material_changed);
+    for (int64_t i = 0; i < _terrainMaterials.size(); ++i)
+    {
+        Ref<JarTerrainMaterial> m = _terrainMaterials[i];
+        if (m.is_valid() && m->is_connected("changed", callback))
+            m->disconnect("changed", callback);
+    }
+    _terrainMaterials = materials;
+    for (int64_t i = 0; i < _terrainMaterials.size(); ++i)
+    {
+        Ref<JarTerrainMaterial> m = _terrainMaterials[i];
+        if (m.is_valid() && !m->is_connected("changed", callback))
+            m->connect("changed", callback, Object::CONNECT_DEFERRED);
+    }
+    update_materials();
+}
+
+void JarVoxelVolume::on_terrain_material_changed()
+{
+    update_materials();
+}
+
+// The material chunks use: the user's (or the mode's default) material, copied
+// per volume so each volume can have its own palette, with the palette, texture
+// arrays and up field inputs filled in.
+void JarVoxelVolume::update_materials()
+{
+    _materialsDirty = true;
+}
+
+void JarVoxelVolume::rebuild_materials()
+{
+    _materialsDirty = false;
+    Ref<Material> base = _material;
+    if (base.is_null())
+    {
+        static const char *Defaults[] = {
+            "res://addons/jar_voxel_terrain/materials/terrain_weights.tres",
+            "res://addons/jar_voxel_terrain/materials/terrain_split.tres",
+            "res://addons/jar_voxel_terrain/materials/terrain_indexed.tres",
+        };
+        base = ResourceLoader::get_singleton()->load(Defaults[std::clamp(_materialMode.load(), 0, 2)]);
+    }
+    _runtimeMaterial = Ref<Material>();
+    if (Ref<ShaderMaterial> shader = base; shader.is_valid())
+    {
+        Ref<ShaderMaterial> copy = shader->duplicate();
+        TerrainMaterialPalette::apply(
+            _terrainMaterials.is_empty() ? TerrainMaterialPalette::default_materials() : _terrainMaterials, copy);
+        _runtimeMaterial = copy;
+    }
+    else
+        _runtimeMaterial = base;
     apply_rendering_to_chunks();
 }
 

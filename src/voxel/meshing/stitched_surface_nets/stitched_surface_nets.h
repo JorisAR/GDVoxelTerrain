@@ -2,6 +2,7 @@
 #define STITCHED_SURFACE_NETS_H
 
 #include "chunk_mesh_data.h"
+#include "material_mesh_builder.h"
 #include "stitched_mesh_chunk.h"
 #include "mesh_compute_scheduler.h"
 #include "voxel_lod.h"
@@ -26,10 +27,9 @@ class StitchedSurfaceNets
   private:
     PackedVector3Array _verts;
     PackedVector3Array _normals;
-    // Material weights 0..3 (vertex COLOR) and 4..7 (CUSTOM0, RGBA8).
-    PackedColorArray _colors;
-    PackedByteArray _custom0;
-    void push_materials(const glm::vec4 &low, const glm::vec4 &high);
+    // Materials per vertex; turned into vertex attributes per material mode at
+    // the end (MaterialMeshBuilder).
+    std::vector<VertexMaterials> _vertexMaterials;
     PackedInt32Array _indices;
     std::vector<bool> _badNormals;
     std::unordered_map<glm::ivec3, int> _innerEdgeNodes;
@@ -40,6 +40,7 @@ class StitchedSurfaceNets
     const bool _dualContouring;
     const bool _manifold;
     const float _featureThreshold;
+    const MaterialMode _materialMode;
 
     // Manifold mode: a cell can hold several separate pieces of surface (thin
     // walls, nearby blobs). Each piece gets its own vertex; for every cell edge
