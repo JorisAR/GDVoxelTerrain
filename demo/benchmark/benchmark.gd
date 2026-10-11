@@ -43,6 +43,7 @@ func _configure_size(volume: JarVoxelVolume) -> void:
 
 func _run() -> void:
 	await _measure_until_idle("initial_build")
+	_report_memory()
 	await _measure_flight()
 	await _measure_until_idle("flight_settle")
 	_dump_chunks(OS.get_environment("CHUNK_DUMP"))
@@ -122,3 +123,13 @@ func _report(label: String, usec: int, frames: int, worst: int, extra := "") -> 
 			chunks += 1
 	print("RESULT %s ms=%.1f frames=%d worst_frame_ms=%.1f chunks=%d %s" % [
 		label, usec / 1000.0, frames, worst / 1000.0, chunks, extra])
+
+## Private memory of the whole process (Windows only; the octree is allocated
+## outside Godot's allocator, so Godot's own memory monitors miss it).
+func _report_memory() -> void:
+	if OS.get_name() != "Windows":
+		return
+	var out := []
+	OS.execute("powershell", ["-NoProfile", "-Command", "(Get-Process -Id %d).PrivateMemorySize64" % OS.get_process_id()], out)
+	if out.size() > 0 and out[0].strip_edges().is_valid_int():
+		print("RESULT memory private_mb=%.0f" % (int(out[0].strip_edges()) / 1048576.0))

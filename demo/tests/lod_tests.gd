@@ -14,6 +14,7 @@ func _ready() -> void:
 		{voxel = 1.0, detail = 64.0, shell = 1},
 	]:
 		await _test(config)
+	await _test_round_trip()
 	print("LOD tests: %s" % ("ALL PASSED" if _failures == 0 else "%d FAILED" % _failures))
 	get_tree().quit(1 if _failures > 0 else 0)
 
@@ -86,3 +87,44 @@ func _settle(volume: JarVoxelVolume) -> void:
 		await get_tree().physics_frame
 		idle = idle + 1 if not volume.is_building() and not volume.is_meshing() else 0
 	await get_tree().create_timer(0.5).timeout # colliders upload over a few frames
+
+## Detail the viewer leaves behind is pruned from the octree. Coming back must
+## regenerate it, and edits must survive the trip.
+func _test_round_trip() -> void:
+	var holder := Node.new()
+	add_child(holder)
+	var world := TestWorld.flat(holder, Vector3(3, 12, 5))
+	var volume: JarVoxelVolume = world.volume
+	var viewer: Node3D = world.viewer
+	await _settle(volume)
+	var hole := Vector3(3, 0, 5)
+	var ground := _ground_height(volume, hole + Vector3(9, 0, 0))
+	var box := JarBoxSdf.new()
+	box.extent = Vector3(2, 6, 2)
+	volume.edit(box, JarVoxelVolume.SDF_OPERATION_SUBTRACTION, Transform3D(Basis(), Vector3(hole.x, _ground_height(volume, hole), hole.z)))
+	await _settle(volume)
+	var before := _lod0_count(volume)
+	var dug := _ground_height(volume, hole)
+	for x in [600.0, 1500.0, 3000.0, 1500.0, 600.0, 3.0]:
+		viewer.position.x = x
+		await _settle(volume)
+	_check("round trip: full detail regenerated", _lod0_count(volume) >= before * 0.9, "%d LOD 0 chunks, %d before" % [_lod0_count(volume), before])
+	var dug_after := _ground_height(volume, hole)
+	_check("round trip: edit kept", absf(dug_after - dug) < 0.5, "hole floor %.2f, was %.2f" % [dug_after, dug])
+	var ground_after := _ground_height(volume, hole + Vector3(9, 0, 0))
+	_check("round trip: terrain unchanged", absf(ground_after - ground) < 0.5, "ground %.2f, was %.2f" % [ground_after, ground])
+	holder.queue_free()
+	await get_tree().process_frame
+
+func _lod0_count(volume: JarVoxelVolume) -> int:
+	var n := 0
+	for c in volume.get_children():
+		n += 1 if c is JarVoxelChunk and c.visible and c.get_lod() == 0 else 0
+	return n
+
+func _ground_height(volume: JarVoxelVolume, at: Vector3) -> float:
+	var space := volume.get_world_3d().direct_space_state
+	var from := Vector3(at.x, 200, at.z)
+	var hit := space.intersect_ray(PhysicsRayQueryParameters3D.create(from, from + Vector3.DOWN * 400))
+	return hit.position.y if hit else NAN
+

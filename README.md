@@ -119,13 +119,13 @@ godot --headless --fixed-fps 60 --path demo res://tests/player_tests.tscn
 - `performance_collider_budget_ms` — main-thread time per frame spent uploading colliders (nearest first). Raise it to get collision sooner, lower it for steadier frame times.
 - `performance_updated_colliders_per_second` — optional hard cap on collider uploads per second; `0` (default) means only the time budget applies.
 - Chunks are recycled through an internal object pool, so heavy LOD churn does not repeatedly allocate/free thousands of nodes.
+- Memory is dominated by the octree (about 64 bytes per node, a few million nodes for a planet). Detail the viewer leaves behind is pruned once the coarser chunks are shown and regenerated on return, so memory stays flat while travelling; edited regions are always kept. `voxel_size` has the largest effect: halving it roughly quadruples the nodes near the surface.
 
 ## Contributing
 
 Contributions are welcome! Please fork the repository and submit a pull request.
 
 In particular, here are some areas of interest, in no particular order of importance:
-- Optimizing LOD connections: borders between chunks of different LOD still emit some duplicate triangles.
 - Multi-material support: painting materials (4-way weight blend) is in — see `sphere_edit`/`modify`'s `material` argument. Texture-array/triplanar materials and more than 4 slots remain open.
 - More SDF shapes, operators and terrain generators.
 - Navigation system.

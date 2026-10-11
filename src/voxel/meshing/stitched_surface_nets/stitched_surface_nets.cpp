@@ -1,4 +1,5 @@
 #include "stitched_surface_nets.h"
+#include <unordered_set>
 #include <godot_cpp/classes/array_mesh.hpp>
 #include <godot_cpp/core/class_db.hpp>
 #include <godot_cpp/variant/utility_functions.hpp>
@@ -160,7 +161,7 @@ void StitchedSurfaceNets::create_vertex(const int node_id, const std::vector<int
         float t = glm::abs(valueA) / (glm::abs(valueA) + glm::abs(valueB));
         vertexPosition += glm::mix(posA, posB, t);
         edge_crossings++;
-        color += glm::mix(na->get_color(), nb->get_color(), t);
+        color += glm::mix(na->get_materials().low(), nb->get_materials().low(), t);
     }
 
     if (edge_crossings <= 0)
@@ -321,6 +322,18 @@ ChunkMeshData *StitchedSurfaceNets::generate_mesh_data(const JarVoxelVolume &ter
     {
         // go through inner node edges, then if some inner node edge in +x/y/z exists, attempt to find a ring vertices
         // around this. make triangle/quad depending on what you find
+        // The search below finds most stitch triangles several times (from each
+        // inner edge node around it): emit each vertex triple only once.
+        std::unordered_set<uint64_t> stitched;
+        auto stitch = [&](int a, int b, int c) {
+            if (a == b || b == c || a == c)
+                return;
+            int k[3] = {a, b, c};
+            std::sort(k, k + 3);
+            const uint64_t key = (uint64_t(k[0]) << 42) | (uint64_t(k[1]) << 21) | uint64_t(k[2]);
+            if (stitched.insert(key).second)
+                add_tri_fix_normal(a, b, c);
+        };
         for (auto &[pos, node_id] : _innerEdgeNodes)
         {
             static const int faces = 3;
@@ -347,19 +360,19 @@ ChunkMeshData *StitchedSurfaceNets::generate_mesh_data(const JarVoxelVolume &ter
                         int n3 = _meshChunk.vertexIndices[neighbours[1]];
                         if (_verts[n0].distance_squared_to(_verts[n3]) < _verts[n1].distance_squared_to(_verts[n2]))
                         {
-                            add_tri_fix_normal(n0, n1, n3);
-                            add_tri_fix_normal(n0, n3, n2);
+                            stitch(n0, n1, n3);
+                            stitch(n0, n3, n2);
                         }
                         else
                         {
-                            add_tri_fix_normal(n1, n3, n2);
-                            add_tri_fix_normal(n1, n2, n0);
+                            stitch(n1, n3, n2);
+                            stitch(n1, n2, n0);
                         }
                     }
                     else if (neighbours.size() == 1)
                     {
                         int n2 = _meshChunk.vertexIndices[neighbours[0]];
-                        add_tri_fix_normal(n0, n1, n2);
+                        stitch(n0, n1, n2);
                     }
                 }
             }
@@ -590,7 +603,7 @@ void StitchedSurfaceNets::create_component_vertices(const int node_id, const std
             const float va = na->get_value(), vb = nb->get_value();
             const float t = std::abs(va) / (std::abs(va) + std::abs(vb));
             position += glm::mix(na->_center, nb->_center, t);
-            color += glm::mix(na->get_color(), nb->get_color(), t);
+            color += glm::mix(na->get_materials().low(), nb->get_materials().low(), t);
             normal += (vb - va) * (nb->_center - na->_center);
             crossings++;
         }

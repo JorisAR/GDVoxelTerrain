@@ -5,6 +5,7 @@
 #include "voxel_chunk.h"
 #include "modify_settings.h"
 #include "octree_node.h"
+#include "material_weights.h"
 #include "octahedral.h"
 #include <algorithm>
 #include <array>
@@ -18,9 +19,25 @@ class JarVoxelVolume;
 class VoxelOctreeNode : public OctreeNode<VoxelOctreeNode>
 {
   private:
+    // Fields are ordered to pack tightly: there are millions of nodes.
+    JarVoxelChunk *_chunk = nullptr;
+    MaterialWeights _materials; // painted material weights
     float _value = 0;
-    int LoD = 0;
-    bool _isGenerated = false; // if true, already generated from SDF.
+    // Surface normal of the field that produced this node's value, packed
+    // (Octahedral). Set by edits; 0 means "use the volume SDF's gradient".
+    // Dual contouring uses it to place vertices on sharp features.
+    uint32_t _normal = 0;
+    int8_t LoD = 0;
+    // Written by the build worker only (builds and edits), so plain bits are safe.
+    enum Flags : uint8_t
+    {
+        FlagGenerated = 1,    // already generated from the SDF
+        FlagEdited = 2,       // this node or a descendant was changed by an edit
+        FlagPrunePending = 4, // LOD got coarser: drop finer detail once meshed
+    };
+    uint8_t _flags = 0;
+    bool has_flag(uint8_t f) const { return (_flags & f) != 0; }
+    void set_flag(uint8_t f, bool on) { _flags = on ? (_flags | f) : (_flags & ~f); }
     // _isDirty and _isMaterialized propagate to the parent, which during a
     // parallel build is shared by subtrees running on different threads.
     std::atomic<bool> _isDirty{false}; // if true, needs to recalculate value from children
@@ -31,16 +48,8 @@ class VoxelOctreeNode : public OctreeNode<VoxelOctreeNode>
     // LOD changes refine shared border voxels, so a boundary change re-meshes.
     // Also reset by edits and when the node stops being a chunk.
     bool _meshedEmpty = false;
-    uint16_t _meshedEmptyBoundaries = 0;
     std::atomic<uint8_t> _isMaterialized{0};
-
-    JarVoxelChunk *_chunk = nullptr;   
-
-    glm::vec4 _nodeColor{0, 0, 0, 0}; // for material
-    // Surface normal of the field that produced this node's value, packed
-    // (Octahedral). Set by edits; 0 means "use the volume SDF's gradient".
-    // Dual contouring uses it to place vertices on sharp features.
-    uint32_t _normal = 0;
+    uint16_t _meshedEmptyBoundaries = 0;
 
     bool is_dirty() const;
     void set_dirty(bool value);
@@ -51,6 +60,9 @@ class VoxelOctreeNode : public OctreeNode<VoxelOctreeNode>
     bool is_materialized();
 
     bool is_one_above_chunk(const JarVoxelVolume &terrain) const;
+    void mark_edited();
+    bool subtree_has_chunk() const;
+    void prune_finer_than(int lod);
     void populateUniqueLoDValues(std::vector<int> &lodValues) const;
 
     bool should_delete_chunk(const JarVoxelVolume &terrain) const;
@@ -108,12 +120,9 @@ class VoxelOctreeNode : public OctreeNode<VoxelOctreeNode>
 
     float get_value();
     int get_lod() const;
-    glm::vec4 get_color();
+    MaterialWeights get_materials();
 
     // private:
-
-  protected:
-    virtual std::unique_ptr<VoxelOctreeNode> create_child_node(const glm::vec3 &center, int size) override;
 };
 
 #endif // VOXEL_OCTREE_NODE_H

@@ -15,8 +15,8 @@ VoxelOctreeNode::VoxelOctreeNode(VoxelOctreeNode *parent, const glm::vec3 center
     {
         LoD = _parent->LoD;
         _value = _parent->get_value();
-        _isGenerated = _parent->_isGenerated;
-        _nodeColor = _parent->_nodeColor;
+        set_flag(FlagGenerated, _parent->has_flag(FlagGenerated));
+        _materials = _parent->_materials;
         _normal = _parent->_normal;
     }
 }
@@ -49,18 +49,17 @@ void VoxelOctreeNode::update_if_dirty()
 
     if (!is_leaf())
     {
-        _value = 0.0f;
-        _nodeColor = glm::vec4(0.0f);
-
-        for (auto &child : (*_children))
-        {
-            _value     += child->get_value();
-            _nodeColor += child->get_color();
-        }
-
         // Average over 8 children
-        _value     *= 0.125f;
-        _nodeColor *= 0.125f;
+        _value = 0.0f;
+        MaterialWeights materials[8];
+        int i = 0;
+        for (auto &child : *_children)
+        {
+            _value += child.get_value();
+            materials[i++] = child.get_materials();
+        }
+        _value *= 0.125f;
+        _materials = MaterialWeights::average(materials);
     }
 
     _isDirty = false;
@@ -72,10 +71,10 @@ float VoxelOctreeNode::get_value()
     return _value;
 }
 
-glm::vec4 VoxelOctreeNode::get_color()
+MaterialWeights VoxelOctreeNode::get_materials()
 {
     update_if_dirty();
-    return _nodeColor;
+    return _materials;
 }
 
 
@@ -106,7 +105,7 @@ void VoxelOctreeNode::mark_materialized()
     {
         for (size_t i = 0; i < 8; ++i)
         {
-            _isMaterialized |= (_children->at(i)->is_materialized() ? 1 : 0) << i;
+            _isMaterialized |= ((*_children)[i].is_materialized() ? 1 : 0) << i;
         }
     }
 
@@ -157,7 +156,7 @@ void VoxelOctreeNode::populateUniqueLoDValues(std::vector<int> &lodValues) const
         return;
     for (const auto &child : *_children)
     {
-        child->populateUniqueLoDValues(lodValues);
+        child.populateUniqueLoDValues(lodValues);
     }
 }
 
@@ -184,7 +183,7 @@ void VoxelOctreeNode::finished_meshing_notify_parent_and_children() const
     {
         for (auto &child : *_children)
         {
-            child->delete_chunk();
+            child.delete_chunk();
         }
     }
 }
@@ -200,7 +199,7 @@ bool VoxelOctreeNode::is_any_children_enqueued() const
         return false;
     for (const auto &child : *_children)
     {
-        if (child->is_enqueued())
+        if (child.is_enqueued())
             return true;
     }
     return false;
@@ -230,27 +229,40 @@ uint16_t VoxelOctreeNode::compute_boundaries(const JarVoxelVolume &terrain) cons
 
 void VoxelOctreeNode::build(JarVoxelVolume &terrain, BuildContext *ctx)
 {
+    const int oldLod = LoD;
     LoD = terrain.desired_lod(*this);
 
     if (LoD < 0)
         return;
 
-    if (!_isGenerated)
+    if (!has_flag(FlagGenerated))
     {
         float value = terrain.get_sdf_ptr()->distance(_center);
         set_value(value);
         if (has_surface(terrain, value) && (_size > LoD))
         {
             subdivide(terrain.get_voxel_size());
-            _isGenerated = true;
+            set_flag(FlagGenerated, true);
         }
         // if we don't subdivide further, we mark it as a fully realized subtree
         if (is_leaf() && (_size > LoD || _size == min_size()))
         { //
-            _isGenerated = true;
+            set_flag(FlagGenerated, true);
             mark_materialized();
             return;
         }
+    }
+
+    // Detail no longer needed (the viewer moved away) is dropped, or the octree
+    // would keep every detail it ever generated. Only once this chunk shows the
+    // coarser mesh: until then the finer chunks below are still on screen.
+    if (LoD > oldLod && !is_leaf())
+        set_flag(FlagPrunePending, true);
+    if (has_flag(FlagPrunePending) && is_chunk(terrain) && _chunk != nullptr && !_isEnqueued &&
+        _chunk->get_lod() == LoD && _chunk->mesh_version == terrain.get_mesh_version())
+    {
+        set_flag(FlagPrunePending, false);
+        prune_finer_than(LoD);
     }
  
     if (!is_chunk(terrain))
@@ -269,10 +281,10 @@ void VoxelOctreeNode::build(JarVoxelVolume &terrain, BuildContext *ctx)
     {
         if (ctx != nullptr && _size == ctx->forkSize)
             for (auto &child : *_children)
-                ctx->subtrees.push_back(child.get());
+                ctx->subtrees.push_back(&child);
         else
             for (auto &child : *_children)
-                child->build(terrain, ctx);
+                child.build(terrain, ctx);
     }
 
     if (ctx != nullptr && _size >= ctx->forkSize)
@@ -300,7 +312,7 @@ void VoxelOctreeNode::modify_sdf_in_bounds(JarVoxelVolume &terrain, const Modify
         return;
 
     LoD = terrain.desired_lod(*this);
-    if (!_isGenerated)
+    if (!has_flag(FlagGenerated))
         set_value(terrain.get_sdf_ptr()->distance(_center));
 
     float old_value = get_value();
@@ -332,29 +344,29 @@ void VoxelOctreeNode::modify_sdf_in_bounds(JarVoxelVolume &terrain, const Modify
         // child instead, so edits next to untouched terrain stay accurate.
         if (wasLeaf && !is_leaf() && !has_normal())
             for (auto &child : *_children)
-                child->set_value(terrain.get_sdf_ptr()->distance(child->_center));
+                child.set_value(terrain.get_sdf_ptr()->distance(child._center));
     }
     else
         if(settings.bounds.encloses(bounds))
             prune_children();
 
     set_value(new_value);
-    _isGenerated = true;
+    set_flag(FlagGenerated, true);
+    if (std::abs(new_value - old_value) > 1e-5f)
+        mark_edited();
     // Paint the edit's material as a one-hot weight vector. Weights blend at
     // material boundaries via the parent-average and the mesher's edge
     // interpolation; all-zero means "unpainted" (procedural shader coloring).
     if (settings.material >= 0 && std::abs(new_value - old_value) > 0.01f)
     {
-        glm::vec4 weights(0.0f);
-        weights[glm::clamp(settings.material, 0, 3)] = 1.0f;
-        _nodeColor = weights;
+        _materials = MaterialWeights::one_hot(settings.material);
     }
 
     if (is_leaf())
         mark_materialized();
     else // recurse down the tree
         for (auto &child : *_children)
-            child->modify_sdf_in_bounds(terrain, settings);
+            child.modify_sdf_in_bounds(terrain, settings);
 
     _meshedEmpty = false; // values changed
     if (is_chunk(terrain))
@@ -383,6 +395,48 @@ void VoxelOctreeNode::update_chunk(JarVoxelVolume &terrain, ChunkMeshData *chunk
     }
 
     _chunk->update_chunk(terrain, this, chunkMeshData);
+}
+
+void VoxelOctreeNode::mark_edited()
+{
+    for (VoxelOctreeNode *n = this; n != nullptr && !n->has_flag(FlagEdited); n = n->_parent)
+        n->set_flag(FlagEdited, true);
+}
+
+bool VoxelOctreeNode::subtree_has_chunk() const
+{
+    if (_chunk != nullptr || _isEnqueued)
+        return true;
+    if (!is_leaf())
+        for (const auto &child : *_children)
+            if (child.subtree_has_chunk())
+                return true;
+    return false;
+}
+
+// Drops descendants finer than `lod` (keeping nodes of size `lod` as leaves),
+// except in edited subtrees, whose detail exists nowhere else. Pruned nodes are
+// regenerated from the SDF if the viewer comes back. Their values are the
+// averages the current mesh was built from, so the mesh does not change.
+void VoxelOctreeNode::prune_finer_than(int lod)
+{
+    if (is_leaf() || has_flag(FlagEdited))
+        return;
+    if (_size > lod)
+    {
+        for (auto &child : *_children)
+            child.prune_finer_than(lod);
+        return;
+    }
+    if (subtree_has_chunk())
+        return;
+    update_if_dirty();
+    prune_children();
+    set_flag(FlagGenerated, false);
+    // Builds skip materialized subtrees; this one must be walked again to
+    // regenerate. Clear the marks up to the root.
+    for (VoxelOctreeNode *n = this; n != nullptr && n->_isMaterialized != 0; n = n->_parent)
+        n->_isMaterialized = 0;
 }
 
 void VoxelOctreeNode::queue_update(JarVoxelVolume &terrain)
@@ -427,10 +481,10 @@ void VoxelOctreeNode::get_voxel_leaves_in_bounds(const JarVoxelVolume &terrain, 
 
     if (is_chunk(terrain))
         for (auto &child : *_children) // use all the same LoD from here on out
-            child->get_voxel_leaves_in_bounds(terrain, bounds, LoD, result);
+            child.get_voxel_leaves_in_bounds(terrain, bounds, LoD, result);
     else
         for (auto &child : *_children)
-            child->get_voxel_leaves_in_bounds(terrain, bounds, result);
+            child.get_voxel_leaves_in_bounds(terrain, bounds, result);
 }
 
 void VoxelOctreeNode::get_voxel_leaves_in_bounds(const JarVoxelVolume &terrain, const Bounds &bounds, const int LOD,
@@ -446,7 +500,7 @@ void VoxelOctreeNode::get_voxel_leaves_in_bounds(const JarVoxelVolume &terrain, 
     }
 
     for (auto &child : *_children)
-        child->get_voxel_leaves_in_bounds(terrain, bounds, LOD, result);
+        child.get_voxel_leaves_in_bounds(terrain, bounds, LOD, result);
 }
 
 void VoxelOctreeNode::get_voxel_leaves_in_bounds_excluding_bounds(const JarVoxelVolume &terrain,
@@ -466,10 +520,7 @@ void VoxelOctreeNode::get_voxel_leaves_in_bounds_excluding_bounds(const JarVoxel
     }
 
     for (auto &child : *_children)
-        child->get_voxel_leaves_in_bounds_excluding_bounds(terrain, acceptance_bounds, rejection_bounds, LOD, result);
+        child.get_voxel_leaves_in_bounds_excluding_bounds(terrain, acceptance_bounds, rejection_bounds, LOD, result);
 }
 
-std::unique_ptr<VoxelOctreeNode> VoxelOctreeNode::create_child_node(const glm::vec3 &center, int size)
-{
-    return std::make_unique<VoxelOctreeNode>(this, center, size);
-}
+

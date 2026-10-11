@@ -234,6 +234,11 @@ void JarVoxelChunk::update_chunk(JarVoxelVolume &terrain, VoxelOctreeNode *node,
                                                           : MeshInstance3D::SHADOW_CASTING_SETTING_OFF);
     }
 
+    // The CPU copy of the mesh is only needed for a collider that is still to
+    // be built (update_collision_mesh releases it); the renderer keeps its own.
+    if (!generate_collider)
+        _chunk_mesh_data.reset();
+
     // Ref<StandardMaterial3D> stitch_material;
     // stitch_material.instantiate();
     // stitch_material->set_albedo(Color(1, 0, 1));
@@ -268,6 +273,7 @@ void JarVoxelChunk::update_collision_mesh()
         _chunk_mesh_data->build_collision_mesh(); // LOD above MaxCollisionLod: not prebuilt
     collision_shape->set_disabled(false);
     concave_polygon_shape->set_faces(_chunk_mesh_data->collision_mesh);
+    _chunk_mesh_data.reset(); // physics has its own copy now
 }
 
 void JarVoxelChunk::delete_chunk()
