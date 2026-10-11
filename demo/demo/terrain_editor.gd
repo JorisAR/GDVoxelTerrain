@@ -1,6 +1,6 @@
 extends Node3D
 
-@export var terrain: JarVoxelTerrain
+@export var terrain: JarVoxelVolume
 @export var sdf: JarSphereSdf
 @export var edit_radius: float = 50.0
 
@@ -33,4 +33,9 @@ func _edit(union : bool):
 	var query = PhysicsRayQueryParameters3D.create(origin, origin + direction * 1000)
 	var result = space_state.intersect_ray(query)
 	if result:
-		terrain.sphere_edit(result.position, edit_radius, union, material)
+		# Edit whichever volume was hit: collider -> chunk -> volume.
+		var volume := terrain
+		var chunk := result.collider.get_parent() as JarVoxelChunk
+		if chunk and chunk.get_volume():
+			volume = chunk.get_volume()
+		volume.sphere_edit(result.position, edit_radius, union, material)

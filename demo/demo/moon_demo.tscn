@@ -1,0 +1,88 @@
+[gd_scene format=3]
+
+[ext_resource type="PackedScene" uid="uid://c7kqgl1k10x14" path="res://addons/jar_voxel_terrain/src/chunk.tscn" id="1_chunk"]
+[ext_resource type="Script" uid="uid://c0626baj7yc8l" path="res://demo/movable_camera.gd" id="2_camera"]
+[ext_resource type="Script" uid="uid://02ob37nu5at8" path="res://demo/terrain_editor.gd" id="3_editor"]
+[ext_resource type="Script" path="res://demo/orbit.gd" id="4_orbit"]
+[ext_resource type="Script" uid="uid://bhjsuh0weeh6j" path="res://demo/label.gd" id="5_label"]
+
+[sub_resource type="FastNoiseLite" id="Noise_planet"]
+frequency = 0.004
+
+[sub_resource type="JarPlanetSdf" id="Sdf_planet"]
+noise = SubResource("Noise_planet")
+radius = 1024.0
+noise_scale = 60.0
+
+[sub_resource type="FastNoiseLite" id="Noise_moon"]
+seed = 7
+frequency = 0.01
+
+[sub_resource type="JarPlanetSdf" id="Sdf_moon"]
+noise = SubResource("Noise_moon")
+radius = 256.0
+noise_scale = 20.0
+
+[sub_resource type="JarSphereSdf" id="Sdf_edit"]
+
+[sub_resource type="ProceduralSkyMaterial" id="Sky_material"]
+
+[sub_resource type="Sky" id="Sky_main"]
+sky_material = SubResource("Sky_material")
+
+[sub_resource type="Environment" id="Environment_main"]
+background_mode = 2
+sky = SubResource("Sky_main")
+tonemap_mode = 3
+
+[node name="MoonDemo" type="Node3D"]
+
+[node name="Planet" type="JarVoxelVolume" parent="."]
+size = 16
+chunk_scene = ExtResource("1_chunk")
+sdf = SubResource("Sdf_planet")
+up_mode = 1
+sea_level = 1024.0
+
+[node name="MoonOrbit" type="Node3D" parent="."]
+script = ExtResource("4_orbit")
+degrees_per_second = 3.0
+
+[node name="MoonSpin" type="Node3D" parent="MoonOrbit"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2200, 0, 0)
+script = ExtResource("4_orbit")
+degrees_per_second = 10.0
+axis = Vector3(0.3, 1, 0)
+
+[node name="Moon" type="JarVoxelVolume" parent="MoonOrbit/MoonSpin"]
+size = 14
+chunk_scene = ExtResource("1_chunk")
+sdf = SubResource("Sdf_moon")
+up_mode = 1
+sea_level = 256.0
+
+[node name="Camera3D" type="Camera3D" parent="." node_paths=PackedStringArray("terrain")]
+transform = Transform3D(1, 0, 0, 0, 0.94, 0.34, 0, -0.34, 0.94, 600, 1250, 900)
+far = 32000.0
+script = ExtResource("2_camera")
+terrain = NodePath("../Planet")
+move_speed = 64.0
+
+[node name="TerrainEditor" type="Node3D" parent="Camera3D" node_paths=PackedStringArray("terrain")]
+script = ExtResource("3_editor")
+terrain = NodePath("../../Planet")
+sdf = SubResource("Sdf_edit")
+
+[node name="JarVoxelViewer" type="JarVoxelViewer" parent="Camera3D"]
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
+environment = SubResource("Environment_main")
+
+[node name="DirectionalLight3D" type="DirectionalLight3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 0.7, 0.714, 0, -0.714, 0.7, 0, 0, 0)
+shadow_enabled = true
+
+[node name="Label" type="Label" parent="."]
+offset_right = 40.0
+offset_bottom = 23.0
+script = ExtResource("5_label")

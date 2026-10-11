@@ -26,8 +26,9 @@ android.debug.arm64 = "res://addons/jar_voxel_terrain/bin/libjar_voxel_terrain.a
 android.release.arm64 = "res://addons/jar_voxel_terrain/bin/libjar_voxel_terrain.android.template_release.arm64.so"
 
 [icons]
-JarVoxelTerrain = "res://addons/jar_voxel_terrain/icons/terrain.svg"
+JarVoxelVolume = "res://addons/jar_voxel_terrain/icons/terrain.svg"
 JarVoxelChunk = "res://addons/jar_voxel_terrain/icons/terrain.svg"
+JarVoxelViewer = "res://addons/jar_voxel_terrain/icons/viewer.svg"
 JarSignedDistanceField = "res://addons/jar_voxel_terrain/icons/sdf.svg"
 JarTerrainSdf = "res://addons/jar_voxel_terrain/icons/sdf.svg"
 JarPlanetSdf = "res://addons/jar_voxel_terrain/icons/sdf_sphere.svg"

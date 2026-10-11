@@ -11,7 +11,7 @@ const FLIGHT_SECONDS := 10.0 # wall-clock: measures how well the terrain keeps u
 const FLIGHT_VELOCITY := Vector3(100, 0, 0) # metres per wall-clock second
 const EDIT_COUNT := 16
 
-var terrain: JarVoxelTerrain
+var terrain: JarVoxelVolume
 var camera: Camera3D
 
 func _ready() -> void:
@@ -19,7 +19,7 @@ func _ready() -> void:
 	camera = demo.get_node("Camera3D")
 	camera.set_script(null) # no input-driven movement
 	add_child(demo)
-	terrain = demo.get_node("JarSphericalWorld/JarVoxelTerrain")
+	terrain = demo.get_node("Planet/JarVoxelVolume")
 	_run.call_deferred()
 
 func _run() -> void:

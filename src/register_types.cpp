@@ -5,17 +5,16 @@
 #include "operation_sdf.h"
 #include "torus_sdf.h"
 #include "transform_sdf.h"
-#include "planar_world.h"
 #include "plane_sdf.h"
 #include "planet_sdf.h"
 #include "sphere_sdf.h"
-#include "spherical_world.h"
 #include "terrain_detail.h"
 #include "terrain_populator.h"
 #include "terrain_sdf.h"
 #include "voxel_chunk.h"
-#include "voxel_terrain.h"
-#include "world.h"
+#include "voxel_volume.h"
+#include "voxel_viewer.h"
+#include "job_system.h"
 using namespace godot;
 
 void initialize_jar_voxel_terrain_module(ModuleInitializationLevel p_level)
@@ -35,18 +34,14 @@ void initialize_jar_voxel_terrain_module(ModuleInitializationLevel p_level)
         GDREGISTER_CLASS(JarCapsuleSdf);
         GDREGISTER_CLASS(JarTransformSdf);
 
-        // WORLD
-        GDREGISTER_ABSTRACT_CLASS(JarWorld);
-        GDREGISTER_CLASS(JarPlanarWorld);
-        GDREGISTER_CLASS(JarSphericalWorld);
-
         // POPULATION
         GDREGISTER_ABSTRACT_CLASS(JarTerrainPopulator);
         GDREGISTER_CLASS(JarTerrainDetail);
 
         // TERRAIN
-        GDREGISTER_CLASS(JarVoxelTerrain);
+        GDREGISTER_CLASS(JarVoxelVolume);
         GDREGISTER_CLASS(JarVoxelChunk);
+        GDREGISTER_CLASS(JarVoxelViewer);
     }
 }
 
@@ -54,6 +49,7 @@ void uninitialize_jar_voxel_terrain_module(ModuleInitializationLevel p_level)
 {
     if (p_level == MODULE_INITIALIZATION_LEVEL_SCENE)
     {
+        JobSystem::shutdown();
     }
 }
 

@@ -1,0 +1,157 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="JarVoxelVolume" inherits="Node3D" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
+	<brief_description>
+		A smooth voxel volume: terrain, a planet, a moon or a prop, defined by a signed distance field.
+	</brief_description>
+	<description>
+		JarVoxelVolume samples [member sdf] into an octree and meshes it into chunks with level of detail. Everything happens in the volume's local space, so a volume can be moved, rotated and animated freely (for example a moon orbiting a planet), and any number of volumes can exist in one scene. All volumes share one worker thread pool.
+		Level of detail follows every [JarVoxelViewer] in the scene (or the active camera if there is none).
+		Edit the volume with [method sphere_edit] or [method modify]; edits are queued and applied on a background thread. To find the volume behind a physics hit, use [method JarVoxelChunk.get_volume] on the collider's chunk.
+	</description>
+	<tutorials>
+	</tutorials>
+	<methods>
+		<method name="force_update_lod">
+			<return type="void" />
+			<description>
+				Force updates LODs to chunks.
+			</description>
+		</method>
+		<method name="get_height_at" qualifiers="const">
+			<return type="float" />
+			<param index="0" name="global_position" type="Vector3" />
+			<description>
+				Returns the height of [param global_position] above [member sea_level], measured along the volume's up direction (see [member up_mode]).
+			</description>
+		</method>
+		<method name="get_up_direction_at" qualifiers="const">
+			<return type="Vector3" />
+			<param index="0" name="global_position" type="Vector3" />
+			<description>
+				Returns the global-space up direction at [param global_position] (see [member up_mode]). Useful to orient a character on a planet.
+			</description>
+		</method>
+		<method name="is_building" qualifiers="const">
+			<return type="bool" />
+			<description>
+				Returns [code]true[/code] while the background worker is rebuilding the octree or applying edits. Edits requested meanwhile are queued and applied afterwards.
+			</description>
+		</method>
+		<method name="is_meshing" qualifiers="const">
+			<return type="bool" />
+			<description>
+				Returns [code]true[/code] while chunk meshes are queued, being generated, or waiting to be applied. When both this and [method is_building] return [code]false[/code], the terrain around the player is up to date.
+			</description>
+		</method>
+		<method name="modify">
+			<return type="void" />
+			<param index="0" name="sdf" type="JarSignedDistanceField" />
+			<param index="1" name="operation" type="int" enum="SDF.Operation" />
+			<param index="2" name="position" type="Vector3" />
+			<param index="3" name="radius" type="float" />
+			<param index="4" name="material" type="int" default="0" />
+			<description>
+				Modifies the terrain using another [JarSignedDistanceField] instance at a given [code]position[/code], with the specified [code]operation[/code].
+				The [code]radius[/code] determines the affected area. If [code]sdf[/code] is [code]null[/code], a sphere of [code]radius[/code] is used.
+				[code]material[/code] (0-3) is painted onto the affected voxels as a one-hot weight in the vertex color, which the chunk shader blends as materials; pass [code]-1[/code] to keep the existing material weights.
+			</description>
+		</method>
+		<method name="spawn_debug_spheres_in_bounds">
+			<return type="void" />
+			<param index="0" name="position" type="Vector3" />
+			<param index="1" name="range" type="float" />
+			<description>
+				Spawns debug spheres within the specified [code]range[/code] around [code]position[/code] to visualize terrain bounds or other metrics.
+			</description>
+		</method>
+		<method name="sphere_edit">
+			<return type="void" />
+			<param index="0" name="position" type="Vector3" />
+			<param index="1" name="radius" type="float" />
+			<param index="2" name="union" type="bool" />
+			<param index="3" name="material" type="int" default="0" />
+			<description>
+				Adds or subtracts a spherical volume from the terrain.
+				The center is defined by [code]position[/code], and [code]radius[/code] defines its size.
+				Set [code]union[/code] to [code]true[/code] to add, or [code]false[/code] to subtract.
+				[code]material[/code] (0-3) selects the material painted onto the edited voxels (see [method modify]); pass [code]-1[/code] to keep the existing material.
+			</description>
+		</method>
+	</methods>
+	<members>
+		<member name="chunk_scene" type="PackedScene" setter="set_chunk_scene" getter="get_chunk_scene">
+			Scene used for singular chunk. Will be duplicated once for each rendered chunk.
+		</member>
+		<member name="cubic_voxels" type="bool" setter="set_cubic_voxels" getter="get_cubic_voxels" default="false">
+			Renders voxels as cubes.
+		</member>
+		<member name="lod_automatic_update" type="bool" setter="set_lod_automatic_update" getter="get_lod_automatic_update" default="true">
+			Enables/disables automatic LOD updates when a [JarVoxelViewer] moves.
+		</member>
+		<member name="lod_automatic_update_distance" type="float" setter="set_lod_automatic_update_distance" getter="get_lod_automatic_update_distance" default="64.0">
+			Distance in world units used to determine whether LODs need to be updated based on player movement.
+		</member>
+		<member name="lod_level_count" type="int" setter="set_lod_level_count" getter="get_lod_level_count" default="20">
+			Determines number of different LOD levels. Higher number means smoother transition between close and far LODs.
+		</member>
+		<member name="lod_shell_size" type="int" setter="set_lod_shell_size" getter="get_lod_shell_size" default="2">
+			Number of LOD rings (shells) around the player. Affects how much terrain is loaded based on proximity.
+		</member>
+		<member name="min_chunk_size" type="int" setter="set_min_chunk_size" getter="get_min_chunk_size" default="4">
+			Number of vertices in the smallest subdivision of the chunk.
+		</member>
+		<member name="octree_scale" type="float" setter="set_octree_scale" getter="get_octree_scale" default="1.0">
+			Scaling factor for the octree used in terrain chunk management and LOD computation.
+		</member>
+		<member name="performance_collider_budget_ms" type="float" setter="set_collider_budget_ms" getter="get_collider_budget_ms" default="2.0">
+			Main-thread time per frame, in milliseconds, spent uploading chunk colliders to the physics engine. Colliders nearest the player are uploaded first. Higher values make collision available sooner after the terrain changes, at the cost of frame time.
+		</member>
+		<member name="performance_collider_distance" type="float" setter="set_collider_distance" getter="get_collider_distance" default="0.0">
+			When greater than [code]0.0[/code], physics colliders are only generated for chunks within this distance of the camera, on top of the usual LOD-based collider rules. Since collider generation is one of the most expensive parts of chunk updates, this can be a large performance win. Set it comfortably larger than the range at which physics interactions are needed. [code]0.0[/code] disables the distance cull (original behaviour).
+		</member>
+		<member name="performance_updated_colliders_per_second" type="int" setter="set_updated_colliders_per_second" getter="get_updated_colliders_per_second" default="0">
+			Optional hard cap on how many chunk colliders are uploaded per second. [code]0[/code] means no cap: uploads are limited only by [member performance_collider_budget_ms].
+		</member>
+		<member name="population_terrain_details" type="JarTerrainDetail[]" setter="set_terrain_details" getter="get_terrain_details" default="[]">
+			Defines additional objects or modifications applied to the terrain, such as grass, rocks, or decorations.
+		</member>
+		<member name="sdf" type="JarSignedDistanceField" setter="set_sdf" getter="get_sdf">
+			The signed distance field ([JarSignedDistanceField]) used to define terrain shape.
+		</member>
+		<member name="sea_level" type="float" setter="set_sea_level" getter="get_sea_level" default="0.0">
+			Height 0 for [method get_height_at] and population height ranges: the planet radius for [constant UP_MODE_RADIAL], or the offset along [member up_axis] for [constant UP_MODE_AXIS].
+		</member>
+		<member name="size" type="int" setter="set_size" getter="get_size" default="14">
+			Size of the terrain grid in chunks. Increasing this value expands the rendered area.
+		</member>
+		<member name="up_axis" type="Vector3" setter="set_up_axis" getter="get_up_axis" default="Vector3(0, 1, 0)">
+			Local up direction when [member up_mode] is [constant UP_MODE_AXIS]; also the fallback at the exact center of a radial volume.
+		</member>
+		<member name="up_center" type="Vector3" setter="set_up_center" getter="get_up_center" default="Vector3(0, 0, 0)">
+			Local-space center: the planet center for [constant UP_MODE_RADIAL], and the origin of height measurement for [constant UP_MODE_AXIS].
+		</member>
+		<member name="up_mode" type="int" setter="set_up_mode" getter="get_up_mode" enum="JarVoxelVolume.UpMode" default="0">
+			How "up" is defined inside the volume, used for population rules (slope and height ranges) and [method get_up_direction_at]. [constant UP_MODE_AXIS] for flat worlds, [constant UP_MODE_RADIAL] for planets.
+		</member>
+	</members>
+	<constants>
+		<constant name="UP_MODE_AXIS" value="0" enum="UpMode">
+			Up is the constant [member up_axis] (flat worlds).
+		</constant>
+		<constant name="UP_MODE_RADIAL" value="1" enum="UpMode">
+			Up points away from [member up_center] (planets and moons).
+		</constant>
+		<constant name="SDF_OPERATION_UNION" value="0" enum="Operation">
+		</constant>
+		<constant name="SDF_OPERATION_SUBTRACTION" value="1" enum="Operation">
+		</constant>
+		<constant name="SDF_OPERATION_INTERSECTION" value="2" enum="Operation">
+		</constant>
+		<constant name="SDF_OPERATION_SMOOTH_UNION" value="3" enum="Operation">
+		</constant>
+		<constant name="SDF_OPERATION_SMOOTH_SUBTRACTION" value="4" enum="Operation">
+		</constant>
+		<constant name="SDF_OPERATION_SMOOTH_INTERSECTION" value="5" enum="Operation">
+		</constant>
+	</constants>
+</class>

@@ -42,13 +42,12 @@ tonemap_mode = 3
 
 [node name="Demo" type="Node3D" unique_id=1616376024]
 
-[node name="JarSphericalWorld" type="JarSphericalWorld" parent="." unique_id=950743398]
-sphere_radius = 4096.0
+[node name="Planet" type="Node3D" parent="." unique_id=950743398]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -4196, 0)
 
-[node name="JarVoxelTerrain" type="JarVoxelTerrain" parent="JarSphericalWorld" unique_id=604818894 node_paths=PackedStringArray("player_node", "world_node")]
-player_node = NodePath("../../Camera3D")
-world_node = NodePath("..")
+[node name="JarVoxelVolume" type="JarVoxelVolume" parent="Planet" unique_id=604818894]
+up_mode = 1
+sea_level = 4096.0
 size = 20
 chunk_scene = ExtResource("1_0cm30")
 sdf = ExtResource("2_onu7k")
@@ -56,7 +55,7 @@ lod_automatic_update_distance = 32.0
 population_terrain_details = Array[JarTerrainDetail]([ExtResource("3_onvmd")])
 transform = Transform3D(1, 0, 0.000401426, 0, 1, 0, -0.000401426, 0, 1, 0, 0, 0)
 
-[node name="MeshInstance3D" type="MeshInstance3D" parent="JarSphericalWorld" unique_id=685093172]
+[node name="MeshInstance3D" type="MeshInstance3D" parent="Planet" unique_id=685093172]
 mesh = SubResource("SphereMesh_onvmd")
 surface_material_override/0 = ExtResource("4_oeqrt")
 
@@ -65,13 +64,15 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -5.08767, 19.5887, 199.553)
 compositor = SubResource("Compositor_4sdup")
 far = 32000.0
 script = ExtResource("2_kdd2p")
-terrain = NodePath("../JarSphericalWorld/JarVoxelTerrain")
+terrain = NodePath("../Planet/JarVoxelVolume")
 move_speed = 64.0
 
 [node name="TerrainEditor" type="Node3D" parent="Camera3D" unique_id=1923696105 node_paths=PackedStringArray("terrain")]
 script = ExtResource("3_8rpa4")
-terrain = NodePath("../../JarSphericalWorld/JarVoxelTerrain")
+terrain = NodePath("../../Planet/JarVoxelVolume")
 sdf = SubResource("JarSphereSdf_yuphb")
+
+[node name="JarVoxelViewer" type="JarVoxelViewer" parent="Camera3D"]
 
 [node name="WorldEnvironment" type="WorldEnvironment" parent="." unique_id=255837496]
 environment = SubResource("Environment_tn4qg")

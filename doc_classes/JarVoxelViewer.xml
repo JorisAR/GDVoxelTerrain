@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="JarVoxelViewer" inherits="Node3D" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
+	<brief_description>
+		Makes voxel volumes refine their level of detail around this node.
+	</brief_description>
+	<description>
+		Add a JarVoxelViewer as a child of the player or camera. Every [JarVoxelVolume] in the scene uses all enabled viewers, converted into its own local space, so moving volumes stay detailed where it matters. Multiple viewers are supported (split screen, servers). If no viewer exists, volumes use the active [Camera3D].
+	</description>
+	<tutorials>
+	</tutorials>
+	<members>
+		<member name="enabled" type="bool" setter="set_enabled" getter="is_enabled" default="true">
+			If [code]false[/code], volumes ignore this viewer.
+		</member>
+	</members>
+</class>

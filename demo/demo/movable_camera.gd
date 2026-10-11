@@ -1,6 +1,6 @@
 extends Camera3D
 
-@export var terrain : JarVoxelTerrain
+@export var terrain : JarVoxelVolume
 @export var move_speed : float = 8.0
 @export var look_sensitivity : float = 0.1
 const MIN_MOVE_SPEED = 0.5;
