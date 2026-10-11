@@ -70,7 +70,7 @@ The editing scripts in `demo/demo/editing` are meant to be reused: `SdfEditor` e
 Shapes are authored as composable `JarSignedDistanceField` resources:
 
 - **Primitives:** `JarSphereSdf`, `JarBoxSdf` (optionally rounded), `JarPlaneSdf`, `JarCylinderSdf`, `JarCapsuleSdf`, `JarTorusSdf`, `JarConeSdf`, `JarEllipsoidSdf`.
-- **Terrain:** `JarTerrainSdf` (noise heightmap) and `JarPlanetSdf` (noisy sphere).
+- **Terrain:** `JarTerrainSdf` (noise heightmap), `JarPlanetSdf` (noisy sphere) and `JarErodedTerrainSdf` (heightmap or planet with an erosion filter: branching gullies and sharp ridges, evaluated per point, after [runevision's erosion filter](https://blog.runevision.com/2026/03/fast-and-gorgeous-erosion-filter.html)). Surface nets suit eroded terrain best; keep the smallest gullies a few voxels wide.
 - **Meshes:** `JarMeshSdf` turns any closed triangle mesh into an SDF. It is baked once into a distance grid stored in the resource (press *Bake* in the inspector, or it bakes on first use).
 - **Combining:** `JarOperationSdf` (union / subtraction / intersection and smooth variants, nestable for full CSG) and `JarTransformSdf` (position / rotate / scale a child).
 - **Modifiers:** `JarOffsetSdf` (grow, shrink, hollow into a shell), `JarRepeatSdf` (grid copies), `JarDisplaceSdf` (noise displacement).
@@ -125,13 +125,14 @@ godot --headless --fixed-fps 60 --path demo res://tests/player_tests.tscn
 Contributions are welcome! Please fork the repository and submit a pull request.
 
 In particular, here are some areas of interest, in no particular order of importance:
-- Optimizing LOD connections, i.e. remove the overdraw/duplicate triangle generation.
+- Optimizing LOD connections: borders between chunks of different LOD still emit some duplicate triangles.
 - Multi-material support: painting materials (4-way weight blend) is in — see `sphere_edit`/`modify`'s `material` argument. Texture-array/triplanar materials and more than 4 slots remain open.
-- Add more interesting SDF options:
-    - Better noise based SDFs for more realistic terrain.
-    - SDF based on an arbitrary triangle mesh.
+- More SDF shapes, operators and terrain generators.
 - Navigation system.
-- Dual contouring extension.
+
+## Credits
+
+- The erosion filter in `JarErodedTerrainSdf` is based on Rune Skovbo Johansen's (runevision) [Fast and Gorgeous Erosion Filter](https://blog.runevision.com/2026/03/fast-and-gorgeous-erosion-filter.html), which builds on work by Clay John and Felix Westin (Fewes). It is an independent implementation written from the article.
 
 ## License
 

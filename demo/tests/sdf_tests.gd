@@ -9,6 +9,7 @@ func _ready() -> void:
 	_test_primitives()
 	_test_modifiers()
 	_test_mesh_sdfs()
+	_test_eroded_terrain()
 	print("SDF tests: %s" % ("ALL PASSED" if _failures == 0 else "%d FAILED" % _failures))
 	get_tree().quit(1 if _failures > 0 else 0)
 
@@ -141,3 +142,48 @@ func _compare_mesh(name: String, mesh: Mesh, reference: JarSignedDistanceField) 
 			sign_errors += 1
 	_check(name, sign_errors == 0 and bound_errors == 0 and max_err < cell * 1.5,
 		"(max error %.3f, cell %.3f, sign errors %d, bound errors %d, bake %.1f ms)" % [max_err, cell, sign_errors, bound_errors, bake_ms])
+
+## Erosion SDF: surface near the eroded height, sign correct, lower bound far
+## away, and continuous (no jumps between nearby points).
+func _test_eroded_terrain() -> void:
+	var noise := FastNoiseLite.new()
+	noise.frequency = 0.003
+	for shape in [JarErodedTerrainSdf.SHAPE_FLAT, JarErodedTerrainSdf.SHAPE_SPHERE]:
+		var sdf := JarErodedTerrainSdf.new()
+		sdf.noise = noise
+		sdf.height = 100.0
+		sdf.shape = shape
+		sdf.radius = 1000.0
+		var label: String = ["flat", "sphere"][shape]
+		var up := Vector3.UP
+		var base := Vector3(37, 0, -12) if shape == JarErodedTerrainSdf.SHAPE_FLAT else Vector3(0.3, 1.0, 0.2).normalized() * 1000.0
+		if shape == JarErodedTerrainSdf.SHAPE_SPHERE:
+			up = base.normalized()
+		var h := sdf.sample_height(base)
+		var surface := base + up * h
+		_check("eroded %s surface" % label, absf(sdf.sample(surface)) < 0.5, "d=%.3f at height %.1f" % [sdf.sample(surface), h])
+		_check("eroded %s sign" % label, sdf.sample(surface + up * 5.0) > 0.0 and sdf.sample(surface - up * 5.0) < 0.0)
+		_check("eroded %s far lower bound" % label, sdf.sample(surface + up * 2000.0) <= 2000.0 + 1e-3)
+		# The far-field bound is blended in: no step anywhere along the way up.
+		var worst_step := 0.0
+		for k in 4000:
+			var q := surface + up * (k * 0.1)
+			worst_step = maxf(worst_step, absf(sdf.sample(q + up * 0.1) - sdf.sample(q)))
+		_check("eroded %s continuous upwards" % label, worst_step < 0.15, "largest change over 10 cm: %.3f" % worst_step)
+		# Continuous: a 1 mm step never jumps (steep slopes are fine, steps are not).
+		# Close to a distance: the octree's subdivision margin tolerates a
+		# gradient of about 2.9, so most of the surface must stay well below.
+		var max_jump := 0.0
+		var slopes: Array[float] = []
+		for i in 200:
+			var p := surface + Vector3(i * 0.37, 0, i * 0.21)
+			max_jump = maxf(max_jump, absf(sdf.sample(p + Vector3(0.001, 0, 0)) - sdf.sample(p)))
+			var b := p - up * sdf.sample(p)
+			var e := 0.01
+			slopes.append(Vector3(sdf.sample(b + Vector3(e, 0, 0)) - sdf.sample(b - Vector3(e, 0, 0)),
+				sdf.sample(b + Vector3(0, e, 0)) - sdf.sample(b - Vector3(0, e, 0)),
+				sdf.sample(b + Vector3(0, 0, e)) - sdf.sample(b - Vector3(0, 0, e))).length() / (2.0 * e))
+		slopes.sort()
+		_check("eroded %s continuous" % label, max_jump < 0.02, "largest jump over 1 mm: %.4f" % max_jump)
+		_check("eroded %s distance-like" % label, slopes[100] < 1.4 and slopes[190] < 2.9,
+			"gradient length median %.2f, 95%% %.2f" % [slopes[100], slopes[190]])

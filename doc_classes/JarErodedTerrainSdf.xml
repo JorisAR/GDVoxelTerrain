@@ -1,0 +1,68 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="JarErodedTerrainSdf" inherits="JarSignedDistanceField" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
+	<brief_description>
+		Terrain or planet with an erosion filter: branching gullies and sharp ridges, computed per point.
+	</brief_description>
+	<description>
+		Displaces a flat ground plane ([constant SHAPE_FLAT], along +Y) or a sphere ([constant SHAPE_SPHERE]) by [member noise] scaled by [member height], then applies an erosion filter on top. The filter adds octaves of gullies that run down the slopes, branch, and fade out on peaks and in valleys. No simulation is involved: every point is evaluated on its own, so it works with chunked, infinite and editable volumes.
+		The erosion technique is by Rune Skovbo Johansen (runevision), building on work by Clay John and Felix Westin (Fewes): [url=https://blog.runevision.com/2026/03/fast-and-gorgeous-erosion-filter.html]Fast and Gorgeous Erosion Filter[/url]. This is an independent implementation written from that article, extended to 3D cells so it also works on spheres.
+		Surface nets suit eroded terrain best. Keep the smallest gullies ([member erosion_scale] / [member lacunarity]^([member octaves] - 1)) at least a few voxels wide; anything finer only aliases.
+	</description>
+	<tutorials>
+	</tutorials>
+	<methods>
+		<method name="sample_height" qualifiers="const">
+			<return type="float" />
+			<param index="0" name="position" type="Vector3" />
+			<description>
+				Returns the eroded height above the base plane (or above the sphere of [member radius]) below or above [param position]. Useful for placing objects on the surface.
+			</description>
+		</method>
+	</methods>
+	<members>
+		<member name="assumed_slope" type="float" setter="set_assumed_slope" getter="get_assumed_slope" default="0.6">
+			Gully directions follow the input slope, but the filter acts as if the input always had this steepness, because the eroded output is roughly equally steep everywhere. The input slope also decides where gullies appear: input that is much flatter than this (peaks and valleys) gets none.
+		</member>
+		<member name="detail" type="float" setter="set_detail" getter="get_detail" default="1.5">
+			How far smaller gullies reach onto flatter ground. Higher values add more fine gullies.
+		</member>
+		<member name="erosion_scale" type="float" setter="set_erosion_scale" getter="get_erosion_scale" default="80.0">
+			Width of the largest gullies, in meters.
+		</member>
+		<member name="erosion_strength" type="float" setter="set_erosion_strength" getter="get_erosion_strength" default="0.5">
+			Slope that each octave of gullies adds (rise over run). [code]0[/code] disables the erosion.
+		</member>
+		<member name="gain" type="float" setter="set_gain" getter="get_gain" default="0.5">
+			Amplitude factor from one octave to the next. With [code]gain = 1 / lacunarity[/code] every octave adds the same slope.
+		</member>
+		<member name="gully_weight" type="float" setter="set_gully_weight" getter="get_gully_weight" default="0.5">
+			Weight of the gullies against the fade towards peaks and valleys. The strength is scaled by the inverse, so values below [code]1[/code] keep peaks pointy and ridges sharp.
+		</member>
+		<member name="height" type="float" setter="set_height" getter="get_height" default="100.0">
+			Height of the base [member noise], in meters.
+		</member>
+		<member name="lacunarity" type="float" setter="set_lacunarity" getter="get_lacunarity" default="2.0">
+			Width factor from one octave of gullies to the next: each octave is this many times narrower.
+		</member>
+		<member name="noise" type="FastNoiseLite" setter="set_noise" getter="get_noise">
+			Base noise. Sampled in 2D (XZ) for [constant SHAPE_FLAT] and in 3D on the sphere for [constant SHAPE_SPHERE]. Without noise the base surface is flat and nothing erodes.
+		</member>
+		<member name="octaves" type="int" setter="set_octaves" getter="get_octaves" default="5">
+			Number of gully octaves, from [member erosion_scale] down.
+		</member>
+		<member name="radius" type="float" setter="set_radius" getter="get_radius" default="1000.0">
+			Radius of the base sphere for [constant SHAPE_SPHERE], in meters.
+		</member>
+		<member name="shape" type="int" setter="set_shape" getter="get_shape" default="0">
+			Base surface: [constant SHAPE_FLAT] or [constant SHAPE_SPHERE].
+		</member>
+	</members>
+	<constants>
+		<constant name="SHAPE_FLAT" value="0" enum="Shape">
+			A heightfield along +Y, infinite in X and Z.
+		</constant>
+		<constant name="SHAPE_SPHERE" value="1" enum="Shape">
+			A planet of [member radius] around the origin.
+		</constant>
+	</constants>
+</class>

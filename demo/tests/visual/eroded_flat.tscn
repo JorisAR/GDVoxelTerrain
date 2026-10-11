@@ -1,0 +1,38 @@
+[gd_scene format=3]
+
+[ext_resource type="PackedScene" uid="uid://c7kqgl1k10x14" path="res://addons/jar_voxel_terrain/src/chunk.tscn" id="1_chunk"]
+
+[sub_resource type="FastNoiseLite" id="Noise"]
+frequency = 0.0025
+fractal_octaves = 3
+
+[sub_resource type="JarErodedTerrainSdf" id="Sdf"]
+noise = SubResource("Noise")
+height = 140.0
+
+[sub_resource type="ProceduralSkyMaterial" id="SkyMaterial"]
+
+[sub_resource type="Sky" id="Sky"]
+sky_material = SubResource("SkyMaterial")
+
+[sub_resource type="Environment" id="Environment"]
+background_mode = 2
+sky = SubResource("Sky")
+tonemap_mode = 3
+
+[node name="ErodedFlat" type="Node3D"]
+
+[node name="JarVoxelVolume" type="JarVoxelVolume" parent="."]
+chunk_scene = ExtResource("1_chunk")
+sdf = SubResource("Sdf")
+manifold = true
+
+[node name="Camera3D" type="Camera3D" parent="."]
+far = 32000.0
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
+environment = SubResource("Environment")
+
+[node name="DirectionalLight3D" type="DirectionalLight3D" parent="."]
+transform = Transform3D(0.8, 0.45, -0.4, 0, 0.66, 0.75, 0.6, -0.6, 0.53, 0, 0, 0)
+shadow_enabled = true
