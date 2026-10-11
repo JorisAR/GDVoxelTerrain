@@ -7,12 +7,12 @@
 [ext_resource type="Script" uid="uid://557h1ey0uo8c" path="res://addons/jar_voxel_terrain/nodes/water/planet_water.gd" id="9_water"]
 [ext_resource type="Script" uid="uid://bdr052q72xws1" path="res://addons/jar_voxel_terrain/nodes/atmosphere/atmosphere.gd" id="10_atmosphere"]
 [ext_resource type="Script" uid="uid://ca8q8yfyo8l3h" path="res://demo/orbit.gd" id="11_orbit"]
-[ext_resource type="Script" path="res://addons/jar_voxel_terrain/nodes/clouds/clouds.gd" id="16_clouds"]
-[ext_resource type="JarBiomeMap" path="res://demo/planet/biomes.tres" id="17_biomes"]
 [ext_resource type="JarCraterSdf" path="res://demo/planet/moon_craters.tres" id="12_moon"]
 [ext_resource type="Material" path="res://demo/planet/moon_material.tres" id="13_moon_material"]
 [ext_resource type="PackedScene" uid="uid://cupyeuv1xe20s" path="res://demo/player/player.tscn" id="14_player"]
 [ext_resource type="Material" uid="uid://55tbedv6qxva" path="res://demo/assets/space/space_sky.tres" id="15_sky"]
+[ext_resource type="Script" uid="uid://cnxfg3coxvqwe" path="res://addons/jar_voxel_terrain/nodes/clouds/clouds.gd" id="16_clouds"]
+[ext_resource type="JarBiomeMap" uid="uid://dt3ug1atfvmdb" path="res://demo/planet/biomes.tres" id="17_biomes"]
 
 [sub_resource type="JarTerrainMaterial" id="Grass"]
 albedo = Color(0.25, 0.35, 0.15, 1)
@@ -54,9 +54,6 @@ albedo = Color(0.72, 0.43, 0.22, 1)
 roughness = 0.6
 variation = 0.3
 
-[sub_resource type="SphereShape3D" id="PlanetGravityShape"]
-radius = 9000.0
-
 [sub_resource type="JarTerrainMaterial" id="Tundra"]
 albedo = Color(0.43, 0.41, 0.3, 1)
 roughness = 0.95
@@ -66,6 +63,9 @@ variation = 0.35
 albedo = Color(0.6, 0.54, 0.3, 1)
 roughness = 0.95
 variation = 0.3
+
+[sub_resource type="SphereShape3D" id="PlanetGravityShape"]
+radius = 9000.0
 
 [sub_resource type="JarTerrainMaterial" id="Regolith"]
 albedo = Color(0.3, 0.29, 0.28, 1)
@@ -82,13 +82,6 @@ radius = 1000.0
 [sub_resource type="Sky" id="Sky"]
 sky_material = ExtResource("15_sky")
 
-[sub_resource type="CameraAttributesPractical" id="Exposure"]
-auto_exposure_enabled = true
-auto_exposure_scale = 0.15
-auto_exposure_speed = 2.0
-auto_exposure_min_sensitivity = 50.0
-auto_exposure_max_sensitivity = 800.0
-
 [sub_resource type="Environment" id="Environment"]
 background_mode = 2
 sky = SubResource("Sky")
@@ -99,6 +92,12 @@ tonemap_mode = 3
 glow_enabled = true
 glow_intensity = 0.4
 glow_bloom = 0.05
+
+[sub_resource type="CameraAttributesPractical" id="Exposure"]
+auto_exposure_enabled = true
+auto_exposure_scale = 0.15
+auto_exposure_speed = 2.0
+auto_exposure_min_sensitivity = 50.0
 
 [node name="PlanetDemo" type="Node3D" unique_id=700940484]
 
@@ -122,7 +121,7 @@ script = ExtResource("9_water")
 [node name="Atmosphere" type="Node3D" parent="Planet" unique_id=1764051413]
 script = ExtResource("10_atmosphere")
 
-[node name="Clouds" type="Node3D" parent="Planet"]
+[node name="Clouds" type="Node3D" parent="Planet" unique_id=1226887604]
 script = ExtResource("16_clouds")
 
 [node name="Gravity" type="Area3D" parent="Planet" unique_id=2147448440 groups=["gravity_frames"]]
@@ -177,7 +176,7 @@ environment = SubResource("Environment")
 camera_attributes = SubResource("Exposure")
 
 [node name="Sun" type="DirectionalLight3D" parent="." unique_id=705585350]
-transform = Transform3D(0.9988, 0.0234, -0.0421, -0.0000, 0.8738, 0.4862, 0.0482, -0.4857, 0.8728, 0, 0, 0)
+transform = Transform3D(0.9988, 0.0234, -0.0421, 0, 0.8738, 0.4862, 0.0482, -0.4857, 0.8728, 0, 0, 0)
 light_energy = 1.4
 shadow_enabled = true
 directional_shadow_max_distance = 400.0
