@@ -37,16 +37,14 @@ The compiled library is written straight into `demo/addons/jar_voxel_terrain/bin
 
 Open the `demo` project in Godot and run one of the scenes in `demo/demo`:
 
-- `walk_planet.tscn` / `walk_flat.tscn`: walk around as a first-person character (dual contouring meshing).
-- `demo.tscn` (planet), `moon_demo.tscn` (a planet with an orbiting, spinning moon), `flat_terrain.tscn`, `op_demo.tscn`: fly around with a free camera.
+- `planet.tscn` (the main scene): a 4 km planet with gravity and water.
+- `flat.tscn`: flat noise terrain with a crater carved by an SDF operation (`op_carve.tres`).
+- `moon.tscn`: a planet with an orbiting, spinning moon; you can land on the moon and it carries you along.
 
-Controls:
+Controls: `WASD` move, `Space` jump, `Shift` sprint, `Tab` toggle flying (`Space`/`Shift` up/down, `Ctrl` + scroll speed), `M` toggle surface nets / dual contouring, `Esc` release the mouse.
+Editing: `left click` dig, `right click` add, `Q` next brush (sphere, box, cone, prism, torus), `scroll` brush size, `E` smooth blending, `1`-`4` material, `R` toggle the brush preview.
 
-- Walking scenes: `WASD` move, `Space` jump, `Shift` sprint, `Tab` toggle flying (`Space`/`Shift` up/down, `Ctrl` + scroll speed).
-- Free camera scenes: `WASD` + mouse to fly, `Space`/`Shift` up/down, `Ctrl` + scroll speed, `F` force a LOD update.
-- Editing (all scenes): `left click` dig, `right click` add, `Q` next brush (sphere, box, cone, prism, torus), `scroll` brush size, `E` smooth blending, `1`-`4` material, `R` toggle the brush preview. `Esc` releases the mouse.
-
-The editing scripts in `demo/demo/editing` are meant to be reused: `SdfEditor` edits with any SDF resource you assign (plus an optional preview mesh), `BrushEditor` adds the built-in brushes. `demo/demo/player` contains the character controller, which follows Godot's gravity (an `Area3D` with point gravity makes a planet).
+The editing scripts in `demo/demo/editing` are meant to be reused: `SdfEditor` edits with any SDF resource you assign (plus an optional preview mesh), `BrushEditor` adds the built-in brushes. `demo/demo/player` contains the character controller, which follows Godot's gravity (an `Area3D` with point gravity makes a planet). Put gravity areas in the `gravity_frames` group to have the player move along with their parent (e.g. an orbiting moon).
 
 ## Usage
 
@@ -85,7 +83,7 @@ box.extent = Vector3(2, 4, 2)
 volume.edit(box, JarVoxelVolume.SDF_OPERATION_UNION, Transform3D(Basis(Vector3.UP, PI / 4), hit_position))
 ```
 
-In the demos, `Q` cycles the brush (sphere, box, cone, prism mesh) and `E` toggles smooth blending. See `demo/demo/op_demo.tscn` + `demo/demo/op_carve.tres` for a crater carved out of noise terrain with a single resource.
+In the demos, `Q` cycles the brush (sphere, box, cone, prism mesh) and `E` toggles smooth blending. See `demo/demo/flat.tscn` + `demo/demo/op_carve.tres` for a crater carved out of noise terrain with a single resource.
 
 ### Meshing
 

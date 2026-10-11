@@ -5,24 +5,40 @@ extends Node
 ## Prints one RESULT line per phase; wall-clock numbers are what to compare.
 ## Set CHUNK_DUMP=<file> to also write the resulting chunk set for diffing.
 
-const DEMO_SCENE := preload("res://demo/demo.tscn")
+const CHUNK_SCENE := preload("res://addons/jar_voxel_terrain/src/chunk.tscn")
+const PLANET_SDF := preload("res://demo/planet_sdf.tres")
 const IDLE_TIMEOUT_MS := 180000
 const FLIGHT_SECONDS := 10.0 # wall-clock: measures how well the terrain keeps up
 const FLIGHT_VELOCITY := Vector3(100, 0, 0) # metres per wall-clock second
 const EDIT_COUNT := 16
 
 var terrain: JarVoxelVolume
-var camera: Camera3D
+var camera: Node3D # the viewer
 
+## A self-contained scene (no demo dependencies): a 4 km planet and one viewer
+## 100 m above its surface.
 func _ready() -> void:
-	var demo := DEMO_SCENE.instantiate()
-	camera = demo.get_node("Camera3D")
-	camera.set_script(null) # no input-driven movement
-	add_child(demo)
-	terrain = demo.get_node("Planet/JarVoxelVolume")
+	var planet := Node3D.new()
+	planet.position = Vector3(0, -4196, 0)
+	add_child(planet)
+	terrain = JarVoxelVolume.new()
+	terrain.chunk_scene = CHUNK_SCENE
+	terrain.sdf = PLANET_SDF
+	terrain.up_mode = JarVoxelVolume.UP_MODE_RADIAL
+	terrain.sea_level = 4096.0
+	terrain.lod_automatic_update_distance = 32.0
+	_configure_size(terrain)
 	if OS.get_environment("MESHER") == "dc":
 		terrain.meshing_algorithm = JarVoxelVolume.MESHING_DUAL_CONTOURING
+	planet.add_child(terrain)
+	camera = JarVoxelViewer.new()
+	camera.position = Vector3(-5, 20, 200)
+	add_child(camera)
 	_run.call_deferred()
+
+## Octree covering 2^20 m at 1 m voxels.
+func _configure_size(volume: JarVoxelVolume) -> void:
+	volume.size = 20
 
 func _run() -> void:
 	await _measure_until_idle("initial_build")

@@ -7,8 +7,9 @@ var _failures := 0
 var _watching := false
 
 func _ready() -> void:
-	await _test_scene("flat", "res://demo/walk_flat.tscn", "JarVoxelVolume")
-	await _test_scene("planet", "res://demo/walk_planet.tscn", "Planet/JarVoxelVolume")
+	await _test_scene("flat", "res://demo/flat.tscn", "JarVoxelVolume")
+	await _test_scene("planet", "res://demo/planet.tscn", "Planet/JarVoxelVolume")
+	await _test_moon()
 	print("Player tests: %s" % ("ALL PASSED" if _failures == 0 else "%d FAILED" % _failures))
 	get_tree().quit(1 if _failures > 0 else 0)
 
@@ -102,6 +103,36 @@ func _ground_distance(player: DemoPlayer, from: Vector3) -> float:
 	query.exclude = [player.get_rid()]
 	var hit := player.get_world_3d().direct_space_state.intersect_ray(query)
 	return (from - hit.position).length() if hit else INF
+
+## Stands on the orbiting, spinning moon: the player must stay on its surface
+## (moving with it) instead of being left behind.
+func _test_moon() -> void:
+	var scene: Node = load("res://demo/moon.tscn").instantiate()
+	var moon: Node3D = scene.get_node("MoonOrbit/Moon")
+	var player: DemoPlayer = scene.get_node("Player")
+	# Speed the moon up so a few seconds cover a lot of motion.
+	scene.get_node("MoonOrbit").degrees_per_second = 6.0
+	moon.degrees_per_second = 20.0
+	add_child(scene)
+	await get_tree().physics_frame
+	player.global_position = moon.global_position + Vector3.UP * 330.0
+	await _wait_until(func(): return player._spawned and player.is_on_floor(), 20000)
+	_check("moon spawns on moon", player.is_on_floor() and player.global_position.distance_to(moon.global_position) < 300.0,
+		"distance to moon center %.1f" % player.global_position.distance_to(moon.global_position))
+	var radius := player.global_position.distance_to(moon.global_position)
+	var moved := 0.0
+	var last := player.global_position
+	var floor_frames := 0
+	for i in 300:
+		await get_tree().physics_frame
+		moved += player.global_position.distance_to(last)
+		last = player.global_position
+		floor_frames += 1 if player.is_on_floor() else 0
+	var drift := absf(player.global_position.distance_to(moon.global_position) - radius)
+	_check("moon carries player", moved > 50.0 and drift < 3.0 and floor_frames > 280,
+		"moved %.0f m, radius drift %.2f m, on floor %d/300 frames" % [moved, drift, floor_frames])
+	scene.queue_free()
+	await get_tree().process_frame
 
 ## Reports (once) if the player ever ends up well below the volume's surface.
 func _watch_fall(label: String, player: DemoPlayer, volume: JarVoxelVolume) -> void:

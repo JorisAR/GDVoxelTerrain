@@ -8,12 +8,9 @@ var _failures := 0
 var volume: JarVoxelVolume
 
 func _ready() -> void:
-	var scene: Node = load("res://demo/flat_terrain.tscn").instantiate()
-	var camera: Camera3D = scene.get_node("Camera3D")
-	camera.set_script(null)
-	volume = scene.get_node("World/JarVoxelVolume")
-	camera.position = Vector3(0, 10, 0)
-	add_child(scene)
+	var world := TestWorld.flat(self, Vector3(0, 10, 0))
+	var camera: Node3D = world.viewer
+	volume = world.volume
 	await _settle()
 
 	var ground := _ray_height(Vector3(0.3, 0, 0.3))

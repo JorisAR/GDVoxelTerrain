@@ -1,5 +1,0 @@
-[gd_resource type="JarSphereSdf" format=3 uid="uid://drkejkeifehu5"]
-
-[resource]
-center = Vector3(0, -1024, 0)
-radius = 1024.0

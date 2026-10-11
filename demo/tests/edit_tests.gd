@@ -3,23 +3,18 @@ extends Node
 ## against the rebuilt chunk colliders. Run:
 ##   godot --headless --path demo res://tests/edit_tests.tscn
 
-const SCENE := preload("res://demo/flat_terrain.tscn")
-
 var _failures := 0
 var volume: JarVoxelVolume
 
 func _ready() -> void:
-	var scene := SCENE.instantiate()
-	var camera: Camera3D = scene.get_node("Camera3D")
-	camera.set_script(null)
-	volume = scene.get_node("World/JarVoxelVolume")
-	if OS.get_environment("MESHER") == "dc":
-		volume.meshing_algorithm = JarVoxelVolume.MESHING_DUAL_CONTOURING
+	var world := TestWorld.flat(self, Vector3(-77, 63, -7), func(v: JarVoxelVolume):
+		if OS.get_environment("MESHER") == "dc":
+			v.meshing_algorithm = JarVoxelVolume.MESHING_DUAL_CONTOURING)
+	volume = world.volume
 	print("Mesher: ", ["surface nets", "dual contouring"][volume.meshing_algorithm])
-	add_child(scene)
-	_run.call_deferred(camera)
+	_run.call_deferred(world.viewer)
 
-func _run(camera: Camera3D) -> void:
+func _run(camera: Node3D) -> void:
 	var at := camera.global_position
 	await _settle()
 	var ground := _ground_height(at)
@@ -65,7 +60,8 @@ func _run(camera: Camera3D) -> void:
 		Transform3D(Basis().scaled(Vector3.ONE * 2.0), Vector3(spot.x, spot_ground + 2.0, spot.z)))
 	await _settle()
 	var peak := _ground_height(spot)
-	_check("mesh stamp", absf(peak - (spot_ground + 4.0)) < 1.0, "peak=%.2f expected=%.2f" % [peak, spot_ground + 4.0])
+	# Surface nets rounds the apex; mesher_tests checks it exactly under dual contouring.
+	_check("mesh stamp", peak > spot_ground + 2.5 and peak < spot_ground + 4.2, "peak=%.2f apex=%.2f" % [peak, spot_ground + 4.0])
 
 	# 4. Unbounded SDFs are rejected by edit() instead of editing the whole world.
 	volume.edit(JarPlaneSdf.new(), JarVoxelVolume.SDF_OPERATION_UNION, Transform3D())

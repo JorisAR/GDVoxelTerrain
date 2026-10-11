@@ -1,0 +1,98 @@
+[gd_scene format=3]
+
+[ext_resource type="PackedScene" uid="uid://c7kqgl1k10x14" path="res://addons/jar_voxel_terrain/src/chunk.tscn" id="1_chunk"]
+[ext_resource type="PackedScene" path="res://demo/player/player.tscn" id="2_player"]
+[ext_resource type="Script" path="res://demo/orbit.gd" id="3_orbit"]
+[ext_resource type="Material" uid="uid://55tbedv6qxva" path="res://demo/assets/space/space_sky.tres" id="4_sky"]
+
+[sub_resource type="FastNoiseLite" id="Noise_planet"]
+frequency = 0.004
+
+[sub_resource type="JarPlanetSdf" id="Sdf_planet"]
+noise = SubResource("Noise_planet")
+radius = 1024.0
+noise_scale = 60.0
+
+[sub_resource type="SphereShape3D" id="PlanetGravityShape"]
+radius = 1800.0
+
+[sub_resource type="FastNoiseLite" id="Noise_moon"]
+seed = 7
+frequency = 0.01
+
+[sub_resource type="JarPlanetSdf" id="Sdf_moon"]
+noise = SubResource("Noise_moon")
+radius = 256.0
+noise_scale = 20.0
+
+[sub_resource type="SphereShape3D" id="MoonGravityShape"]
+radius = 500.0
+
+[sub_resource type="Sky" id="Sky"]
+sky_material = ExtResource("4_sky")
+
+[sub_resource type="Environment" id="Environment"]
+background_mode = 2
+sky = SubResource("Sky")
+tonemap_mode = 3
+
+[node name="MoonDemo" type="Node3D"]
+
+[node name="Planet" type="Node3D" parent="."]
+
+[node name="JarVoxelVolume" type="JarVoxelVolume" parent="Planet"]
+size = 16
+chunk_scene = ExtResource("1_chunk")
+sdf = SubResource("Sdf_planet")
+lod_automatic_update_distance = 16.0
+up_mode = 1
+sea_level = 1024.0
+
+[node name="Gravity" type="Area3D" parent="Planet" groups=["gravity_frames"]]
+gravity_space_override = 3
+gravity_point = true
+gravity_point_unit_distance = 1024.0
+gravity_point_center = Vector3(0, 0, 0)
+gravity = 9.8
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="Planet/Gravity"]
+shape = SubResource("PlanetGravityShape")
+
+[node name="MoonOrbit" type="Node3D" parent="."]
+script = ExtResource("3_orbit")
+degrees_per_second = 1.0
+
+[node name="Moon" type="Node3D" parent="MoonOrbit"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2400, 0, 0)
+script = ExtResource("3_orbit")
+degrees_per_second = 4.0
+axis = Vector3(0.3, 1, 0)
+
+[node name="JarVoxelVolume" type="JarVoxelVolume" parent="MoonOrbit/Moon"]
+size = 14
+chunk_scene = ExtResource("1_chunk")
+sdf = SubResource("Sdf_moon")
+lod_automatic_update_distance = 16.0
+up_mode = 1
+sea_level = 256.0
+
+[node name="Gravity" type="Area3D" parent="MoonOrbit/Moon" groups=["gravity_frames"]]
+priority = 1
+gravity_space_override = 3
+gravity_point = true
+gravity_point_unit_distance = 256.0
+gravity_point_center = Vector3(0, 0, 0)
+gravity = 4.0
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="MoonOrbit/Moon/Gravity"]
+shape = SubResource("MoonGravityShape")
+
+[node name="Player" parent="." instance=ExtResource("2_player")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1150, 0)
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
+environment = SubResource("Environment")
+
+[node name="DirectionalLight3D" type="DirectionalLight3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 0.7, 0.714, 0, -0.714, 0.7, 0, 0, 0)
+shadow_enabled = true

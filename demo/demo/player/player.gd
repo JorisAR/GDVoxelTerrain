@@ -4,8 +4,13 @@ extends CharacterBody3D
 ## (Godot's Area3D point gravity for planets, project gravity otherwise),
 ## walks, sprints and jumps, and flies with Tab.
 ##
+## On moving bodies (an orbiting moon) it moves along with the body whose
+## gravity it is in: Area3D gravity sources in the "gravity_frames" group carry
+## the player with their parent node.
+##
 ## WASD: move   Space: jump / fly up   Shift: sprint / fly down
-## Tab: toggle flying   Ctrl + scroll: fly speed   Esc: release the mouse
+## Tab: toggle flying   Ctrl + scroll: fly speed   M: toggle mesher
+## Esc: release the mouse
 
 @export var walk_speed := 5.0
 @export var sprint_speed := 10.0
@@ -24,6 +29,8 @@ extends CharacterBody3D
 var flying := false
 var _spawned := false
 var _moved_to_surface := false
+var _frame: Node3D # node whose motion the player currently follows
+var _frame_transform: Transform3D
 
 func _ready() -> void:
 	flying = start_flying
@@ -40,6 +47,9 @@ func _unhandled_input(event: InputEvent) -> void:
 		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE if Input.mouse_mode == Input.MOUSE_MODE_CAPTURED else Input.MOUSE_MODE_CAPTURED
 	elif event.is_action_pressed("ui_focus_next"):
 		flying = not flying
+	elif event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_M:
+		for volume: JarVoxelVolume in _volumes():
+			volume.meshing_algorithm = (1 - volume.meshing_algorithm) as JarVoxelVolume.MeshingAlgorithm
 	elif event is InputEventMouseButton and event.pressed and event.ctrl_pressed:
 		if event.button_index == MOUSE_BUTTON_WHEEL_UP:
 			fly_speed = minf(fly_speed * 1.5, 2000.0)
@@ -47,6 +57,7 @@ func _unhandled_input(event: InputEvent) -> void:
 			fly_speed = maxf(fly_speed / 1.5, 1.0)
 
 func _physics_process(delta: float) -> void:
+	_follow_frame()
 	var gravity := get_gravity()
 	if gravity.length_squared() > 1e-6:
 		up_direction = -gravity.normalized()
@@ -72,7 +83,7 @@ func _physics_process(delta: float) -> void:
 func _try_spawn() -> bool:
 	if start_flying:
 		return true
-	var volumes := get_tree().root.find_children("*", "JarVoxelVolume", true, false)
+	var volumes := _volumes()
 	if not _moved_to_surface:
 		for volume: JarVoxelVolume in volumes:
 			var surface := volume.raycast_sdf(global_position, global_position - up_direction * 10000.0)
@@ -93,6 +104,27 @@ func _try_spawn() -> bool:
 	global_position = hit.position + up_direction * 0.1
 	velocity = Vector3.ZERO
 	return true
+
+## Moves and turns the player with the body it stands on (or flies near): the
+## parent of the highest-priority gravity frame area overlapping the player.
+func _follow_frame() -> void:
+	var best: Area3D = null
+	for area: Area3D in get_tree().get_nodes_in_group("gravity_frames"):
+		if area.overlaps_body(self) and (best == null or area.priority > best.priority):
+			best = area
+	var frame: Node3D = best.get_parent() if best else null
+	if frame != _frame:
+		_frame = frame
+	elif frame:
+		# Apply how the frame moved since the last physics frame.
+		var motion := frame.global_transform * _frame_transform.affine_inverse()
+		global_transform = motion * global_transform
+		velocity = motion.basis * velocity
+	if frame:
+		_frame_transform = frame.global_transform
+
+func _volumes() -> Array[Node]:
+	return get_tree().root.find_children("*", "JarVoxelVolume", true, false)
 
 ## Rotates the body so its up axis follows gravity, keeping the heading.
 func _align_to(up: Vector3, delta: float) -> void:
@@ -135,6 +167,9 @@ func _fly(input: Vector2, delta: float) -> void:
 
 func _update_hud() -> void:
 	var editor := head.get_node_or_null("Camera3D/Editor")
-	var mode := "flying %.0f m/s" % fly_speed if flying else ("walking" if is_on_floor() else "airborne")
-	hud.text = "%s   |   %s\nLMB dig  RMB add  Q brush  scroll size  E smooth  1-4 material  R preview  Tab fly" % [
-		mode, editor.describe() if editor and editor.has_method("describe") else ""]
+	var mode := "flying %.0f m/s (Ctrl+scroll)" % fly_speed if flying else ("walking" if is_on_floor() else "airborne")
+	var volumes := _volumes()
+	var mesher: String = ["surface nets", "dual contouring"][volumes[0].meshing_algorithm] if volumes else ""
+	var brush: String = editor.describe() if editor and editor.has_method("describe") else ""
+	hud.text = "%d fps   %s   |   %s   |   %s (M)\nLMB dig  RMB add  Q brush  scroll size  E smooth  1-4 material  R preview  Tab fly" % [
+		Engine.get_frames_per_second(), mode, brush, mesher]

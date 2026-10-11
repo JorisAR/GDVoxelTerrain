@@ -1,4 +1,4 @@
-[gd_scene format=3]
+[gd_scene format=3 uid="uid://b81gow3g200oa"]
 
 [ext_resource type="PackedScene" uid="uid://c7kqgl1k10x14" path="res://addons/jar_voxel_terrain/src/chunk.tscn" id="1_chunk"]
 [ext_resource type="JarPlanetSdf" uid="uid://c0w3b174vgmm7" path="res://demo/planet_sdf.tres" id="2_sdf"]
@@ -24,12 +24,12 @@ background_mode = 2
 sky = SubResource("Sky")
 tonemap_mode = 3
 
-[node name="WalkPlanet" type="Node3D"]
+[node name="PlanetDemo" type="Node3D" unique_id=642987003]
 
-[node name="Planet" type="Node3D" parent="."]
+[node name="Planet" type="Node3D" parent="." unique_id=208202448]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -4196, 0)
 
-[node name="JarVoxelVolume" type="JarVoxelVolume" parent="Planet"]
+[node name="JarVoxelVolume" type="JarVoxelVolume" parent="Planet" unique_id=1034945197]
 size = 20
 chunk_scene = ExtResource("1_chunk")
 sdf = ExtResource("2_sdf")
@@ -39,26 +39,26 @@ up_mode = 1
 sea_level = 4096.0
 population_terrain_details = Array[JarTerrainDetail]([ExtResource("4_grass")])
 
-[node name="Gravity" type="Area3D" parent="Planet"]
+[node name="Gravity" type="Area3D" parent="Planet" unique_id=822470123 groups=["gravity_frames"]]
 gravity_space_override = 3
 gravity_point = true
 gravity_point_unit_distance = 4096.0
 gravity_point_center = Vector3(0, 0, 0)
-gravity = 9.8
+gravity_direction = Vector3(0, 0, 0)
 
-[node name="CollisionShape3D" type="CollisionShape3D" parent="Planet/Gravity"]
+[node name="CollisionShape3D" type="CollisionShape3D" parent="Planet/Gravity" unique_id=336188260]
 shape = SubResource("GravityShape")
 
-[node name="Water" type="MeshInstance3D" parent="Planet"]
+[node name="Water" type="MeshInstance3D" parent="Planet" unique_id=1786798836]
 mesh = SubResource("WaterMesh")
 surface_material_override/0 = ExtResource("5_water")
 
-[node name="Player" parent="." instance=ExtResource("3_player")]
+[node name="Player" parent="." unique_id=121442460 instance=ExtResource("3_player")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 120, 0)
 
-[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
+[node name="WorldEnvironment" type="WorldEnvironment" parent="." unique_id=1256624684]
 environment = SubResource("Environment")
 
-[node name="DirectionalLight3D" type="DirectionalLight3D" parent="."]
+[node name="DirectionalLight3D" type="DirectionalLight3D" parent="." unique_id=2041357874]
 transform = Transform3D(1, 0, 0, 0, 0.7, 0.714, 0, -0.714, 0.7, 0, 0, 0)
 shadow_enabled = true

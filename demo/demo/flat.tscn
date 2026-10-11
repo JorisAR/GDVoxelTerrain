@@ -1,7 +1,7 @@
 [gd_scene format=3]
 
 [ext_resource type="PackedScene" uid="uid://c7kqgl1k10x14" path="res://addons/jar_voxel_terrain/src/chunk.tscn" id="1_chunk"]
-[ext_resource type="JarTerrainSdf" uid="uid://3jlwgf5biu2x" path="res://demo/terrain_sdf.tres" id="2_sdf"]
+[ext_resource type="JarOperationSdf" uid="uid://dv0mfksbe4f83" path="res://demo/op_carve.tres" id="2_sdf"]
 [ext_resource type="PackedScene" path="res://demo/player/player.tscn" id="3_player"]
 [ext_resource type="JarTerrainDetail" uid="uid://d0oay8xwjjuf3" path="res://demo/assets/population/details/grass_detail.tres" id="4_grass"]
 
@@ -15,7 +15,7 @@ background_mode = 2
 sky = SubResource("Sky")
 tonemap_mode = 3
 
-[node name="WalkFlat" type="Node3D"]
+[node name="Flat" type="Node3D"]
 
 [node name="JarVoxelVolume" type="JarVoxelVolume" parent="."]
 chunk_scene = ExtResource("1_chunk")
