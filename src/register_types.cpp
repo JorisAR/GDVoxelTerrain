@@ -1,6 +1,10 @@
 #include "register_types.h"
 #include "box_sdf.h"
 #include "capsule_sdf.h"
+#include "cone_sdf.h"
+#include "ellipsoid_sdf.h"
+#include "mesh_sdf.h"
+#include "modifier_sdfs.h"
 #include "cylinder_sdf.h"
 #include "operation_sdf.h"
 #include "torus_sdf.h"
@@ -33,6 +37,13 @@ void initialize_jar_voxel_terrain_module(ModuleInitializationLevel p_level)
         GDREGISTER_CLASS(JarCylinderSdf);
         GDREGISTER_CLASS(JarCapsuleSdf);
         GDREGISTER_CLASS(JarTransformSdf);
+        GDREGISTER_CLASS(JarConeSdf);
+        GDREGISTER_CLASS(JarEllipsoidSdf);
+        GDREGISTER_CLASS(JarMeshSdf);
+        GDREGISTER_ABSTRACT_CLASS(JarModifierSdf);
+        GDREGISTER_CLASS(JarOffsetSdf);
+        GDREGISTER_CLASS(JarRepeatSdf);
+        GDREGISTER_CLASS(JarDisplaceSdf);
 
         // POPULATION
         GDREGISTER_ABSTRACT_CLASS(JarTerrainPopulator);

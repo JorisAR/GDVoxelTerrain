@@ -1,4 +1,4 @@
-[gd_resource type="JarTerrainSdf" load_steps=2 format=3 uid="uid://3jlwgf5biu2x"]
+[gd_resource type="JarTerrainSdf" format=3 uid="uid://3jlwgf5biu2x"]
 
 [sub_resource type="FastNoiseLite" id="FastNoiseLite_8043g"]
 frequency = 0.0029

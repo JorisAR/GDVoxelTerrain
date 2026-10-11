@@ -11,11 +11,30 @@
 	<tutorials>
 	</tutorials>
 	<methods>
+		<method name="get_bounds" qualifiers="const">
+			<return type="AABB" />
+			<description>
+				Returns the local-space box enclosing the solid part of the field, or an empty [AABB] if it is unbounded (see [method is_bounded]).
+			</description>
+		</method>
+		<method name="is_bounded" qualifiers="const">
+			<return type="bool" />
+			<description>
+				Returns [code]true[/code] if the solid part is finite. Only bounded fields can be used with [method JarVoxelVolume.edit].
+			</description>
+		</method>
 		<method name="sample" qualifiers="const">
 			<return type="float" />
 			<param index="0" name="position" type="Vector3" />
 			<description>
 				Evaluates the signed distance field at [param position]. Returns a negative value inside the surface, a positive value outside, and [code]0.0[/code] on the surface — useful from scripts, e.g. to check whether a point is underground.
+			</description>
+		</method>
+		<method name="sample_normal" qualifiers="const">
+			<return type="Vector3" />
+			<param index="0" name="position" type="Vector3" />
+			<description>
+				Returns the surface normal (normalized distance gradient) at [param position], in local space.
 			</description>
 		</method>
 	</methods>

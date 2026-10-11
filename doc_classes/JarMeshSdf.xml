@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="JarMeshSdf" inherits="JarSignedDistanceField" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
+	<brief_description>
+		Signed distance field of a closed triangle mesh, for stamping arbitrary shapes into volumes.
+	</brief_description>
+	<description>
+		The mesh is baked into a regular distance grid that is stored in the resource, so saved resources load without baking again. Sampling uses trilinear interpolation and is fast and thread-safe. Inside and outside are decided by ray parity along all three axes with a majority vote, which tolerates small holes and non-manifold spots, but the mesh should be closed.
+		Baking happens automatically the first time a volume or edit uses the field, or press [b]Bake[/b] in the inspector. Combine with [method JarVoxelVolume.edit] to place, rotate and scale the shape.
+	</description>
+	<tutorials>
+	</tutorials>
+	<methods>
+		<method name="bake">
+			<return type="void" />
+			<description>
+				Rebuilds the distance grid from [member mesh]. Runs on the calling thread using the shared worker pool; call it from the main thread.
+			</description>
+		</method>
+		<method name="is_baked" qualifiers="const">
+			<return type="bool" />
+			<description>
+				Returns [code]true[/code] if a distance grid is available.
+			</description>
+		</method>
+	</methods>
+	<members>
+		<member name="bake_now" type="Callable" setter="" getter="get_bake_button" default="Callable()">
+			Inspector button that bakes the grid.
+		</member>
+		<member name="baked_cell_size" type="float" setter="set_baked_cell_size" getter="get_baked_cell_size" default="1.0">
+			Baked grid storage; set by [method bake].
+		</member>
+		<member name="baked_data" type="PackedFloat32Array" setter="set_baked_data" getter="get_baked_data" default="PackedFloat32Array()">
+			Baked grid storage; set by [method bake].
+		</member>
+		<member name="baked_mesh_bounds" type="AABB" setter="set_baked_mesh_bounds" getter="get_baked_mesh_bounds" default="AABB(0, 0, 0, 0, 0, 0)">
+			Baked grid storage; set by [method bake].
+		</member>
+		<member name="baked_origin" type="Vector3" setter="set_baked_origin" getter="get_baked_origin" default="Vector3(0, 0, 0)">
+			Baked grid storage; set by [method bake].
+		</member>
+		<member name="baked_size" type="Vector3i" setter="set_baked_size" getter="get_baked_size" default="Vector3i(0, 0, 0)">
+			Baked grid storage; set by [method bake].
+		</member>
+		<member name="mesh" type="Mesh" setter="set_mesh" getter="get_mesh">
+			The mesh to bake. All triangle surfaces are used.
+		</member>
+		<member name="padding" type="float" setter="set_padding" getter="get_padding" default="2.0">
+			Empty cells of margin around the mesh in the baked grid.
+		</member>
+		<member name="resolution" type="int" setter="set_resolution" getter="get_resolution" default="64">
+			Grid cells along the mesh's longest axis. Higher values capture finer detail at the cost of memory and bake time.
+		</member>
+	</members>
+</class>

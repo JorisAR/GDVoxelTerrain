@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="JarOffsetSdf" inherits="JarModifierSdf" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
+	<brief_description>
+		Grows, shrinks or hollows its child field.
+	</brief_description>
+	<description>
+		A positive [member offset] inflates the surface and rounds its edges; a negative one shrinks it. With [member shell_thickness] above [code]0[/code], only a shell around the surface remains (useful for hollow domes and pipes).
+	</description>
+	<tutorials>
+	</tutorials>
+	<members>
+		<member name="offset" type="float" setter="set_offset" getter="get_offset" default="0.0">
+			Distance to move the surface outwards (negative moves it inwards).
+		</member>
+		<member name="shell_thickness" type="float" setter="set_shell_thickness" getter="get_shell_thickness" default="0.0">
+			If greater than [code]0[/code], hollows the shape into a shell of this thickness.
+		</member>
+	</members>
+</class>

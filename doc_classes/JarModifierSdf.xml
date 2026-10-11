@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="JarModifierSdf" inherits="JarSignedDistanceField" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
+	<brief_description>
+		Base class of SDFs that modify a single child field.
+	</brief_description>
+	<description>
+		See [JarOffsetSdf], [JarRepeatSdf] and [JarDisplaceSdf].
+	</description>
+	<tutorials>
+	</tutorials>
+	<members>
+		<member name="sdf" type="JarSignedDistanceField" setter="set_sdf" getter="get_sdf">
+			The field being modified.
+		</member>
+	</members>
+</class>

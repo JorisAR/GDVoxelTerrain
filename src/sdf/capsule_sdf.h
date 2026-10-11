@@ -15,20 +15,25 @@ class JarCapsuleSdf : public JarSignedDistanceField
     float _radius = 0.5f;
 
   public:
-    void set_point_a(const Vector3 &v) { _a = glm::vec3(v.x, v.y, v.z); }
+    void set_point_a(const Vector3 &v) { set_and_notify(_a, glm::vec3(v.x, v.y, v.z)); }
     Vector3 get_point_a() const { return Vector3(_a.x, _a.y, _a.z); }
-    void set_point_b(const Vector3 &v) { _b = glm::vec3(v.x, v.y, v.z); }
+    void set_point_b(const Vector3 &v) { set_and_notify(_b, glm::vec3(v.x, v.y, v.z)); }
     Vector3 get_point_b() const { return Vector3(_b.x, _b.y, _b.z); }
-    void set_radius(float r) { _radius = r; }
+    void set_radius(float r) { set_and_notify(_radius, r); }
     float get_radius() const { return _radius; }
 
-    virtual float distance(const glm::vec3 &pos) const override
+    float distance(const glm::vec3 &pos) const override
     {
-        glm::vec3 pa = pos - _a;
-        glm::vec3 ba = _b - _a;
-        float denom = glm::dot(ba, ba);
-        float h = denom > 0.0f ? glm::clamp(glm::dot(pa, ba) / denom, 0.0f, 1.0f) : 0.0f;
+        const glm::vec3 pa = pos - _a;
+        const glm::vec3 ba = _b - _a;
+        const float denom = glm::dot(ba, ba);
+        const float h = denom > 0.0f ? glm::clamp(glm::dot(pa, ba) / denom, 0.0f, 1.0f) : 0.0f;
         return glm::length(pa - ba * h) - _radius;
+    }
+
+    Bounds bounds() const override
+    {
+        return Bounds(glm::min(_a, _b) - glm::vec3(_radius), glm::max(_a, _b) + glm::vec3(_radius));
     }
 
   protected:

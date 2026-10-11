@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="JarRepeatSdf" inherits="JarModifierSdf" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
+	<brief_description>
+		Repeats its child field on a grid.
+	</brief_description>
+	<description>
+		Copies are [member spacing] apart and centered on the origin. A [member count] of [code]0[/code] on an axis repeats forever along it (the field is then unbounded and cannot be used with [method JarVoxelVolume.edit]). For exact distances the child should fit inside one cell.
+	</description>
+	<tutorials>
+	</tutorials>
+	<members>
+		<member name="count" type="Vector3i" setter="set_count" getter="get_count" default="Vector3i(3, 1, 3)">
+			Number of copies along each axis; [code]0[/code] means infinite.
+		</member>
+		<member name="spacing" type="Vector3" setter="set_spacing" getter="get_spacing" default="Vector3(4, 4, 4)">
+			Distance between copies along each axis.
+		</member>
+	</members>
+</class>

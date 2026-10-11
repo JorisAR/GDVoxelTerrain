@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="JarConeSdf" inherits="JarSignedDistanceField" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
+	<brief_description>
+		A capped cone along the Y axis.
+	</brief_description>
+	<description>
+		Runs from [member bottom_radius] at [code]-height / 2[/code] to [member top_radius] at [code]+height / 2[/code]. A top radius of [code]0[/code] gives a pointed cone, equal radii a cylinder.
+	</description>
+	<tutorials>
+	</tutorials>
+	<members>
+		<member name="bottom_radius" type="float" setter="set_bottom_radius" getter="get_bottom_radius" default="1.0">
+			Radius at the bottom ([code]-height / 2[/code]).
+		</member>
+		<member name="center" type="Vector3" setter="set_center" getter="get_center" default="Vector3(0, 0, 0)">
+			Center of the cone.
+		</member>
+		<member name="height" type="float" setter="set_height" getter="get_height" default="2.0">
+			Full height along Y.
+		</member>
+		<member name="top_radius" type="float" setter="set_top_radius" getter="get_top_radius" default="0.0">
+			Radius at the top ([code]+height / 2[/code]).
+		</member>
+	</members>
+</class>

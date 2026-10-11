@@ -104,16 +104,14 @@ void JarVoxelVolume::_bind_methods()
                                   ":JarTerrainDetail"),
                  "set_terrain_details", "get_terrain_details");
 
-    // BIND_ENUM_CONSTANT would register the qualified "SDF::..." name, which
-    // GDScript cannot reference.
-#define BIND_SDF_OPERATION(m_name)     ClassDB::bind_integer_constant(get_class_static(), "Operation", #m_name, SDF::m_name)
-    BIND_SDF_OPERATION(SDF_OPERATION_UNION);
-    BIND_SDF_OPERATION(SDF_OPERATION_SUBTRACTION);
-    BIND_SDF_OPERATION(SDF_OPERATION_INTERSECTION);
-    BIND_SDF_OPERATION(SDF_OPERATION_SMOOTH_UNION);
-    BIND_SDF_OPERATION(SDF_OPERATION_SMOOTH_SUBTRACTION);
-    BIND_SDF_OPERATION(SDF_OPERATION_SMOOTH_INTERSECTION);
-#undef BIND_SDF_OPERATION
+    BIND_ENUM_CONSTANT(SDF_OPERATION_UNION);
+    BIND_ENUM_CONSTANT(SDF_OPERATION_SUBTRACTION);
+    BIND_ENUM_CONSTANT(SDF_OPERATION_INTERSECTION);
+    BIND_ENUM_CONSTANT(SDF_OPERATION_SMOOTH_UNION);
+    BIND_ENUM_CONSTANT(SDF_OPERATION_SMOOTH_SUBTRACTION);
+    BIND_ENUM_CONSTANT(SDF_OPERATION_SMOOTH_INTERSECTION);
+    ClassDB::bind_method(D_METHOD("edit", "sdf", "operation", "transform", "material", "smoothness"),
+                         &JarVoxelVolume::edit, DEFVAL(0), DEFVAL(0.0f));
     ClassDB::bind_method(D_METHOD("modify", "sdf", "operation", "position", "radius", "material"),
                          &JarVoxelVolume::modify, DEFVAL(0));
     ClassDB::bind_method(D_METHOD("sphere_edit", "position", "radius", "union", "material"),
@@ -243,14 +241,62 @@ void JarVoxelVolume::process_pool()
     }
 }
 
-void JarVoxelVolume::modify(const Ref<JarSignedDistanceField> sdf, const SDF::Operation operation,
-                             const Vector3 &position, const float radius, const int material)
+void JarVoxelVolume::queue_edit(const Ref<JarSignedDistanceField> &sdf, SDF::Operation operation,
+                                const Transform3D &transform, int material, float smoothness, const Bounds &limit)
 {
-    const Vector3 local = to_local(position);
-    glm::vec3 pos = glm::vec3(local.x, local.y, local.z);
-    // Use the caller's SDF; `radius` bounds the affected region. Fall back to a
-    // sphere when none is given (previously the sdf argument was ignored and a
-    // sphere was always used).
+    if (sdf.is_null())
+    {
+        UtilityFunctions::push_error("JarVoxelVolume: edit needs an SDF.");
+        return;
+    }
+    sdf->prepare(); // e.g. bake a mesh SDF, on this (main) thread
+
+    // SDF space -> volume space.
+    const Transform3D local = get_global_transform().affine_inverse() * transform;
+    const glm::mat4 toVolume = to_glm(local);
+    const Vector3 scale = local.basis.get_scale().abs();
+
+    ModifySettings settings;
+    settings.sdf = sdf;
+    settings.toSdf = glm::inverse(toVolume);
+    settings.distanceScale = std::max(float(std::min(scale.x, std::min(scale.y, scale.z))), 1e-4f);
+    settings.operation = operation;
+    settings.smoothness = smoothness;
+    settings.material = material;
+
+    // Region the edit can change: the SDF's solid part (plus room for smooth
+    // blending and the mesher's sampling margin), clipped to `limit`.
+    const float margin = _octreeScale * 2.0f + std::max(0.0f, smoothness);
+    Bounds region = sdf->bounds();
+    if (region.is_valid() && !region.is_infinite())
+        region = region.transformed(toVolume).expanded(margin);
+    if (!limit.is_infinite())
+        region = region.is_infinite() ? limit : region.intersected(limit);
+    if (!region.is_valid())
+        return; // nothing to change
+    if (region.is_infinite())
+    {
+        UtilityFunctions::push_error("JarVoxelVolume: cannot edit with an unbounded SDF; use modify() with a radius.");
+        return;
+    }
+    settings.bounds = region;
+
+    // Queued rather than applied immediately: the octree may only be mutated
+    // when no build or meshing task is reading it (see process()).
+    _modifySettingsQueue.push(settings);
+}
+
+void JarVoxelVolume::edit(const Ref<JarSignedDistanceField> &sdf, const Operation operation,
+                          const Transform3D &transform, const int material, const float smoothness)
+{
+    queue_edit(sdf, static_cast<SDF::Operation>(operation), transform, material, smoothness);
+}
+
+void JarVoxelVolume::modify(const Ref<JarSignedDistanceField> sdf, const Operation operation,
+                            const Vector3 &position, const float radius, const int material)
+{
+    // Use the caller's SDF centered on `position`, limited to `radius`. Falls
+    // back to a sphere when none is given.
     Ref<JarSignedDistanceField> s = sdf;
     if (s.is_null())
     {
@@ -259,26 +305,22 @@ void JarVoxelVolume::modify(const Ref<JarSignedDistanceField> sdf, const SDF::Op
         sphere->set_radius(radius);
         s = sphere;
     }
-
-    auto edge = glm::vec3(radius);
-    _modifySettingsQueue.push({s, Bounds(pos - edge, pos + edge), pos, operation, material});
+    const Vector3 local = to_local(position);
+    const glm::vec3 center(local.x, local.y, local.z);
+    const glm::vec3 edge(radius + _octreeScale * 2.0f);
+    queue_edit(s, static_cast<SDF::Operation>(operation), Transform3D(Basis(), position), material, 0.0f,
+               Bounds(center - edge, center + edge));
 }
 
 void JarVoxelVolume::sphere_edit(const Vector3 &position, const float radius, bool operation_union,
-                                  const int material)
+                                 const int material)
 {
-    const Vector3 local = to_local(position);
-    glm::vec3 pos = glm::vec3(local.x, local.y, local.z);
-    auto operation = operation_union ? SDF::Operation::SDF_OPERATION_UNION : SDF::Operation::SDF_OPERATION_SUBTRACTION;
     Ref<JarSphereSdf> sdf;
     sdf.instantiate();
     sdf->set_radius(radius);
-    auto edge = glm::vec3(radius + _octreeScale * 2.0f);
-
-    // Queued rather than applied immediately: the octree may only be mutated
-    // when no build or meshing task is reading it (see process()). Previously the
-    // edit was silently dropped while a build was running.
-    _modifySettingsQueue.push({sdf, Bounds(pos - edge, pos + edge), pos, operation, material});
+    const auto operation =
+        operation_union ? SDF::Operation::SDF_OPERATION_UNION : SDF::Operation::SDF_OPERATION_SUBTRACTION;
+    queue_edit(sdf, operation, Transform3D(Basis(), position), material, 0.0f);
 }
 
 void JarVoxelVolume::enqueue_chunk_collider(JarVoxelChunk *chunk)
@@ -487,6 +529,7 @@ void JarVoxelVolume::initialize()
         UtilityFunctions::printerr("No sdf, please provide it.");
         return;
     }
+    _sdf->prepare(); // main thread: caches the SDF needs before workers sample it
     _chunkSize = (1 << _minChunkSize);
     _voxelLod =
         JarVoxelLoD(_lod_automatic_update, _lod_automatic_update_distance, _lod_level_count, _lod_shell_size, _octreeScale);

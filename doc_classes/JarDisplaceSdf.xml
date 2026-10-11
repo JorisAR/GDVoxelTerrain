@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="JarDisplaceSdf" inherits="JarModifierSdf" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
+	<brief_description>
+		Displaces its child field's surface with 3D noise.
+	</brief_description>
+	<description>
+		Useful for rocky boulders and natural-looking caves. Displacement can bend the field enough that it is no longer an exact distance, which is fine for meshing and edits.
+	</description>
+	<tutorials>
+	</tutorials>
+	<members>
+		<member name="amplitude" type="float" setter="set_amplitude" getter="get_amplitude" default="1.0">
+			Maximum displacement distance.
+		</member>
+		<member name="noise" type="FastNoiseLite" setter="set_noise" getter="get_noise">
+			Noise sampled at each point; values in [code][-1, 1][/code].
+		</member>
+	</members>
+</class>

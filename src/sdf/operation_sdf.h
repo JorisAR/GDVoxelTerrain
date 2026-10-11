@@ -7,8 +7,6 @@
 // plus smooth variants). Lets you carve caves (subtract a sphere), fuse shapes
 // (union), or blend them (smooth ops) purely as data — no code.
 //   result = op(sdf_a(p), sdf_b(p))
-// Implements contributing-list item: "Combine multiple existing SDFs based on a
-// boolean operation (OperationSDF)."
 class JarOperationSdf : public JarSignedDistanceField
 {
     GDCLASS(JarOperationSdf, JarSignedDistanceField);
@@ -20,19 +18,19 @@ class JarOperationSdf : public JarSignedDistanceField
     float _smoothness = 1.0f; // blend radius k, only used by the smooth_* operations
 
   public:
-    void set_sdf_a(const Ref<JarSignedDistanceField> &sdf) { _sdf_a = sdf; emit_changed(); }
+    void set_sdf_a(const Ref<JarSignedDistanceField> &sdf) { set_and_notify(_sdf_a, sdf); }
     Ref<JarSignedDistanceField> get_sdf_a() const { return _sdf_a; }
 
-    void set_sdf_b(const Ref<JarSignedDistanceField> &sdf) { _sdf_b = sdf; emit_changed(); }
+    void set_sdf_b(const Ref<JarSignedDistanceField> &sdf) { set_and_notify(_sdf_b, sdf); }
     Ref<JarSignedDistanceField> get_sdf_b() const { return _sdf_b; }
 
-    void set_operation(int op) { _operation = op; emit_changed(); }
+    void set_operation(int op) { set_and_notify(_operation, op); }
     int get_operation() const { return _operation; }
 
-    void set_smoothness(float k) { _smoothness = k; emit_changed(); }
+    void set_smoothness(float k) { set_and_notify(_smoothness, k); }
     float get_smoothness() const { return _smoothness; }
 
-    virtual float distance(const glm::vec3 &pos) const override
+    float distance(const glm::vec3 &pos) const override
     {
         const bool ha = _sdf_a.is_valid();
         const bool hb = _sdf_b.is_valid();
@@ -48,6 +46,39 @@ class JarOperationSdf : public JarSignedDistanceField
         const float b = _sdf_b->distance(pos);
         return SDF::apply_operation(static_cast<SDF::Operation>(_operation), a, b,
                                     _smoothness > 0.0f ? _smoothness : 0.0001f);
+    }
+
+    Bounds bounds() const override
+    {
+        if (_sdf_a.is_null() && _sdf_b.is_null())
+            return Bounds();
+        if (_sdf_a.is_null())
+            return _sdf_b->bounds();
+        if (_sdf_b.is_null())
+            return _sdf_a->bounds();
+        const Bounds a = _sdf_a->bounds();
+        const Bounds b = _sdf_b->bounds();
+        const bool smooth = _operation >= SDF::SDF_OPERATION_SMOOTH_UNION;
+        const float k = smooth ? std::max(_smoothness, 0.0f) : 0.0f;
+        switch (_operation)
+        {
+        case SDF::SDF_OPERATION_SUBTRACTION:
+        case SDF::SDF_OPERATION_SMOOTH_SUBTRACTION:
+            return a;
+        case SDF::SDF_OPERATION_INTERSECTION:
+        case SDF::SDF_OPERATION_SMOOTH_INTERSECTION:
+            return a.intersected(b);
+        default: // unions; a smooth union can bulge by up to ~k/4 between the shapes
+            return a.joined(b).expanded(k * 0.25f);
+        }
+    }
+
+    void prepare() override
+    {
+        if (_sdf_a.is_valid())
+            _sdf_a->prepare();
+        if (_sdf_b.is_valid())
+            _sdf_b->prepare();
     }
 
   protected:

@@ -16,11 +16,11 @@ class JarTorusSdf : public JarSignedDistanceField
     float _minorRadius = 0.5f;
 
   public:
-    void set_center(const Vector3 &c) { _center = glm::vec3(c.x, c.y, c.z); }
+    void set_center(const Vector3 &c) { set_and_notify(_center, glm::vec3(c.x, c.y, c.z)); }
     Vector3 get_center() const { return Vector3(_center.x, _center.y, _center.z); }
-    void set_major_radius(float r) { _majorRadius = r; }
+    void set_major_radius(float r) { set_and_notify(_majorRadius, r); }
     float get_major_radius() const { return _majorRadius; }
-    void set_minor_radius(float r) { _minorRadius = r; }
+    void set_minor_radius(float r) { set_and_notify(_minorRadius, r); }
     float get_minor_radius() const { return _minorRadius; }
 
     virtual float distance(const glm::vec3 &pos) const override
@@ -28,6 +28,12 @@ class JarTorusSdf : public JarSignedDistanceField
         glm::vec3 p = pos - _center;
         glm::vec2 q(glm::length(glm::vec2(p.x, p.z)) - _majorRadius, p.y);
         return glm::length(q) - _minorRadius;
+    }
+
+    Bounds bounds() const override
+    {
+        const glm::vec3 e(_majorRadius + _minorRadius, _minorRadius, _majorRadius + _minorRadius);
+        return Bounds(_center - e, _center + e);
     }
 
   protected:

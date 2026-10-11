@@ -58,14 +58,33 @@ Controls: `WASD` + mouse to fly, `left click` to add terrain, `right click` to d
 
 ### Shaping worlds with SDFs
 
-Terrain shape is authored as composable `JarSignedDistanceField` resources:
+Shapes are authored as composable `JarSignedDistanceField` resources:
 
-- **Primitives:** `JarSphereSdf`, `JarBoxSdf`, `JarPlaneSdf`, `JarCylinderSdf`, `JarCapsuleSdf`, `JarTorusSdf`, plus the noise-based `JarTerrainSdf` (heightmap terrain) and `JarPlanetSdf` (planets).
-- **`JarOperationSdf`** combines two SDFs with a boolean operation (union, subtraction, intersection, and smooth variants) — e.g. subtract a sphere from terrain to start with a crater. Operations can be nested for full CSG.
-- **`JarTransformSdf`** positions, rotates and scales any child SDF.
-- Every SDF can be queried from scripts: `sdf.sample(position)` returns the signed distance (negative = inside).
+- **Primitives:** `JarSphereSdf`, `JarBoxSdf` (optionally rounded), `JarPlaneSdf`, `JarCylinderSdf`, `JarCapsuleSdf`, `JarTorusSdf`, `JarConeSdf`, `JarEllipsoidSdf`.
+- **Terrain:** `JarTerrainSdf` (noise heightmap) and `JarPlanetSdf` (noisy sphere).
+- **Meshes:** `JarMeshSdf` turns any closed triangle mesh into an SDF. It is baked once into a distance grid stored in the resource (press *Bake* in the inspector, or it bakes on first use).
+- **Combining:** `JarOperationSdf` (union / subtraction / intersection and smooth variants, nestable for full CSG) and `JarTransformSdf` (position / rotate / scale a child).
+- **Modifiers:** `JarOffsetSdf` (grow, shrink, hollow into a shell), `JarRepeatSdf` (grid copies), `JarDisplaceSdf` (noise displacement).
+- Every SDF can be queried from scripts: `sdf.sample(position)`, `sdf.sample_normal(position)`, `sdf.get_bounds()`.
 
-See `demo/demo/op_demo.tscn` + `demo/demo/op_carve.tres` for a worked example (a crater carved out of noise terrain with a single resource).
+Edit volumes with any bounded SDF, placed with a full transform:
+
+```gdscript
+var box := JarBoxSdf.new()
+box.extent = Vector3(2, 4, 2)
+volume.edit(box, JarVoxelVolume.SDF_OPERATION_UNION, Transform3D(Basis(Vector3.UP, PI / 4), hit_position))
+```
+
+In the demos, `Q` cycles the brush (sphere, box, cone, prism mesh) and `E` toggles smooth blending. See `demo/demo/op_demo.tscn` + `demo/demo/op_carve.tres` for a crater carved out of noise terrain with a single resource.
+
+### Tests
+
+Headless checks live in `demo/tests` and exit with a non-zero code on failure:
+
+```bash
+godot --headless --path demo res://tests/sdf_tests.tscn
+godot --headless --path demo res://tests/edit_tests.tscn
+```
 
 ### Performance tips
 

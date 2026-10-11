@@ -293,23 +293,18 @@ bool VoxelOctreeNode::has_surface(const JarVoxelVolume &terrain, const float val
 
 void VoxelOctreeNode::modify_sdf_in_bounds(JarVoxelVolume &terrain, const ModifySettings &settings)
 {
-    if (settings.sdf.is_null())
-    {
-        UtilityFunctions::print("sdf invalid");
-        return;
-    }
-
     auto bounds = get_bounds(terrain.get_octree_scale());
     if (!settings.bounds.intersects(bounds))
         return;
 
     LoD = terrain.desired_lod(*this);
     if (!_isGenerated)
-        set_value(terrain.get_sdf()->distance(_center));
+        set_value(terrain.get_sdf_ptr()->distance(_center));
 
     float old_value = get_value();
-    float sdf_value = settings.sdf->distance(_center - settings.position);
-    float new_value = SDF::apply_operation(settings.operation, old_value, sdf_value, terrain.get_octree_scale());
+    float sdf_value = settings.sample(_center);
+    const float k = settings.smoothness > 0.0f ? settings.smoothness : terrain.get_octree_scale();
+    float new_value = SDF::apply_operation(settings.operation, old_value, sdf_value, k);
 
     // ensure the node has children if it contains a surface
     if (has_surface(terrain, new_value)) // || has_surface(terrain, sdf_value)

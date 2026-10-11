@@ -19,20 +19,18 @@ private:
 public:
     JarPlanetSdf() {}
 
-    void set_noise(Ref<FastNoiseLite> noise) { _noiseLite = noise; }
+    void set_noise(Ref<FastNoiseLite> noise) { set_and_notify(_noiseLite, noise); }
     Ref<FastNoiseLite> get_noise() const { return _noiseLite; }
 
-    void set_radius(float value) { _radius = value; }
+    void set_radius(float value) { set_and_notify(_radius, value); }
     float get_radius() const { return _radius; }
 
-    void set_center(Vector3 center) { 
-        _center = glm::vec3(center.x, center.y, center.z); 
-    }
+    void set_center(Vector3 center) { set_and_notify(_center, glm::vec3(center.x, center.y, center.z)); }
     Vector3 get_center() const { 
         return Vector3(_center.x, _center.y, _center.z); 
     }
 
-    void set_noise_scale(float scale) { _noiseScale = scale; }
+    void set_noise_scale(float scale) { set_and_notify(_noiseScale, scale); }
     float get_noise_scale() const { return _noiseScale; }
 
 protected:
@@ -40,12 +38,6 @@ protected:
     float get_spherical_displacement(const glm::vec3& pos) const {
         if(_noiseLite.is_null()) return 0.0f;
         
-        // Convert to spherical coordinates for more natural planet noise
-        const glm::vec3 dir = glm::normalize(pos - _center);
-        const float latitude = asin(dir.y);
-        const float longitude = atan2(dir.z, dir.x);
-        
-        // Sample 3D noise with spherical warping
         const float height = _noiseLite->get_noise_3d(
             pos.x,
             pos.y,
@@ -54,6 +46,12 @@ protected:
 
         if(height < 0.0f) return 0.5f * height * _noiseScale;
         return (height) * _noiseScale;
+    }
+
+    Bounds bounds() const override {
+        // Displacement is at most noise_scale (outward).
+        const glm::vec3 e(_radius + _noiseScale);
+        return Bounds(_center - e, _center + e);
     }
 
     virtual float distance(const glm::vec3& pos) const override {

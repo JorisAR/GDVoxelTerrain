@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="JarEllipsoidSdf" inherits="JarSignedDistanceField" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
+	<brief_description>
+		An ellipsoid with a radius per axis.
+	</brief_description>
+	<description>
+		The distance is a close bound rather than exact, which is standard for ellipsoids and works well for meshing and edits.
+	</description>
+	<tutorials>
+	</tutorials>
+	<members>
+		<member name="center" type="Vector3" setter="set_center" getter="get_center" default="Vector3(0, 0, 0)">
+			Center of the ellipsoid.
+		</member>
+		<member name="radii" type="Vector3" setter="set_radii" getter="get_radii" default="Vector3(1, 0.5, 1)">
+			Radius along each local axis.
+		</member>
+	</members>
+</class>

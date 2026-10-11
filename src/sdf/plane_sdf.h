@@ -3,46 +3,32 @@
 
 #include "signed_distance_field.h"
 
+// Infinite half-space: solid below the plane dot(normal, p) + d = 0.
 class JarPlaneSdf : public JarSignedDistanceField
 {
     GDCLASS(JarPlaneSdf, JarSignedDistanceField);
 
   private:
-    float _d;
-    glm::vec3 _normal;
+    glm::vec3 _normal{0.0f, 1.0f, 0.0f};
+    float _d = 0.0f;
 
   public:
-    JarPlaneSdf() : _normal(0.0f, 1.0f, 0.0f), _d(0.0f)
-    {
-    }
     void set_normal(const Vector3 &normal)
     {
-        _normal = glm::vec3(normal.x, normal.y, normal.z);
-        if(glm::length(_normal) <= 1.0e-6f)
-        {
-            _normal = glm::vec3(0.0f, 1.0f, 0.0f);
-        }
-        // _normal = glm::normalize(_normal);
+        const glm::vec3 n(normal.x, normal.y, normal.z);
+        const float len = glm::length(n);
+        set_and_notify(_normal, len > 1.0e-6f ? n / len : glm::vec3(0.0f, 1.0f, 0.0f));
     }
-    Vector3 get_normal() const
-    {
-        return Vector3(_normal.x, _normal.y, _normal.z);
-    }
-    void set_d(float d)
-    {
-        _d = d;
-    }
-    float get_d() const
-    {
-        return _d;
-    }
+    Vector3 get_normal() const { return Vector3(_normal.x, _normal.y, _normal.z); }
+    void set_d(float d) { set_and_notify(_d, d); }
+    float get_d() const { return _d; }
 
-    virtual float distance(const glm::vec3 &pos) const override
+    float distance(const glm::vec3 &pos) const override
     {
         return glm::dot(_normal, pos) + _d;
     }
 
-    virtual glm::vec3 normal(const glm::vec3 &pos) const override
+    glm::vec3 normal(const glm::vec3 &) const override
     {
         return _normal;
     }

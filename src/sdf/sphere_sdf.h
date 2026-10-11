@@ -8,38 +8,30 @@ class JarSphereSdf : public JarSignedDistanceField
     GDCLASS(JarSphereSdf, JarSignedDistanceField);
 
   private:
-    glm::vec3 _center;
-    float _radius;
+    glm::vec3 _center{0.0f};
+    float _radius = 1.0f;
 
   public:
-    JarSphereSdf() : _center(0.0f, 0.0f, 0.0f), _radius(1.0f)
-    {
-    }
-    void set_center(const Vector3 &center)
-    {
-        _center = glm::vec3(center.x, center.y, center.z);
-    }
-    Vector3 get_center() const
-    {
-        return Vector3(_center.x, _center.y, _center.z);
-    }
-    void set_radius(float radius)
-    {
-        _radius = radius;
-    }
-    float get_radius() const
-    {
-        return _radius;
-    }
+    void set_center(const Vector3 &c) { set_and_notify(_center, glm::vec3(c.x, c.y, c.z)); }
+    Vector3 get_center() const { return Vector3(_center.x, _center.y, _center.z); }
+    void set_radius(float r) { set_and_notify(_radius, r); }
+    float get_radius() const { return _radius; }
 
-    virtual float distance(const glm::vec3 &pos) const override
+    float distance(const glm::vec3 &pos) const override
     {
         return glm::length(pos - _center) - _radius;
     }
 
-    virtual glm::vec3 normal(const glm::vec3 &pos) const override
+    glm::vec3 normal(const glm::vec3 &pos) const override
     {
-        return glm::normalize(pos - _center);
+        const glm::vec3 d = pos - _center;
+        const float len = glm::length(d);
+        return len > 0.0f ? d / len : glm::vec3(0.0f, 1.0f, 0.0f);
+    }
+
+    Bounds bounds() const override
+    {
+        return Bounds(_center - glm::vec3(_radius), _center + glm::vec3(_radius));
     }
 
   protected:
@@ -50,7 +42,8 @@ class JarSphereSdf : public JarSignedDistanceField
         ClassDB::bind_method(D_METHOD("set_radius", "radius"), &JarSphereSdf::set_radius);
         ClassDB::bind_method(D_METHOD("get_radius"), &JarSphereSdf::get_radius);
         ADD_PROPERTY(PropertyInfo(Variant::VECTOR3, "center"), "set_center", "get_center");
-        ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "radius"), "set_radius", "get_radius");
+        ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "radius", PROPERTY_HINT_RANGE, "0,1024,0.01,or_greater"),
+                     "set_radius", "get_radius");
     }
 };
 

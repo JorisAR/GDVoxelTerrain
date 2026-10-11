@@ -21,7 +21,7 @@ class JarTerrainSdf : public JarSignedDistanceField
 
     void set_noise(Ref<FastNoiseLite> noise)
     {
-        _noiseLite = noise;
+        set_and_notify(_noiseLite, noise);
     }
 
     Ref<FastNoiseLite> get_noise() const
@@ -31,7 +31,7 @@ class JarTerrainSdf : public JarSignedDistanceField
 
     void set_height_scale(float heightScale)
     {
-        _heightScale = heightScale;
+        set_and_notify(_heightScale, heightScale);
     }
 
     float get_height_scale() const
@@ -42,6 +42,8 @@ class JarTerrainSdf : public JarSignedDistanceField
   protected:
     float sample_height(const Vector2 &pos) const
     {
+        if (_noiseLite.is_null())
+            return 0.0f;
         float noise = _noiseLite->get_noise_2d(pos.x, pos.y);
         return _heightScale * (noise > 0 ? 2.0f * noise : 1.0f * noise);
     }
@@ -62,7 +64,6 @@ class JarTerrainSdf : public JarSignedDistanceField
         Vector2 samplePos(pos.x, pos.z);
         float height = sample_height(samplePos);
         Vector2 gradient = sample_gradient(samplePos, height);
-        Vector3 normal = Vector3(gradient.x, 1, gradient.y).normalized();
 
         // Adjust SDF based on gradient
         return (pos.y - height) / sqrt(1 + gradient.x * gradient.x + gradient.y * gradient.y);

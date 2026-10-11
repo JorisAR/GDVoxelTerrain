@@ -118,6 +118,10 @@ class JarVoxelVolume : public Node3D
     void process_chunk_queue(float delta);
     void generate_epsilons();
     void process_modify_queue();
+    // Resolves an edit into volume space and queues it. `limit` (volume-local)
+    // further restricts the affected region, e.g. modify()'s radius.
+    void queue_edit(const Ref<JarSignedDistanceField> &sdf, SDF::Operation operation, const Transform3D &transform,
+                    int material, float smoothness, const Bounds &limit = Bounds::infinite());
 
     // void process_delete_chunk_queue();
 
@@ -133,7 +137,21 @@ class JarVoxelVolume : public Node3D
     JarVoxelChunk *pool_acquire();
     void pool_release(JarVoxelChunk *chunk);
 
-    void modify(const Ref<JarSignedDistanceField> sdf, const SDF::Operation operation, const Vector3 &position,
+    // Script-facing operations (GDScript sees them as JarVoxelVolume.Operation).
+    enum Operation
+    {
+        SDF_OPERATION_UNION = SDF::SDF_OPERATION_UNION,
+        SDF_OPERATION_SUBTRACTION = SDF::SDF_OPERATION_SUBTRACTION,
+        SDF_OPERATION_INTERSECTION = SDF::SDF_OPERATION_INTERSECTION,
+        SDF_OPERATION_SMOOTH_UNION = SDF::SDF_OPERATION_SMOOTH_UNION,
+        SDF_OPERATION_SMOOTH_SUBTRACTION = SDF::SDF_OPERATION_SMOOTH_SUBTRACTION,
+        SDF_OPERATION_SMOOTH_INTERSECTION = SDF::SDF_OPERATION_SMOOTH_INTERSECTION,
+    };
+
+    // Places `sdf` with a global transform and combines it with the volume.
+    void edit(const Ref<JarSignedDistanceField> &sdf, const Operation operation, const Transform3D &transform,
+              const int material = 0, const float smoothness = 0.0f);
+    void modify(const Ref<JarSignedDistanceField> sdf, const Operation operation, const Vector3 &position,
                 const float radius, const int material = 0);
     void sphere_edit(const Vector3 &position, const float radius, bool operation_union, const int material = 0);
 
@@ -234,7 +252,7 @@ class JarVoxelVolume : public Node3D
     TypedArray<JarTerrainDetail> get_terrain_details() const;
 };
 
-VARIANT_ENUM_CAST(SDF::Operation);
+VARIANT_ENUM_CAST(JarVoxelVolume::Operation);
 VARIANT_ENUM_CAST(JarVoxelVolume::UpMode);
 
 #endif // VOXEL_VOLUME_H

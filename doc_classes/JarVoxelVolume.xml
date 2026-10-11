@@ -11,6 +11,23 @@
 	<tutorials>
 	</tutorials>
 	<methods>
+		<method name="edit">
+			<return type="void" />
+			<param index="0" name="sdf" type="JarSignedDistanceField" />
+			<param index="1" name="operation" type="int" enum="JarVoxelVolume.Operation" />
+			<param index="2" name="transform" type="Transform3D" />
+			<param index="3" name="material" type="int" default="0" />
+			<param index="4" name="smoothness" type="float" default="0.0" />
+			<description>
+				Combines [param sdf], placed with the global [param transform] (position, rotation and uniform scale), with the volume using [param operation]. The affected region is derived from [method JarSignedDistanceField.get_bounds], so the SDF must be bounded. [param material] (0-3) is painted onto changed voxels, [code]-1[/code] keeps existing materials. [param smoothness] is the blend radius of the smooth operations; [code]0[/code] uses the voxel size.
+				Edits are queued and applied on a background thread.
+				[codeblock]
+				var box := JarBoxSdf.new()
+				box.extent = Vector3(2, 4, 2)
+				volume.edit(box, JarVoxelVolume.SDF_OPERATION_UNION, Transform3D(Basis(Vector3.UP, PI / 4), hit_position))
+				[/codeblock]
+			</description>
+		</method>
 		<method name="force_update_lod">
 			<return type="void" />
 			<description>
@@ -46,7 +63,7 @@
 		<method name="modify">
 			<return type="void" />
 			<param index="0" name="sdf" type="JarSignedDistanceField" />
-			<param index="1" name="operation" type="int" enum="SDF.Operation" />
+			<param index="1" name="operation" type="int" enum="JarVoxelVolume.Operation" />
 			<param index="2" name="position" type="Vector3" />
 			<param index="3" name="radius" type="float" />
 			<param index="4" name="material" type="int" default="0" />
@@ -142,16 +159,22 @@
 			Up points away from [member up_center] (planets and moons).
 		</constant>
 		<constant name="SDF_OPERATION_UNION" value="0" enum="Operation">
+			Adds the shape: [code]min(volume, shape)[/code].
 		</constant>
 		<constant name="SDF_OPERATION_SUBTRACTION" value="1" enum="Operation">
+			Carves the shape out of the volume.
 		</constant>
 		<constant name="SDF_OPERATION_INTERSECTION" value="2" enum="Operation">
+			Keeps only the part of the volume inside the shape.
 		</constant>
 		<constant name="SDF_OPERATION_SMOOTH_UNION" value="3" enum="Operation">
+			Adds the shape with a smooth fillet of radius [code]smoothness[/code].
 		</constant>
 		<constant name="SDF_OPERATION_SMOOTH_SUBTRACTION" value="4" enum="Operation">
+			Carves the shape with smoothly rounded edges.
 		</constant>
 		<constant name="SDF_OPERATION_SMOOTH_INTERSECTION" value="5" enum="Operation">
+			Intersects with smoothly rounded edges.
 		</constant>
 	</constants>
 </class>

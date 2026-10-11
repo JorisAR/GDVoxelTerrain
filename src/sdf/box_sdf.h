@@ -1,51 +1,36 @@
-#ifndef AABB_SDF_H
-#define AABB_SDF_H
+#ifndef BOX_SDF_H
+#define BOX_SDF_H
 
 #include "signed_distance_field.h"
 
+// Axis-aligned box with optional rounded edges. extent = half size.
 class JarBoxSdf : public JarSignedDistanceField
 {
     GDCLASS(JarBoxSdf, JarSignedDistanceField);
 
   private:
-    glm::vec3 _center;
-    glm::vec3 _extent;
+    glm::vec3 _center{0.0f};
+    glm::vec3 _extent{1.0f};
+    float _rounding = 0.0f;
 
   public:
-    JarBoxSdf() : _center(0.0f, 0.0f, 0.0f), _extent(1.0f, 1.0f, 1.0f)
+    void set_center(const Vector3 &c) { set_and_notify(_center, glm::vec3(c.x, c.y, c.z)); }
+    Vector3 get_center() const { return Vector3(_center.x, _center.y, _center.z); }
+    void set_extent(const Vector3 &e) { set_and_notify(_extent, glm::max(glm::vec3(e.x, e.y, e.z), glm::vec3(0.0f))); }
+    Vector3 get_extent() const { return Vector3(_extent.x, _extent.y, _extent.z); }
+    void set_rounding(float r) { set_and_notify(_rounding, std::max(0.0f, r)); }
+    float get_rounding() const { return _rounding; }
+
+    float distance(const glm::vec3 &pos) const override
     {
-    }
-    void set_center(const Vector3 &center)
-    {
-        _center = glm::vec3(center.x, center.y, center.z);
-    }
-    Vector3 get_center() const
-    {
-        return Vector3(_center.x, _center.y, _center.z);
-    }
-    void set_extent(const Vector3 &extent)
-    {
-        _extent = glm::vec3(extent.x, extent.y, extent.z);
-    }
-    Vector3 get_extent() const
-    {
-        return Vector3(_extent.x, _extent.y, _extent.z);
+        const float r = std::min(_rounding, std::min(_extent.x, std::min(_extent.y, _extent.z)));
+        const glm::vec3 q = glm::abs(pos - _center) - _extent + glm::vec3(r);
+        return glm::length(glm::max(q, 0.0f)) + std::min(std::max(q.x, std::max(q.y, q.z)), 0.0f) - r;
     }
 
-    virtual float distance(const glm::vec3 &pos) const override
+    Bounds bounds() const override
     {
-        glm::vec3 q = glm::abs(pos - _center) - _extent;
-        return glm::length(glm::max(q, 0.0f)) + glm::min(glm::max(q.x, glm::max(q.y, q.z)), 0.0f);
-    }
-
-    virtual glm::vec3 normal(const glm::vec3 &pos) const override
-    {
-        glm::vec3 p = pos - _center;
-        glm::vec3 q = glm::abs(p) - _extent;
-
-        if (q.x > q.y && q.x > q.z) return glm::vec3((p.x > 0) ? 1 : -1, 0, 0);
-        if (q.y > q.z)              return glm::vec3(0, (p.y > 0) ? 1 : -1, 0);
-        return glm::vec3(0, 0, (p.z > 0) ? 1 : -1);
+        return Bounds(_center - _extent, _center + _extent);
     }
 
   protected:
@@ -55,9 +40,13 @@ class JarBoxSdf : public JarSignedDistanceField
         ClassDB::bind_method(D_METHOD("get_center"), &JarBoxSdf::get_center);
         ClassDB::bind_method(D_METHOD("set_extent", "extent"), &JarBoxSdf::set_extent);
         ClassDB::bind_method(D_METHOD("get_extent"), &JarBoxSdf::get_extent);
+        ClassDB::bind_method(D_METHOD("set_rounding", "rounding"), &JarBoxSdf::set_rounding);
+        ClassDB::bind_method(D_METHOD("get_rounding"), &JarBoxSdf::get_rounding);
         ADD_PROPERTY(PropertyInfo(Variant::VECTOR3, "center"), "set_center", "get_center");
         ADD_PROPERTY(PropertyInfo(Variant::VECTOR3, "extent"), "set_extent", "get_extent");
+        ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "rounding", PROPERTY_HINT_RANGE, "0,64,0.01,or_greater"),
+                     "set_rounding", "get_rounding");
     }
 };
 
-#endif // AABB_SDF_H
+#endif // BOX_SDF_H

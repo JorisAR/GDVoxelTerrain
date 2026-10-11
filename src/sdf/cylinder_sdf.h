@@ -10,24 +10,30 @@ class JarCylinderSdf : public JarSignedDistanceField
     GDCLASS(JarCylinderSdf, JarSignedDistanceField);
 
   private:
-    glm::vec3 _center{0.0f, 0.0f, 0.0f};
+    glm::vec3 _center{0.0f};
     float _radius = 1.0f;
     float _height = 2.0f;
 
   public:
-    void set_center(const Vector3 &c) { _center = glm::vec3(c.x, c.y, c.z); }
+    void set_center(const Vector3 &c) { set_and_notify(_center, glm::vec3(c.x, c.y, c.z)); }
     Vector3 get_center() const { return Vector3(_center.x, _center.y, _center.z); }
-    void set_radius(float r) { _radius = r; }
+    void set_radius(float r) { set_and_notify(_radius, r); }
     float get_radius() const { return _radius; }
-    void set_height(float h) { _height = h; }
+    void set_height(float h) { set_and_notify(_height, h); }
     float get_height() const { return _height; }
 
-    virtual float distance(const glm::vec3 &pos) const override
+    float distance(const glm::vec3 &pos) const override
     {
-        glm::vec3 p = pos - _center;
-        glm::vec2 d =
+        const glm::vec3 p = pos - _center;
+        const glm::vec2 d =
             glm::abs(glm::vec2(glm::length(glm::vec2(p.x, p.z)), p.y)) - glm::vec2(_radius, _height * 0.5f);
-        return glm::min(glm::max(d.x, d.y), 0.0f) + glm::length(glm::max(d, glm::vec2(0.0f)));
+        return std::min(std::max(d.x, d.y), 0.0f) + glm::length(glm::max(d, glm::vec2(0.0f)));
+    }
+
+    Bounds bounds() const override
+    {
+        const glm::vec3 e(_radius, _height * 0.5f, _radius);
+        return Bounds(_center - e, _center + e);
     }
 
   protected:

@@ -16,5 +16,8 @@
 		<member name="extent" type="Vector3" setter="set_extent" getter="get_extent" default="Vector3(1, 1, 1)">
 			Extent defines the size of the bounding box in relation to center. In other words, it's the distance from center to side.
 		</member>
+		<member name="rounding" type="float" setter="set_rounding" getter="get_rounding" default="0.0">
+			Radius of the rounded edges and corners. [code]0[/code] gives sharp edges.
+		</member>
 	</members>
 </class>

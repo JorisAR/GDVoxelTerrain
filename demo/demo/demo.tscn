@@ -46,12 +46,12 @@ tonemap_mode = 3
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -4196, 0)
 
 [node name="JarVoxelVolume" type="JarVoxelVolume" parent="Planet" unique_id=604818894]
-up_mode = 1
-sea_level = 4096.0
 size = 20
 chunk_scene = ExtResource("1_0cm30")
 sdf = ExtResource("2_onu7k")
 lod_automatic_update_distance = 32.0
+up_mode = 1
+sea_level = 4096.0
 population_terrain_details = Array[JarTerrainDetail]([ExtResource("3_onvmd")])
 transform = Transform3D(1, 0, 0.000401426, 0, 1, 0, -0.000401426, 0, 1, 0, 0, 0)
 
@@ -72,7 +72,7 @@ script = ExtResource("3_8rpa4")
 terrain = NodePath("../../Planet/JarVoxelVolume")
 sdf = SubResource("JarSphereSdf_yuphb")
 
-[node name="JarVoxelViewer" type="JarVoxelViewer" parent="Camera3D"]
+[node name="JarVoxelViewer" type="JarVoxelViewer" parent="Camera3D" unique_id=107113133]
 
 [node name="WorldEnvironment" type="WorldEnvironment" parent="." unique_id=255837496]
 environment = SubResource("Environment_tn4qg")

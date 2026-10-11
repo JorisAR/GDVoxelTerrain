@@ -2,6 +2,7 @@
 #define JAR_AABB_H
 
 #include <glm/glm.hpp>
+#include <limits>
 #include <godot_cpp/variant/aabb.hpp>
 #include <godot_cpp/variant/vector3.hpp>
 
@@ -30,6 +31,34 @@ struct Bounds
         // Ensure validity
         min = glm::min(min, max);
         max = glm::max(min, max);
+    }
+
+    // Effectively unbounded (large but finite, so arithmetic stays NaN-free).
+    static Bounds infinite()
+    {
+        return Bounds(glm::vec3(-1e30f), glm::vec3(1e30f));
+    }
+
+    inline bool is_infinite() const
+    {
+        return glm::any(glm::lessThanEqual(min, glm::vec3(-1e29f))) ||
+               glm::any(glm::greaterThanEqual(max, glm::vec3(1e29f)));
+    }
+
+    // Axis-aligned bounds of this box after an affine transform.
+    inline Bounds transformed(const glm::mat4 &m) const
+    {
+        if (!is_valid() || is_infinite())
+            return *this;
+        Bounds result;
+        for (int i = 0; i < 8; ++i)
+        {
+            const glm::vec3 corner((i & 1) ? max.x : min.x, (i & 2) ? max.y : min.y, (i & 4) ? max.z : min.z);
+            const glm::vec3 p = glm::vec3(m * glm::vec4(corner, 1.0f));
+            result.min = glm::min(result.min, p);
+            result.max = glm::max(result.max, p);
+        }
+        return result;
     }
 
     inline bool is_valid() const
