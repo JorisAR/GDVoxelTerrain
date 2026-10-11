@@ -62,8 +62,10 @@ class JarVoxelChunk : public Node3D
     int get_collider_lod_threshold() const;
     void set_collider_lod_threshold(int p_collider_lod_threshold);
 
-    uint8_t get_boundaries() const;
-    void set_boundaries(uint8_t p_boundaries);
+    // 16 bits: high-to-low LOD seams in the low byte, low-to-high in the high byte.
+    uint16_t get_boundaries() const;
+    void set_boundaries(uint16_t p_boundaries);
+    int mesh_version = -1; // JarVoxelVolume::get_mesh_version() this chunk was meshed with
 
     bool is_edge_chunk() const;
     void set_edge_chunk(bool p_edge_chunk);

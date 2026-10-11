@@ -5,6 +5,7 @@
 #include "voxel_chunk.h"
 #include "modify_settings.h"
 #include "octree_node.h"
+#include "octahedral.h"
 #include <algorithm>
 #include <array>
 #include <atomic>
@@ -36,6 +37,10 @@ class VoxelOctreeNode : public OctreeNode<VoxelOctreeNode>
     JarVoxelChunk *_chunk = nullptr;   
 
     glm::vec4 _nodeColor{0, 0, 0, 0}; // for material
+    // Surface normal of the field that produced this node's value, packed
+    // (Octahedral). Set by edits; 0 means "use the volume SDF's gradient".
+    // Dual contouring uses it to place vertices on sharp features.
+    uint32_t _normal = 0;
 
     bool is_dirty() const;
     void set_dirty(bool value);
@@ -79,6 +84,8 @@ class VoxelOctreeNode : public OctreeNode<VoxelOctreeNode>
         std::vector<VoxelOctreeNode *> deferredPost;
     };
     void build(JarVoxelVolume &terrain, BuildContext *ctx = nullptr);
+    bool has_normal() const { return _normal != 0; }
+    glm::vec3 get_normal() const { return Octahedral::decode(_normal); }
     // Recomputes averaged values of dirty inner nodes in this subtree. The build
     // worker calls it after every build/edit, so mesh threads only ever read.
     void update_if_dirty();

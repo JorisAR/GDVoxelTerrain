@@ -23,6 +23,7 @@ class ChunkMeshData
     PackedVector3Array collision_mesh;
     int lod;
     uint16_t boundaries;
+    int mesh_version = 0;
     bool edge_chunk;
     Bounds bounds;
     // One MultiMesh buffer (TRANSFORM_3D layout, 12 floats per instance) per

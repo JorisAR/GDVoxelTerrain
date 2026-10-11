@@ -35,6 +35,21 @@ void JarVoxelVolume::_bind_methods()
     ClassDB::bind_method(D_METHOD("set_cubic_voxels", "cubic_voxels"), &JarVoxelVolume::set_cubic_voxels);
     ADD_PROPERTY(PropertyInfo(Variant::BOOL, "cubic_voxels"), "set_cubic_voxels", "get_cubic_voxels");
 
+    ADD_GROUP("Meshing", "");
+    BIND_ENUM_CONSTANT(MESHING_SURFACE_NETS);
+    BIND_ENUM_CONSTANT(MESHING_DUAL_CONTOURING);
+    ClassDB::bind_method(D_METHOD("get_meshing_algorithm"), &JarVoxelVolume::get_meshing_algorithm);
+    ClassDB::bind_method(D_METHOD("set_meshing_algorithm", "algorithm"), &JarVoxelVolume::set_meshing_algorithm);
+    ADD_PROPERTY(PropertyInfo(Variant::INT, "meshing_algorithm", PROPERTY_HINT_ENUM, "Surface Nets,Dual Contouring"),
+                 "set_meshing_algorithm", "get_meshing_algorithm");
+    ClassDB::bind_method(D_METHOD("get_dual_contouring_feature_threshold"),
+                         &JarVoxelVolume::get_dual_contouring_feature_threshold);
+    ClassDB::bind_method(D_METHOD("set_dual_contouring_feature_threshold", "value"),
+                         &JarVoxelVolume::set_dual_contouring_feature_threshold);
+    ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "dual_contouring_feature_threshold", PROPERTY_HINT_RANGE, "0.001,1,0.001"),
+                 "set_dual_contouring_feature_threshold", "get_dual_contouring_feature_threshold");
+    ClassDB::bind_method(D_METHOD("remesh_all"), &JarVoxelVolume::remesh_all);
+
     // -------------------------------------------------- PERFORMANCE --------------------------------------------------
     ADD_GROUP("Performance", "performance_");
     ClassDB::bind_method(D_METHOD("get_updated_colliders_per_second"),
@@ -413,6 +428,28 @@ bool JarVoxelVolume::get_cubic_voxels() const
 void JarVoxelVolume::set_cubic_voxels(bool value)
 {
     _cubicVoxels = value;
+    remesh_all();
+}
+
+void JarVoxelVolume::set_meshing_algorithm(MeshingAlgorithm value)
+{
+    _meshingAlgorithm = value;
+    remesh_all();
+}
+
+void JarVoxelVolume::set_dual_contouring_feature_threshold(float value)
+{
+    _dcFeatureThreshold = std::clamp(value, 0.001f, 1.0f);
+    if (_meshingAlgorithm == MESHING_DUAL_CONTOURING)
+        remesh_all();
+}
+
+void JarVoxelVolume::remesh_all()
+{
+    // Mesh tasks read these settings, so changes only take effect through a new
+    // build, which runs once no mesh task is in flight.
+    _meshVersion++;
+    _rebuildRequested = true;
 }
 
 int JarVoxelVolume::get_updated_colliders_per_second() const
@@ -570,7 +607,7 @@ void JarVoxelVolume::process()
     {
         if (!_modifySettingsQueue.empty())
             process_modify_queue();
-        else if (_voxelLod.process(*this))
+        else if (_rebuildRequested || _voxelLod.process(*this))
         {
             build(); // hands off to the build worker (sets _isBuilding); resume next frame
             return;
@@ -610,6 +647,7 @@ void JarVoxelVolume::build()
     bool expected = false;
     if (!_isBuilding.compare_exchange_strong(expected, true))
         return; // a build is already in flight
+    _rebuildRequested = false;
 
     // Hand the work to the persistent build worker (see build_worker()). It is
     // joined on destruction, so unlike the old detach()ed thread it can't be left

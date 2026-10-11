@@ -34,6 +34,16 @@ struct ModifySettings
     {
         return sdf->distance(glm::vec3(toSdf * glm::vec4(volumePoint, 1.0f))) * distanceScale;
     }
+
+    // Normalized gradient of sample() (tetrahedral differences).
+    glm::vec3 gradient(const glm::vec3 &p) const
+    {
+        const float h = std::max(1e-2f, 1e-5f * std::max(std::abs(p.x), std::max(std::abs(p.y), std::abs(p.z))));
+        const glm::vec3 a(h, -h, -h), b(-h, -h, h), c(-h, h, -h), d(h, h, h);
+        const glm::vec3 g = a * sample(p + a) + b * sample(p + b) + c * sample(p + c) + d * sample(p + d);
+        const float len = glm::length(g);
+        return len > 0.0f ? g / len : glm::vec3(0.0f, 1.0f, 0.0f);
+    }
 };
 
 #endif // MODIFY_SETTINGS_H

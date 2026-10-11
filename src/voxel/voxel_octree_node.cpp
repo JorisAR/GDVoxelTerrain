@@ -17,6 +17,7 @@ VoxelOctreeNode::VoxelOctreeNode(VoxelOctreeNode *parent, const glm::vec3 center
         _value = _parent->get_value();
         _isGenerated = _parent->_isGenerated;
         _nodeColor = _parent->_nodeColor;
+        _normal = _parent->_normal;
     }
 }
 
@@ -258,7 +259,8 @@ void VoxelOctreeNode::build(JarVoxelVolume &terrain, BuildContext *ctx)
     {
         const uint16_t boundaries = compute_boundaries(terrain);
         const bool knownEmpty = _meshedEmpty && _chunk == nullptr && _meshedEmptyBoundaries == boundaries;
-        if (!knownEmpty && (_chunk == nullptr || _chunk->get_boundaries() != boundaries))
+        if (!knownEmpty && (_chunk == nullptr || _chunk->get_boundaries() != boundaries ||
+                            _chunk->mesh_version != terrain.get_mesh_version()))
             queue_update(terrain);
     }
 
@@ -305,6 +307,20 @@ void VoxelOctreeNode::modify_sdf_in_bounds(JarVoxelVolume &terrain, const Modify
     float sdf_value = settings.sample(_center);
     const float k = settings.smoothness > 0.0f ? settings.smoothness : terrain.get_octree_scale();
     float new_value = SDF::apply_operation(settings.operation, old_value, sdf_value, k);
+
+    // Where the edit changes the field, record the resulting surface normal
+    // (exact, from both fields' gradients) for dual contouring.
+    if (std::abs(new_value - old_value) > 1e-5f)
+    {
+        const glm::vec3 oldNormal = has_normal() ? get_normal() : terrain.get_sdf_ptr()->normal(_center);
+        float combined;
+        glm::vec3 normal;
+        SDF::apply_operation(settings.operation, old_value, oldNormal, sdf_value, settings.gradient(_center), k,
+                             combined, normal);
+        const float len = glm::length(normal);
+        if (len > 1e-6f)
+            _normal = Octahedral::encode(normal / len);
+    }
 
     // ensure the node has children if it contains a surface
     if (has_surface(terrain, new_value)) // || has_surface(terrain, sdf_value)

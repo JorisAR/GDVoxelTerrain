@@ -12,13 +12,22 @@ func _ready() -> void:
 	var scene := SCENE.instantiate()
 	var camera: Camera3D = scene.get_node("Camera3D")
 	camera.set_script(null)
-	add_child(scene)
 	volume = scene.get_node("World/JarVoxelVolume")
-	_run.call_deferred(camera.global_position)
+	if OS.get_environment("MESHER") == "dc":
+		volume.meshing_algorithm = JarVoxelVolume.MESHING_DUAL_CONTOURING
+	print("Mesher: ", ["surface nets", "dual contouring"][volume.meshing_algorithm])
+	add_child(scene)
+	_run.call_deferred(camera)
 
-func _run(at: Vector3) -> void:
+func _run(camera: Camera3D) -> void:
+	var at := camera.global_position
 	await _settle()
 	var ground := _ground_height(at)
+	# Bring the viewer down to the edit site so it is meshed at full detail.
+	if not is_nan(ground):
+		camera.global_position = Vector3(at.x + 6, ground + 8, at.z)
+		volume.force_update_lod()
+		await _settle()
 	_check("ground found", not is_nan(ground), "y=%.2f" % ground)
 	if is_nan(ground):
 		return _finish()
@@ -34,6 +43,10 @@ func _run(at: Vector3) -> void:
 	# 3.54 m out along a face normal, past the 3 m half-extent.
 	var side := _ground_height(at + Vector3(2.5, 0, 2.5))
 	_check("box is rotated", side < top - 2.0, "side=%.2f" % side)
+	# 2.6 m in along a face normal, 0.4 m from the box edge: a sharp mesher keeps
+	# this at full height (informational: how far the edge is rounded off).
+	var near_edge := _ground_height(at + Vector3(2.6, 0, 0).rotated(Vector3.UP, PI / 4))
+	print("INFO box edge height %.2f of %.2f" % [near_edge, top])
 
 	# 2. Carve a sphere into the box top.
 	volume.sphere_edit(Vector3(at.x, top, at.z), 2.0, false)

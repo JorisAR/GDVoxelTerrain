@@ -10,8 +10,6 @@
 #include "voxel_octree_node.h"
 #include <atomic>
 #include <condition_variable>
-#include <mutex>
-#include <thread>
 #include <godot_cpp/classes/engine.hpp>
 #include <godot_cpp/classes/fast_noise_lite.hpp>
 #include <godot_cpp/classes/mesh.hpp>
@@ -21,9 +19,11 @@
 #include <godot_cpp/classes/random_number_generator.hpp>
 #include <godot_cpp/classes/sphere_mesh.hpp>
 #include <godot_cpp/classes/standard_material3d.hpp>
-#include <godot_cpp/variant/utility_functions.hpp>
 #include <godot_cpp/variant/typed_array.hpp>
+#include <godot_cpp/variant/utility_functions.hpp>
+#include <mutex>
 #include <queue>
+#include <thread>
 #include <vector>
 
 using namespace godot;
@@ -65,6 +65,12 @@ class JarVoxelVolume : public Node3D
     bool _initialBuildRequested = false; // first build waits for process(), when the player is in the tree
     int _chunkSize = 0;
     bool _cubicVoxels = false;
+    std::atomic<int> _meshingAlgorithm{0}; // MeshingAlgorithm; read by mesh threads
+    std::atomic<float> _dcFeatureThreshold{0.1f};
+    // Bumped when meshing settings change; chunks meshed with an older version
+    // are remeshed by the next build.
+    std::atomic<int> _meshVersion{0};
+    bool _rebuildRequested = false; // main thread: rebuild as soon as idle
 
     // One persistent, managed build worker (replaces per-build detached threads,
     // which could not be joined and were still walking the octree at shutdown
@@ -72,9 +78,9 @@ class JarVoxelVolume : public Node3D
     std::thread _buildThread;
     std::mutex _buildMutex;
     std::condition_variable _buildCv;
-    bool _buildRequested = false; // guarded by _buildMutex
+    bool _buildRequested = false;             // guarded by _buildMutex
     std::vector<ModifySettings> _workerEdits; // guarded by _buildMutex; applied before any build
-    bool _buildShutdown = false;  // guarded by _buildMutex
+    bool _buildShutdown = false;              // guarded by _buildMutex
     void build_worker();
     void build_octree(); // build worker only
     void stop_build_worker();
@@ -176,7 +182,10 @@ class JarVoxelVolume : public Node3D
 
     // Up direction / height (population rules, player controllers). Copy is
     // taken by worker threads; only change it while the volume is idle.
-    const UpField &get_up_field() const { return _upField; }
+    const UpField &get_up_field() const
+    {
+        return _upField;
+    }
     UpMode get_up_mode() const;
     void set_up_mode(UpMode mode);
     Vector3 get_up_axis() const;
@@ -191,7 +200,10 @@ class JarVoxelVolume : public Node3D
 
     Ref<JarSignedDistanceField> get_sdf() const;
     // Hot-path access without Ref refcounting (an atomic shared by all build threads).
-    JarSignedDistanceField *get_sdf_ptr() const { return _sdf.ptr(); }
+    JarSignedDistanceField *get_sdf_ptr() const
+    {
+        return _sdf.ptr();
+    }
     void set_sdf(const Ref<JarSignedDistanceField> &sdf);
 
     float get_octree_scale() const;
@@ -210,6 +222,19 @@ class JarVoxelVolume : public Node3D
 
     bool get_cubic_voxels() const;
     void set_cubic_voxels(bool value);
+
+    enum MeshingAlgorithm
+    {
+        MESHING_SURFACE_NETS = 0,
+        MESHING_DUAL_CONTOURING = 1,
+    };
+    MeshingAlgorithm get_meshing_algorithm() const { return static_cast<MeshingAlgorithm>(_meshingAlgorithm.load()); }
+    void set_meshing_algorithm(MeshingAlgorithm value);
+    float get_dual_contouring_feature_threshold() const { return _dcFeatureThreshold; }
+    void set_dual_contouring_feature_threshold(float value);
+    int get_mesh_version() const { return _meshVersion; }
+    // Remeshes every chunk (e.g. after changing meshing settings at runtime).
+    void remesh_all();
 
     // PERFORMANCE
     int get_updated_colliders_per_second() const;
@@ -246,7 +271,6 @@ class JarVoxelVolume : public Node3D
     int desired_lod(const VoxelOctreeNode &node);
     int lod_at(const glm::vec3 &position) const;
 
-
     // POPULATION
     void set_terrain_details(const TypedArray<JarTerrainDetail> &details);
     TypedArray<JarTerrainDetail> get_terrain_details() const;
@@ -254,5 +278,6 @@ class JarVoxelVolume : public Node3D
 
 VARIANT_ENUM_CAST(JarVoxelVolume::Operation);
 VARIANT_ENUM_CAST(JarVoxelVolume::UpMode);
+VARIANT_ENUM_CAST(JarVoxelVolume::MeshingAlgorithm);
 
 #endif // VOXEL_VOLUME_H

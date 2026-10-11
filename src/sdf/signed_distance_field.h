@@ -43,7 +43,9 @@ class JarSignedDistanceField : public Resource
 
     virtual glm::vec3 normal(const glm::vec3 &pos) const
     {
-        constexpr float delta = 0.001f;
+        // Step relative to the coordinate magnitude: far from the origin (e.g. a
+        // 4 km planet) a fixed tiny step drowns in float rounding.
+        const float delta = std::max(1e-3f, 1e-5f * std::max(std::abs(pos.x), std::max(std::abs(pos.y), std::abs(pos.z))));
         const glm::vec3 xyy(delta, -delta, -delta);
         const glm::vec3 yyx(-delta, -delta, delta);
         const glm::vec3 yxy(-delta, delta, -delta);

@@ -5,10 +5,66 @@
 
 #include "voxel_volume.h"
 #include "utility/utils.h"
+#include "qef.h"
+#include <limits>
 
 StitchedSurfaceNets::StitchedSurfaceNets(const JarVoxelVolume &terrain, const VoxelOctreeNode &chunk)
-    : _chunk(&chunk), _cubicVoxels(terrain.get_cubic_voxels()), _meshChunk(StitchedMeshChunk(terrain, chunk))
+    : _chunk(&chunk), _cubicVoxels(terrain.get_cubic_voxels()),
+      _dualContouring(terrain.get_meshing_algorithm() == JarVoxelVolume::MESHING_DUAL_CONTOURING),
+      _featureThreshold(terrain.get_dual_contouring_feature_threshold()), _sdf(terrain.get_sdf_ptr()),
+      _meshChunk(StitchedMeshChunk(terrain, chunk))
 {
+    if (_dualContouring)
+    {
+        _gradients.resize(_meshChunk.nodes.size());
+        _hasGradient.resize(_meshChunk.nodes.size(), false);
+    }
+}
+
+glm::vec3 StitchedSurfaceNets::gradient_at(int node_id)
+{
+    if (_hasGradient[node_id])
+        return _gradients[node_id];
+    const VoxelOctreeNode *node = _meshChunk.nodes[node_id];
+    _gradients[node_id] = node->has_normal() ? node->get_normal() : _sdf->normal(node->_center);
+    _hasGradient[node_id] = true;
+    return _gradients[node_id];
+}
+
+glm::vec3 StitchedSurfaceNets::place_dual_contouring_vertex(const int node_id, const std::vector<int> &neighbours)
+{
+    // Every corner sample near the surface is a distance d along normal n, so
+    // the surface passes through (center - d n) with normal n: one tangent
+    // plane per corner. Their least-squares intersection recovers edges and
+    // corners that lie between the samples.
+    Qef qef;
+    glm::vec3 cellMin(std::numeric_limits<float>::max()), cellMax(std::numeric_limits<float>::lowest());
+    for (int i = 0; i < 8; ++i)
+    {
+        const VoxelOctreeNode *n = _meshChunk.nodes[neighbours[i]];
+        cellMin = glm::min(cellMin, n->_center);
+        cellMax = glm::max(cellMax, n->_center);
+    }
+    const float cellSize = cellMax.x - cellMin.x;
+    for (int i = 0; i < 8; ++i)
+    {
+        VoxelOctreeNode *n = _meshChunk.nodes[neighbours[i]];
+        const float d = n->get_value();
+        if (std::abs(d) > 1.5f * cellSize)
+            continue; // too far for its closest feature to be in this cell
+        const glm::vec3 normal = gradient_at(neighbours[i]);
+        qef.add(n->_center - d * normal, normal);
+    }
+    if (qef.count() == 0)
+        return glm::vec3(std::numeric_limits<float>::quiet_NaN());
+    // A solution outside the cell belongs to a feature of a neighbouring cell;
+    // clamping it would leave a vertex floating off the surface, so fall back
+    // to the surface-nets position (always inside the cell) instead.
+    const glm::vec3 x = qef.solve(_featureThreshold);
+    const glm::vec3 tolerance(cellSize * 0.01f);
+    if (glm::any(glm::lessThan(x, cellMin - tolerance)) || glm::any(glm::greaterThan(x, cellMax + tolerance)))
+        return glm::vec3(std::numeric_limits<float>::quiet_NaN());
+    return glm::clamp(x, cellMin, cellMax);
 }
 
 void StitchedSurfaceNets::create_vertex(const int node_id, const std::vector<int> &neighbours, const bool on_ring)
@@ -62,6 +118,14 @@ void StitchedSurfaceNets::create_vertex(const int node_id, const std::vector<int
     normal = glm::normalize(normal);
     if (_cubicVoxels)
         vertexPosition = _meshChunk.nodes[node_id]->_center;
+    else if (_dualContouring && !on_ring)
+    {
+        // Ring (LOD seam) vertices keep the surface-nets position, so seams
+        // stay watertight against the neighbouring coarser chunk.
+        const glm::vec3 dc = place_dual_contouring_vertex(node_id, neighbours);
+        if (!glm::any(glm::isnan(dc)))
+            vertexPosition = dc;
+    }
 
     vertexPosition -= _chunk->_center;
     int vertexIndex = _verts.size();
@@ -238,6 +302,7 @@ ChunkMeshData *StitchedSurfaceNets::generate_mesh_data(const JarVoxelVolume &ter
     ChunkMeshData *output =
         new ChunkMeshData(meshData, _chunk->get_lod(), _meshChunk.is_edge_chunk(), _chunk->get_bounds(terrain.get_octree_scale()));
     output->boundaries = _meshChunk._lodH2LBoundaries | (_meshChunk._lodL2HBoundaries << 8);
+    output->mesh_version = terrain.get_mesh_version();
 
     return output;
 }

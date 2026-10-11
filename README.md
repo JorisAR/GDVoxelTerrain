@@ -77,6 +77,13 @@ volume.edit(box, JarVoxelVolume.SDF_OPERATION_UNION, Transform3D(Basis(Vector3.U
 
 In the demos, `Q` cycles the brush (sphere, box, cone, prism mesh) and `E` toggles smooth blending. See `demo/demo/op_demo.tscn` + `demo/demo/op_carve.tres` for a crater carved out of noise terrain with a single resource.
 
+### Meshing
+
+`meshing_algorithm` selects the mesher per volume, and can be switched at runtime:
+
+- **Surface Nets** (default): smooth, rounded surfaces.
+- **Dual Contouring**: reproduces sharp edges and corners (stamped boxes, meshes, carved tunnels). Edits store the exact surface normal of the shape they apply, and untouched terrain uses the SDF's gradient, so vertices land exactly on creases and corners. Seams between LOD levels use the same stitching as surface nets.
+
 ### Tests
 
 Headless checks live in `demo/tests` and exit with a non-zero code on failure:
@@ -84,6 +91,7 @@ Headless checks live in `demo/tests` and exit with a non-zero code on failure:
 ```bash
 godot --headless --path demo res://tests/sdf_tests.tscn
 godot --headless --path demo res://tests/edit_tests.tscn
+godot --headless --path demo res://tests/mesher_tests.tscn
 ```
 
 ### Performance tips

@@ -60,18 +60,18 @@ jobs:
             target: template_release
             platform: macos
             arch: universal
-          - identifier: android-debug-arm64
-            name: Android Debug arm64
-            runner: ubuntu-22.04
-            target: template_debug
-            platform: android
-            arch: arm64
-          - identifier: android-release-arm64
-            name: Android Release arm64
-            runner: ubuntu-22.04
-            target: template_release
-            platform: android
-            arch: arm64
+          # - identifier: android-debug-arm64
+          #   name: Android Debug arm64
+          #   runner: ubuntu-22.04
+          #   target: template_debug
+          #   platform: android
+          #   arch: arm64
+          # - identifier: android-release-arm64
+          #   name: Android Release arm64
+          #   runner: ubuntu-22.04
+          #   target: template_release
+          #   platform: android
+          #   arch: arm64
 
     steps:
       - name: Checkout project

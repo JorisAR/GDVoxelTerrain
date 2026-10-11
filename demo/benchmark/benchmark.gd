@@ -20,6 +20,8 @@ func _ready() -> void:
 	camera.set_script(null) # no input-driven movement
 	add_child(demo)
 	terrain = demo.get_node("Planet/JarVoxelVolume")
+	if OS.get_environment("MESHER") == "dc":
+		terrain.meshing_algorithm = JarVoxelVolume.MESHING_DUAL_CONTOURING
 	_run.call_deferred()
 
 func _run() -> void:

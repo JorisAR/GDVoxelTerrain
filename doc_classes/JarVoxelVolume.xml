@@ -73,6 +73,12 @@
 				[code]material[/code] (0-3) is painted onto the affected voxels as a one-hot weight in the vertex color, which the chunk shader blends as materials; pass [code]-1[/code] to keep the existing material weights.
 			</description>
 		</method>
+		<method name="remesh_all">
+			<return type="void" />
+			<description>
+				Remeshes every chunk with the current meshing settings. Called automatically when [member meshing_algorithm], [member dual_contouring_feature_threshold] or [member cubic_voxels] change.
+			</description>
+		</method>
 		<method name="spawn_debug_spheres_in_bounds">
 			<return type="void" />
 			<param index="0" name="position" type="Vector3" />
@@ -102,6 +108,9 @@
 		<member name="cubic_voxels" type="bool" setter="set_cubic_voxels" getter="get_cubic_voxels" default="false">
 			Renders voxels as cubes.
 		</member>
+		<member name="dual_contouring_feature_threshold" type="float" setter="set_dual_contouring_feature_threshold" getter="get_dual_contouring_feature_threshold" default="0.1">
+			How eagerly dual contouring snaps vertices to sharp features, as a fraction of the strongest surface direction in a cell. Lower values sharpen subtler creases but can add noise on curved surfaces; higher values behave more like surface nets.
+		</member>
 		<member name="lod_automatic_update" type="bool" setter="set_lod_automatic_update" getter="get_lod_automatic_update" default="true">
 			Enables/disables automatic LOD updates when a [JarVoxelViewer] moves.
 		</member>
@@ -113,6 +122,9 @@
 		</member>
 		<member name="lod_shell_size" type="int" setter="set_lod_shell_size" getter="get_lod_shell_size" default="2">
 			Number of LOD rings (shells) around the player. Affects how much terrain is loaded based on proximity.
+		</member>
+		<member name="meshing_algorithm" type="int" setter="set_meshing_algorithm" getter="get_meshing_algorithm" enum="JarVoxelVolume.MeshingAlgorithm" default="0">
+			How chunks are turned into triangles. [constant MESHING_SURFACE_NETS] gives smooth, rounded surfaces; [constant MESHING_DUAL_CONTOURING] reproduces sharp edges and corners (stamped boxes, meshes, carved tunnels). Can be changed at runtime; all chunks are then remeshed.
 		</member>
 		<member name="min_chunk_size" type="int" setter="set_min_chunk_size" getter="get_min_chunk_size" default="4">
 			Number of vertices in the smallest subdivision of the chunk.
@@ -152,6 +164,12 @@
 		</member>
 	</members>
 	<constants>
+		<constant name="MESHING_SURFACE_NETS" value="0" enum="MeshingAlgorithm">
+			Smooth surfaces: each vertex sits at the average of its cell's surface crossings.
+		</constant>
+		<constant name="MESHING_DUAL_CONTOURING" value="1" enum="MeshingAlgorithm">
+			Sharp features: each vertex is placed where the surface's tangent planes in its cell meet. Edited voxels store the exact surface normal of the edit for this; untouched voxels use the volume SDF's gradient.
+		</constant>
 		<constant name="UP_MODE_AXIS" value="0" enum="UpMode">
 			Up is the constant [member up_axis] (flat worlds).
 		</constant>

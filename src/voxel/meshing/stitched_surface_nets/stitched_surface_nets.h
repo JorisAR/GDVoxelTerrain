@@ -32,7 +32,17 @@ class StitchedSurfaceNets
 
     const VoxelOctreeNode *_chunk;
     const bool _cubicVoxels;
+    const bool _dualContouring;
+    const float _featureThreshold;
     StitchedMeshChunk _meshChunk;
+
+    // Dual contouring: surface normal per node (stored by edits, otherwise the
+    // volume SDF's analytic gradient), computed on demand and cached.
+    const JarSignedDistanceField *_sdf;
+    std::vector<glm::vec3> _gradients;
+    std::vector<bool> _hasGradient;
+    glm::vec3 gradient_at(int node_id);
+    glm::vec3 place_dual_contouring_vertex(const int node_id, const std::vector<int> &neighbours);
 
     void add_tri(int n0, int n1, int n2, bool flip);
     void add_tri_fix_normal(int n0, int n1, int n2);

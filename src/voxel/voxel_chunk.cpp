@@ -86,12 +86,12 @@ void JarVoxelChunk::set_collider_lod_threshold(int p_collider_lod_threshold)
     collider_lod_threshold = p_collider_lod_threshold;
 }
 
-uint8_t JarVoxelChunk::get_boundaries() const
+uint16_t JarVoxelChunk::get_boundaries() const
 {
     return boundaries;
 }
 
-void JarVoxelChunk::set_boundaries(uint8_t p_h2lboundaries)
+void JarVoxelChunk::set_boundaries(uint16_t p_h2lboundaries)
 {
     boundaries = p_h2lboundaries;
 }
@@ -176,6 +176,7 @@ void JarVoxelChunk::update_chunk(JarVoxelVolume &terrain, VoxelOctreeNode *node,
     material = Ref<ShaderMaterial>(Object::cast_to<ShaderMaterial>(*mesh_instance->get_material_override()));
     lod = chunk_mesh_data->lod;
     boundaries = chunk_mesh_data->boundaries;
+    mesh_version = chunk_mesh_data->mesh_version;
     edge_chunk = chunk_mesh_data->edge_chunk;
     auto old_bounds = bounds;
     bounds = chunk_mesh_data->bounds;
