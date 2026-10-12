@@ -1,0 +1,18 @@
+[gd_resource type="ShaderMaterial" format=3 uid="uid://bm6ae8b8xv31"]
+
+[ext_resource type="Texture2D" path="res://addons/jar_voxel_terrain/textures/noise/3d_voronoi.png" id="voronoi"]
+[ext_resource type="Shader" path="res://demo/assets/population/Trees/Tree.gdshader" id="1_ngfv3"]
+[ext_resource type="Texture2D" uid="uid://2epd056yg4fd" path="res://demo/assets/population/Trees/Pine/pine_leaves.png" id="2_1vhys"]
+
+[resource]
+render_priority = 0
+shader = ExtResource("1_ngfv3")
+shader_parameter/leaves_color1 = Color(0.2958, 0.58, 0.471057, 1)
+shader_parameter/leaves_color2 = Color(0.1215, 0.433575, 0.45, 1)
+shader_parameter/leaves_highlight = Color(0.0656, 0.16, 0.101787, 1)
+shader_parameter/trunk_color = Color(0.52, 0.360533, 0.2808, 1)
+shader_parameter/leaves_highlight_strength = 0.5
+shader_parameter/ground_factor = 20.0
+shader_parameter/wind_affect = 0.5
+shader_parameter/noise = ExtResource("voronoi")
+shader_parameter/leaves_mask = ExtResource("2_1vhys")

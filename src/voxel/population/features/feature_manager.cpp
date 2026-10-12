@@ -4,8 +4,14 @@
 #include "voxel_volume.h"
 #include <chrono>
 #include <cmath>
+#include "population_rendering.h"
+#include <functional>
+#include <godot_cpp/classes/collision_object3d.hpp>
+#include <godot_cpp/classes/collision_shape3d.hpp>
+#include <godot_cpp/classes/mesh_instance3d.hpp>
 #include <godot_cpp/classes/multi_mesh.hpp>
 #include <godot_cpp/classes/multi_mesh_instance3d.hpp>
+#include <godot_cpp/classes/static_body3d.hpp>
 #include <thread>
 #include <unordered_set>
 
@@ -45,11 +51,13 @@ void FeatureManager::refresh_features()
 {
     _features.clear();
     _featureBiomes.clear();
+    _templates.clear();
     _range = 0.0f;
     for (const auto &entry : _volume.population_features())
     {
         _features.push_back(entry.item);
         _featureBiomes.push_back(entry.biome);
+        _templates.push_back(make_template(entry.item));
         if (entry.item.is_valid())
             _range = std::max(_range, entry.item->get_draw_distance());
     }
@@ -102,9 +110,9 @@ void FeatureManager::remove_in(const Bounds &bounds)
         {
             const size_t before = transforms.size();
             transforms.erase(std::remove_if(transforms.begin(), transforms.end(),
-                                            [&](const Transform3D &t) {
-                                                return bounds.contains_point(
-                                                    glm::vec3(t.origin.x, t.origin.y, t.origin.z));
+                                            [&](const Placed &p) {
+                                                const Vector3 o = p.transform.origin;
+                                                return bounds.contains_point(glm::vec3(o.x, o.y, o.z));
                                             }),
                              transforms.end());
             changed = changed || transforms.size() != before;
@@ -125,9 +133,12 @@ std::vector<FeatureManager::Instance> FeatureManager::instances_near(const glm::
         if (!cell.ready)
             continue;
         for (size_t f = 0; f < cell.perFeature.size(); ++f)
-            for (const Transform3D &t : cell.perFeature[f])
-                if (glm::distance(glm::vec3(t.origin.x, t.origin.y, t.origin.z), position) <= radius)
-                    result.push_back({int(f), t});
+            for (const Placed &p : cell.perFeature[f])
+            {
+                const Vector3 o = p.transform.origin;
+                if (glm::distance(glm::vec3(o.x, o.y, o.z), position) <= radius)
+                    result.push_back({int(f), p.transform, p.ground});
+            }
     }
     return result;
 }
@@ -200,8 +211,10 @@ void FeatureManager::start_generation(const glm::ivec3 &key)
     const std::vector<int> featureBiomes = _featureBiomes;
     const Ref<JarBiomeMap> biomes = _biomeMap;
     const UpField up = _volume.get_up_field();
-    JobSystem::get_pool().enqueue_background([shared, key, cellSize, features, featureBiomes, biomes, sdf, up]() {
-        std::vector<Instance> instances = generate_cell(key, cellSize, features, featureBiomes, biomes, sdf, up);
+    const std::shared_ptr<const GroundPalette> ground = _volume.get_ground_palette();
+    JobSystem::get_pool().enqueue_background([shared, key, cellSize, features, featureBiomes, biomes, sdf, up, ground]() {
+        std::vector<Instance> instances =
+            generate_cell(key, cellSize, features, featureBiomes, biomes, sdf, up, ground);
         {
             std::lock_guard<std::mutex> lock(shared->mutex);
             shared->generated.emplace_back(key, std::move(instances));
@@ -243,9 +256,10 @@ void FeatureManager::apply_results()
             for (const Bounds &b : removals)
                 removed = removed || b.contains_point(p);
             if (!removed)
-                cell.perFeature[instance.feature].push_back(instance.transform);
+                cell.perFeature[instance.feature].push_back({instance.transform, instance.ground});
         }
         cell.groups.assign(_features.size(), nullptr);
+        cell.colliders.assign(_features.size(), nullptr);
         cell.ready = true;
         _toShow.push_back(key);
     }
@@ -300,49 +314,172 @@ void FeatureManager::update_visibility(const std::vector<glm::vec3> &viewers)
                 cell.groups[f]->queue_free();
                 cell.groups[f] = nullptr;
             }
+            // Colliders only near viewers.
+            const float reach = _templates[f].colliders.empty() || !_volume.colliders_enabled()
+                                    ? 0.0f
+                                    : _features[f]->get_collision_distance();
+            if (cell.colliders[f] == nullptr && reach > 0.0f && d < reach + _cellSize)
+                needsBuild = true;
+            else if (cell.colliders[f] != nullptr && d > reach + 2.0f * _cellSize)
+            {
+                cell.colliders[f]->queue_free();
+                cell.colliders[f] = nullptr;
+            }
         }
         if (needsBuild)
             _toShow.push_back(key);
     }
 }
 
+// A feature's scene read into parts: its MeshInstance3Ds (with visibility
+// ranges) and collision shapes, relative to the scene root.
+FeatureManager::Template FeatureManager::make_template(const Ref<JarTerrainFeature> &feature)
+{
+    Template t;
+    if (feature.is_null())
+        return t;
+    const Ref<PackedScene> scene = feature->get_scene();
+    if (scene.is_null())
+    {
+        if (feature->get_mesh().is_valid())
+            t.parts.push_back({feature->get_mesh(), feature->get_material(), Transform3D(), 0.0f, 0.0f,
+                               feature->get_cast_shadows() ? GeometryInstance3D::SHADOW_CASTING_SETTING_ON
+                                                           : GeometryInstance3D::SHADOW_CASTING_SETTING_OFF});
+        return t;
+    }
+    if (feature->get_scene_mode() == JarTerrainFeature::SCENE_MODE_NODES)
+    {
+        t.nodes = true;
+        return t;
+    }
+    Node *root = scene->instantiate();
+    if (root == nullptr)
+        return t;
+    bool haveBody = false;
+    std::function<void(Node *, const Transform3D &)> visit = [&](Node *node, const Transform3D &xform) {
+        if (MeshInstance3D *mesh = Object::cast_to<MeshInstance3D>(node))
+        {
+            if (mesh->get_mesh().is_valid())
+            {
+                Ref<Material> material = mesh->get_material_override();
+                if (material.is_null() && mesh->get_surface_override_material_count() > 0)
+                    material = mesh->get_surface_override_material(0);
+                t.parts.push_back({mesh->get_mesh(), material, xform, mesh->get_visibility_range_begin(),
+                                   mesh->get_visibility_range_end(), mesh->get_cast_shadows_setting()});
+            }
+        }
+        else if (CollisionShape3D *shape = Object::cast_to<CollisionShape3D>(node))
+        {
+            if (!shape->is_disabled() && shape->get_shape().is_valid())
+            {
+                t.colliders.push_back({shape->get_shape(), xform});
+                CollisionObject3D *body = Object::cast_to<CollisionObject3D>(shape->get_parent());
+                if (body != nullptr && !haveBody)
+                {
+                    t.layer = body->get_collision_layer();
+                    t.mask = body->get_collision_mask();
+                    haveBody = true;
+                }
+            }
+        }
+        for (int i = 0; i < node->get_child_count(); ++i)
+        {
+            Node *child = node->get_child(i);
+            const Node3D *child3d = Object::cast_to<Node3D>(child);
+            // Hidden parts are not drawn (collision shapes count regardless).
+            if (child3d != nullptr && !child3d->is_visible() && Object::cast_to<CollisionShape3D>(child) == nullptr)
+                continue;
+            visit(child, child3d != nullptr ? xform * child3d->get_transform() : xform);
+        }
+    };
+    visit(root, Transform3D()); // the root's own transform does not count
+    memdelete(root);
+    return t;
+}
+
+Node3D *FeatureManager::build_colliders(const Template &t, const std::vector<Placed> &placed) const
+{
+    StaticBody3D *body = memnew(StaticBody3D);
+    body->set_collision_layer(t.layer);
+    body->set_collision_mask(t.mask);
+    for (const Placed &p : placed)
+        for (const Template::Collider &c : t.colliders)
+        {
+            const uint32_t owner = body->create_shape_owner(body);
+            body->shape_owner_set_transform(owner, p.transform * c.local);
+            body->shape_owner_add_shape(owner, c.shape);
+        }
+    return body;
+}
+
 void FeatureManager::build_groups(const glm::ivec3 &key, Cell &cell, const std::vector<glm::vec3> &viewers)
 {
     const float d = nearest_distance(viewers, cell_bounds(key).get_center());
+    const float margin = 0.87f * _cellSize; // instances lie within this of the cell center
     for (size_t f = 0; f < _features.size() && f < cell.groups.size(); ++f)
     {
         const Ref<JarTerrainFeature> &feature = _features[f];
-        if (feature.is_null() || cell.perFeature[f].empty() || cell.groups[f] != nullptr ||
-            d >= feature->get_draw_distance() + _cellSize)
+        if (feature.is_null() || cell.perFeature[f].empty())
+            continue;
+        const Template &tpl = _templates[f];
+        const std::vector<Placed> &placed = cell.perFeature[f];
+        const float reach =
+            tpl.colliders.empty() || !_volume.colliders_enabled() ? 0.0f : feature->get_collision_distance();
+        if (cell.colliders[f] == nullptr && reach > 0.0f && d < reach + _cellSize)
+        {
+            cell.colliders[f] = build_colliders(tpl, placed);
+            _volume.add_child(cell.colliders[f]);
+        }
+        const float draw = feature->get_draw_distance();
+        if (cell.groups[f] != nullptr || d >= draw + _cellSize)
             continue;
         Node3D *group = memnew(Node3D);
-        const std::vector<Transform3D> &transforms = cell.perFeature[f];
-        if (feature->get_scene().is_valid())
+        if (tpl.nodes)
         {
-            for (const Transform3D &t : transforms)
+            for (const Placed &p : placed)
             {
                 Node *node = feature->get_scene()->instantiate();
                 if (Node3D *n3 = Object::cast_to<Node3D>(node))
-                    n3->set_transform(t);
+                    n3->set_transform(p.transform);
                 group->add_child(node);
             }
         }
-        else if (feature->get_mesh().is_valid())
+        for (const Template::Part &part : tpl.parts)
         {
+            const float end = part.end > 0.0f ? std::min(part.end, draw) : draw;
+            if (part.begin >= end)
+                continue;
+            // Transform, then custom data: the ground color (see jar_population.gdshaderinc).
+            PackedFloat32Array buffer;
+            buffer.resize(int64_t(placed.size()) * 16);
+            float *w = buffer.ptrw();
+            for (const Placed &p : placed)
+            {
+                const Transform3D t = p.transform * part.local;
+                for (int row = 0; row < 3; ++row)
+                {
+                    *w++ = t.basis.rows[row].x;
+                    *w++ = t.basis.rows[row].y;
+                    *w++ = t.basis.rows[row].z;
+                    *w++ = t.origin[row];
+                }
+                PopulationRendering::write_custom(w, p.ground, part.begin, end);
+                w += 4;
+            }
             Ref<MultiMesh> multimesh;
             multimesh.instantiate();
             multimesh->set_transform_format(MultiMesh::TRANSFORM_3D);
-            multimesh->set_mesh(feature->get_mesh());
-            multimesh->set_instance_count(int(transforms.size()));
-            for (size_t i = 0; i < transforms.size(); ++i)
-                multimesh->set_instance_transform(int(i), transforms[i]);
+            multimesh->set_use_custom_data(true);
+            multimesh->set_mesh(part.mesh);
+            multimesh->set_instance_count(int(placed.size()));
+            multimesh->set_buffer(buffer);
             MultiMeshInstance3D *mmi = memnew(MultiMeshInstance3D);
             mmi->set_multimesh(multimesh);
-            if (feature->get_material().is_valid())
-                mmi->set_material_override(feature->get_material());
-            mmi->set_cast_shadows_setting(feature->get_cast_shadows() ? GeometryInstance3D::SHADOW_CASTING_SETTING_ON
-                                                                      : GeometryInstance3D::SHADOW_CASTING_SETTING_OFF);
-            mmi->set_visibility_range_end(feature->get_draw_distance() + _cellSize);
+            if (part.material.is_valid())
+                mmi->set_material_override(part.material);
+            mmi->set_cast_shadows_setting(part.shadows);
+            PopulationRendering::set_lod_range(mmi, PopulationRendering::effective_material(part.mesh, part.material),
+                                               part.begin, end, margin);
             group->add_child(mmi);
         }
         _volume.add_child(group);
@@ -357,6 +494,12 @@ void FeatureManager::free_groups(Cell &cell)
         {
             group->queue_free();
             group = nullptr;
+        }
+    for (Node3D *&body : cell.colliders)
+        if (body != nullptr)
+        {
+            body->queue_free();
+            body = nullptr;
         }
 }
 
@@ -474,7 +617,7 @@ float find_surface_below(const JarSignedDistanceField &sdf, const glm::vec3 &top
 std::vector<FeatureManager::Instance> FeatureManager::generate_cell(
     const glm::ivec3 &key, float cellSize, const std::vector<Ref<JarTerrainFeature>> &features,
     const std::vector<int> &featureBiomes, const Ref<JarBiomeMap> &biomes, const Ref<JarSignedDistanceField> &sdf,
-    const UpField &upField)
+    const UpField &upField, const std::shared_ptr<const GroundPalette> &ground)
 {
     std::vector<Instance> result;
     std::vector<glm::vec3> placed;    // positions of result
@@ -501,6 +644,24 @@ std::vector<FeatureManager::Instance> FeatureManager::generate_cell(
         const JarTerrainFeature &feature = **features[f];
         const float density = feature.get_density();
         const float footprint = feature.get_footprint();
+
+        // Whole layers that cannot place anything here are skipped before any
+        // sampling: no cluster in reach, or the feature's biome is absent.
+        const float halfDiagonal = cellSize * 0.8660254f;
+        if (!feature.clusters_reach(center, up, halfDiagonal))
+            continue;
+        const int layerBiome = f < int(featureBiomes.size()) ? featureBiomes[f] : -1;
+        if (layerBiome >= 0 && biomes.is_valid())
+        {
+            // Biomes change over hundreds of meters: a 3x3 grid over the cell finds them.
+            float most = 0.0f;
+            for (int y = -1; y <= 1 && most < 0.01f; ++y)
+                for (int x = -1; x <= 1 && most < 0.01f; ++x)
+                    most = std::max(most, biomes->evaluate(center + (t1 * float(x) + t2 * float(y)) * (cellSize * 0.5f), upField)
+                                              .weight_of(layerBiome));
+            if (most < 0.01f)
+                continue;
+        }
 
         // Poisson disc samples by dart throwing on a grid (one sample per grid
         // cell): even spacing within the layer, no clumps of overlapping copies.
@@ -537,6 +698,26 @@ std::vector<FeatureManager::Instance> FeatureManager::generate_cell(
             // not depend on whether earlier samples were kept.
             const float keep = rng.next(), r1 = rng.next(), r2 = rng.next();
             const glm::vec3 onPlane = center + t1 * (s.x - side * 0.5f) + t2 * (s.y - side * 0.5f);
+            // Where the sample's column (down along up) crosses the cell: a
+            // column that misses it cannot place anything here (most of the
+            // square does, it covers the cell from any up direction).
+            const glm::vec3 top = onPlane + up * (side * 0.5f);
+            float enter = 0.0f, leave = side;
+            for (int a = 0; a < 3 && enter <= leave; ++a)
+            {
+                const float dir = -up[a];
+                if (std::abs(dir) < 1e-6f)
+                {
+                    if (top[a] < lo[a] || top[a] >= hi[a])
+                        leave = -1.0f;
+                    continue;
+                }
+                const float ta = (lo[a] - top[a]) / dir, tb = (hi[a] - top[a]) / dir;
+                enter = std::max(enter, std::min(ta, tb));
+                leave = std::min(leave, std::max(ta, tb));
+            }
+            if (enter > leave)
+                continue;
             // Mask and clusters only depend on the position: test them on the
             // sample's projection before paying for the ray march.
             const int biome = f < int(featureBiomes.size()) ? featureBiomes[f] : -1;
@@ -547,14 +728,16 @@ std::vector<FeatureManager::Instance> FeatureManager::generate_cell(
             const float spread = feature.distribution(onPlane, up) * biome_weight(onPlane);
             if (keep >= spread)
                 continue;
-            const glm::vec3 top = onPlane + up * (side * 0.5f);
-            float d = sdf->distance(top);
+            // The first surface in the cell along the column (none if the
+            // column enters the cell underground).
+            const glm::vec3 entry = top - up * enter;
+            float d = sdf->distance(entry);
             if (d < 0.0f)
-                continue; // surface above the sampled square: not this cell's
-            const float t = find_surface_below(*sdf.ptr(), top, up, d, side);
+                continue;
+            const float t = find_surface_below(*sdf.ptr(), entry, up, d, leave - enter);
             if (t < 0.0f)
                 continue;
-            const glm::vec3 p = top - up * t;
+            const glm::vec3 p = entry - up * t;
             if (glm::any(glm::lessThan(p, lo)) || glm::any(glm::greaterThanEqual(p, hi)))
                 continue;
             const glm::vec3 normal = sdf->normal(p);
@@ -572,7 +755,8 @@ std::vector<FeatureManager::Instance> FeatureManager::generate_cell(
                 continue;
             placed.push_back(p);
             placedFootprint.push_back(footprint);
-            result.push_back({f, feature.build_transform(p, localUp, normal, r1, r2)});
+            result.push_back({f, feature.build_transform(p, localUp, normal, r1, r2),
+                              ground ? ground->color_at(p, upField) : glm::vec3(0.3f, 0.35f, 0.2f)});
         }
     }
     return result;

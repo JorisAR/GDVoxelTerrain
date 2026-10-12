@@ -112,6 +112,39 @@ class JarTerrainPopulator : public Resource
     // Probability (0..1) from the position alone: mask and clusters. Cheap, so
     // placement tests it before finding the exact surface. The density settings
     // are the density where this is 1 (inside forests, in cluster centers).
+    // Whether clusters leave anything within `reach` meters of `position` (a
+    // cell's center and half diagonal): if not, the cell can skip this layer.
+    bool clusters_reach(const glm::vec3 &position, const glm::vec3 &up, float reach) const
+    {
+        if (cluster_spacing <= 0.0f)
+            return true;
+        return nearest_cluster(position, up) * cluster_spacing < reach + cluster_radius;
+    }
+
+    // Distance along the ground to the nearest cluster center, in cluster
+    // spacings: one random point per grid cell of cluster_spacing (Worley
+    // noise). Centers more than half a cell above or below are skipped, so the
+    // ground sees about one center per cell of area, flat or round.
+    float nearest_cluster(const glm::vec3 &position, const glm::vec3 &up) const
+    {
+        const glm::vec3 g = position / cluster_spacing;
+        const glm::ivec3 base = glm::ivec3(glm::floor(g));
+        float nearest = 1e9f;
+        for (int z = -1; z <= 1; ++z)
+            for (int y = -1; y <= 1; ++y)
+                for (int x = -1; x <= 1; ++x)
+                {
+                    const glm::ivec3 c = base + glm::ivec3(x, y, z);
+                    PopulationRandom r(PopulationRandom::hash(uint32_t(c.x), uint32_t(c.y), uint32_t(c.z), 0xc1u));
+                    const glm::vec3 delta = glm::vec3(c) + glm::vec3(r.next(), r.next(), r.next()) - g;
+                    const float along = glm::dot(delta, up);
+                    if (std::abs(along) > 0.5f)
+                        continue;
+                    nearest = std::min(nearest, glm::length(delta - up * along));
+                }
+        return nearest;
+    }
+
     float distribution(const glm::vec3 &position, const glm::vec3 &up) const
     {
         float p = 1.0f;
@@ -124,27 +157,10 @@ class JarTerrainPopulator : public Resource
         }
         if (cluster_spacing > 0.0f && p > 0.0f)
         {
-            // Distance along the ground to the nearest cluster center: one
-            // random point per grid cell of cluster_spacing (Worley noise).
-            // Centers more than half a cell above or below are skipped, so the
-            // ground sees about one center per cell of area, flat or round.
-            const glm::vec3 g = position / cluster_spacing;
-            const glm::ivec3 base = glm::ivec3(glm::floor(g));
-            float nearest = 1e9f;
-            for (int z = -1; z <= 1; ++z)
-                for (int y = -1; y <= 1; ++y)
-                    for (int x = -1; x <= 1; ++x)
-                    {
-                        const glm::ivec3 c = base + glm::ivec3(x, y, z);
-                        PopulationRandom r(PopulationRandom::hash(uint32_t(c.x), uint32_t(c.y), uint32_t(c.z), 0xc1u));
-                        const glm::vec3 delta = glm::vec3(c) + glm::vec3(r.next(), r.next(), r.next()) - g;
-                        const float along = glm::dot(delta, up);
-                        if (std::abs(along) > 0.5f)
-                            continue;
-                        nearest = std::min(nearest, glm::length(delta - up * along));
-                    }
-            const float d = nearest * cluster_spacing / cluster_radius;
-            p *= std::exp(-d * d);
+            // Full density in the inner 60% of a cluster, none beyond its
+            // radius: groves with an edge, not a tail of lone instances.
+            const float d = nearest_cluster(position, up) * cluster_spacing / cluster_radius;
+            p *= 1.0f - ramp((d - 0.6f) / 0.4f);
         }
         return p;
     }
@@ -189,7 +205,8 @@ class JarTerrainPopulator : public Resource
         }
         const float s = minimum_scale + (maximum_scale - minimum_scale) * r2;
         const glm::vec3 origin = position - up * sink;
-        Basis basis(Vector3(x.x, y.x, z.x) * s, Vector3(x.y, y.y, z.y) * s, Vector3(x.z, y.z, z.z) * s);
+        // Basis(a, b, c) takes the axes (columns): the instance's x, y, z.
+        Basis basis(Vector3(x.x, x.y, x.z) * s, Vector3(y.x, y.y, y.z) * s, Vector3(z.x, z.y, z.z) * s);
         return Transform3D(basis, Vector3(origin.x, origin.y, origin.z));
     }
 

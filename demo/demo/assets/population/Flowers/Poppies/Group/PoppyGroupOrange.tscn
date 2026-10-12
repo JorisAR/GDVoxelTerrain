@@ -1,0 +1,24 @@
+[gd_scene format=3 uid="uid://dsssuji832l7a"]
+
+[ext_resource type="Texture2D" path="res://addons/jar_voxel_terrain/textures/noise/3d_voronoi.png" id="voronoi"]
+[ext_resource type="Shader" path="res://demo/assets/population/Flowers/Poppies/Poppy.gdshader" id="1_w3rp3"]
+[ext_resource type="Texture2D" uid="uid://cmu4hbi66ofju" path="res://demo/assets/population/Flowers/Poppies/poppy.png" id="2_d68j8"]
+[ext_resource type="ArrayMesh" uid="uid://ceys400mwnkx0" path="res://demo/assets/population/Flowers/Poppies/Group/poppies.obj" id="3_asppm"]
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_n6cel"]
+render_priority = 0
+shader = ExtResource("1_w3rp3")
+shader_parameter/leaves_color1 = Color(0.792461, 0.11968, 4.81307e-07, 1)
+shader_parameter/leaves_color2 = Color(0.808602, 0, 0.165863, 1)
+shader_parameter/trunk_color = Color(0.1886, 0.41, 0.19967, 1)
+shader_parameter/wind_affect = 0.1
+shader_parameter/noise = ExtResource("voronoi")
+shader_parameter/leaves_mask = ExtResource("2_d68j8")
+
+[node name="PoppyGroup" type="Node3D"]
+
+[node name="Poppy" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.0426161, 0, 0)
+material_override = SubResource("ShaderMaterial_n6cel")
+visibility_range_end = 256.0
+mesh = ExtResource("3_asppm")

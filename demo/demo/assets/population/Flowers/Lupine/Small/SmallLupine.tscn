@@ -1,0 +1,11 @@
+[gd_scene format=3]
+
+[ext_resource type="Material" uid="uid://c2gxuroct6pyh" path="res://demo/assets/population/Flowers/Lupine/LupineMaterial.tres" id="1_0oe76"]
+[ext_resource type="ArrayMesh" uid="uid://gs8qsge0j1vb" path="res://demo/assets/population/Flowers/Lupine/Small/lupine.obj" id="2_ekca6"]
+
+[node name="LargePoplar" type="Node3D"]
+
+[node name="Lupine" type="MeshInstance3D" parent="."]
+material_override = ExtResource("1_0oe76")
+visibility_range_end = 256.0
+mesh = ExtResource("2_ekca6")

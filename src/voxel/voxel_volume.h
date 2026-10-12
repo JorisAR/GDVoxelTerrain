@@ -9,6 +9,7 @@
 #include "terrain_feature.h"
 #include "biome_map.h"
 #include "feature_manager.h"
+#include "ground_palette.h"
 #include "up_field.h"
 #include "voxel_lod.h"
 #include "voxel_octree_node.h"
@@ -65,6 +66,7 @@ class JarVoxelVolume : public Node3D
     Ref<PackedScene> _chunkScene;
     Ref<Material> _material;          // user material; empty uses the default for the material mode
     Ref<Material> _runtimeMaterial;   // what chunks use: a per-volume copy with the material palette
+    std::shared_ptr<const GroundPalette> _groundPalette; // replaced whole (atomically) with the materials
     TypedArray<JarTerrainMaterial> _terrainMaterials;
     std::atomic<int> _materialMode{0}; // MaterialMode; read by mesh threads
     bool _materialsDirty = true;
@@ -126,6 +128,14 @@ class JarVoxelVolume : public Node3D
     // POPULATION
     TypedArray<JarTerrainDetail> _terrainDetails;
     TypedArray<JarTerrainFeature> _terrainFeatures;
+    bool _featuresEnabled = true;
+    bool _detailsEnabled = true;
+    bool _editorPreview = false; // build and show the terrain in the editor
+    // What the editor preview builds (cheaper than the game by default).
+    bool _previewFeatures = false;
+    bool _previewDetails = false;
+    bool _previewColliders = false;
+    int _previewMinLod = 1;
     Ref<JarBiomeMap> _biomeMap;
     float _featureCellSize = 64.0f;
     std::unique_ptr<FeatureManager> _featureManager;
@@ -139,6 +149,8 @@ class JarVoxelVolume : public Node3D
     void build();
     void _notification(int what);
     void initialize();
+    void teardown(); // frees the octree, chunks and population (editor preview off)
+    bool is_active() const; // runs here: in game, or previewing in the editor
     void process();
     void process_chunk_queue(float delta);
     void process_modify_queue();
@@ -251,6 +263,9 @@ class JarVoxelVolume : public Node3D
     Ref<Material> get_material() const { return _material; }
     void set_material(const Ref<Material> &value);
     Ref<Material> get_runtime_material() const { return _runtimeMaterial; }
+    // Any thread: the ground colors for population materials (never null once
+    // initialized; a snapshot stays valid while held).
+    std::shared_ptr<const GroundPalette> get_ground_palette() const { return std::atomic_load(&_groundPalette); }
     // Rebuilds the per-volume material (palette, textures, defaults) before the
     // next frame. Call after changing materials from code.
     void update_materials();
@@ -334,6 +349,24 @@ class JarVoxelVolume : public Node3D
     Dictionary get_biome_weights_at(const Vector3 &global_position) const;
     void set_terrain_features(const TypedArray<JarTerrainFeature> &features);
     TypedArray<JarTerrainFeature> get_terrain_features() const { return _terrainFeatures; }
+    bool get_features_enabled() const { return _featuresEnabled; }
+    void set_features_enabled(bool value);
+    bool get_details_enabled() const { return _detailsEnabled; }
+    void set_details_enabled(bool value);
+    bool get_editor_preview() const { return _editorPreview; }
+    void set_editor_preview(bool value);
+    bool get_preview_features() const { return _previewFeatures; }
+    void set_preview_features(bool value);
+    bool get_preview_details() const { return _previewDetails; }
+    void set_preview_details(bool value);
+    bool get_preview_colliders() const { return _previewColliders; }
+    void set_preview_colliders(bool value);
+    int get_preview_min_lod() const { return _previewMinLod; }
+    void set_preview_min_lod(int value);
+    // Running as the editor preview (the editor_preview_* settings apply).
+    bool is_previewing() const;
+    // Whether chunks and features get colliders (not in a preview without them).
+    bool colliders_enabled() const { return !is_previewing() || _previewColliders; }
     void set_feature_cell_size(float value);
     float get_feature_cell_size() const { return _featureCellSize; }
     void remove_features(const Vector3 &global_position, float radius);

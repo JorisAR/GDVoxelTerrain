@@ -1,8 +1,8 @@
 [gd_resource type="JarBiomeMap" format=3 uid="uid://dt3ug1atfvmdb"]
 
-[ext_resource type="JarBiome" path="res://demo/planet/temperate.tres" id="1"]
-[ext_resource type="JarBiome" path="res://demo/planet/tundra.tres" id="2"]
-[ext_resource type="JarBiome" path="res://demo/planet/steppe.tres" id="3"]
+[ext_resource type="JarBiome" uid="uid://khfaq0u8m2va" path="res://demo/planet/temperate.tres" id="1"]
+[ext_resource type="JarBiome" uid="uid://bi4h1jyrnamyk" path="res://demo/planet/tundra.tres" id="2"]
+[ext_resource type="JarBiome" uid="uid://bgo5pwo1i768t" path="res://demo/planet/steppe.tres" id="3"]
 
 [sub_resource type="FastNoiseLite" id="Moisture"]
 seed = 47

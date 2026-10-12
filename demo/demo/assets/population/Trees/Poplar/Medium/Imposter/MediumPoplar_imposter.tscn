@@ -1,0 +1,37 @@
+[gd_scene format=3 uid="uid://yok5r8dldwem"]
+
+[ext_resource type="Shader" path="res://addons/jar_voxel_terrain/shaders/impostor.gdshader" id="1_r8fex"]
+[ext_resource type="Texture2D" uid="uid://btp1vs4fjinex" path="res://demo/assets/population/Trees/Poplar/Medium/Imposter/base_MediumPoplar_albedo.png" id="2_rcp6g"]
+[ext_resource type="Texture2D" uid="uid://bnabngd8kttjw" path="res://demo/assets/population/Trees/Poplar/Medium/Imposter/base_MediumPoplar_depth.png" id="3_x2tm5"]
+[ext_resource type="Texture2D" uid="uid://da81hp0isdmoi" path="res://demo/assets/population/Trees/Poplar/Medium/Imposter/base_MediumPoplar_normal.png" id="4_lstt4"]
+[ext_resource type="Texture2D" uid="uid://cvdvo8it3yn7u" path="res://demo/assets/population/Trees/Poplar/Medium/Imposter/base_MediumPoplar_orm.png" id="5_2vkh0"]
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_nwam3"]
+render_priority = 0
+shader = ExtResource("1_r8fex")
+shader_parameter/albedo = Color(1, 1, 1, 1)
+shader_parameter/specular = 0.5
+shader_parameter/metallic = 0.0
+shader_parameter/roughness = 1.0
+shader_parameter/imposterFrames = Vector2(8, 8)
+shader_parameter/positionOffset = Vector3(0.0386105, 12.3889, -0.792621)
+shader_parameter/isFullSphere = false
+shader_parameter/alpha_clamp = 0.5
+shader_parameter/dither = false
+shader_parameter/scale = 19.0991
+shader_parameter/depth_scale = 0.0
+shader_parameter/normalmap_depth = 1.0
+shader_parameter/aabb_max = 9.54955
+shader_parameter/imposterTextureAlbedo = ExtResource("2_rcp6g")
+shader_parameter/imposterTextureNormal = ExtResource("4_lstt4")
+shader_parameter/imposterTextureDepth = ExtResource("3_x2tm5")
+shader_parameter/imposterTextureOrm = ExtResource("5_2vkh0")
+
+[sub_resource type="QuadMesh" id="QuadMesh_ousyd"]
+material = SubResource("ShaderMaterial_nwam3")
+custom_aabb = AABB(-8.727, -2.01059, -9.77012, 26.2968, 43.1984, 26.9325)
+
+[node name="Impostor" type="Node3D"]
+
+[node name="mesh-impostor" type="MeshInstance3D" parent="."]
+mesh = SubResource("QuadMesh_ousyd")

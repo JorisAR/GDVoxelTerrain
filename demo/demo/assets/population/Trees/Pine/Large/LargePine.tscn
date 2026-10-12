@@ -1,0 +1,36 @@
+[gd_scene format=3 uid="uid://b13h7c6q6po5a"]
+
+[ext_resource type="Material" uid="uid://bm6ae8b8xv31" path="res://demo/assets/population/Trees/Pine/PineMaterial.tres" id="1_fqoin"]
+[ext_resource type="ArrayMesh" uid="uid://d1uny8xjidl4j" path="res://demo/assets/population/Trees/Pine/Large/pine.obj" id="2_k201u"]
+[ext_resource type="ArrayMesh" uid="uid://djqf8vn673qu0" path="res://demo/assets/population/Trees/Pine/Large/large_pine_lod_1.obj" id="3_gvqdm"]
+[ext_resource type="QuadMesh" uid="uid://be8ne6askr7qq" path="res://demo/assets/population/Trees/Pine/Large/Imposter/LargePine_mesh.tres" id="3_m08vy"]
+[ext_resource type="ArrayMesh" uid="uid://cptegec65yqrk" path="res://demo/assets/population/Trees/Pine/Large/large_pine_trunk.obj" id="5_melal"]
+
+[sub_resource type="CapsuleShape3D" id="CapsuleShape3D_l4xv8"]
+height = 24.3836
+
+[node name="LargePine" type="Node3D"]
+
+[node name="StaticBody3D" type="StaticBody3D" parent="."]
+collision_mask = 0
+
+[node name="LoD0" type="MeshInstance3D" parent="StaticBody3D"]
+material_override = ExtResource("1_fqoin")
+visibility_range_end = 64.0
+mesh = ExtResource("2_k201u")
+skeleton = NodePath("../..")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="StaticBody3D"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 11.3719, 0)
+shape = SubResource("CapsuleShape3D_l4xv8")
+
+[node name="LoD1" type="MeshInstance3D" parent="."]
+material_override = ExtResource("1_fqoin")
+visibility_range_begin = 63.0
+visibility_range_end = 383.0
+mesh = ExtResource("3_gvqdm")
+
+[node name="mesh-impostor" type="MeshInstance3D" parent="."]
+visibility_range_begin = 384.0
+mesh = ExtResource("3_m08vy")
+skeleton = NodePath("")

@@ -1,0 +1,65 @@
+[gd_scene format=3 uid="uid://clm74f6t2j43o"]
+
+[ext_resource type="Material" uid="uid://bexm6ox0oi22p" path="res://demo/assets/population/Trees/Birch/BirchMaterial.tres" id="1_vkyg2"]
+[ext_resource type="ArrayMesh" uid="uid://wp28314i281g" path="res://demo/assets/population/Trees/Birch/Small/small_birch.obj" id="2_cajwo"]
+[ext_resource type="ArrayMesh" uid="uid://okkglxtnucqn" path="res://demo/assets/population/Trees/Birch/Small/small_birch_lod1.obj" id="3_1yfo1"]
+[ext_resource type="Shader" path="res://addons/jar_voxel_terrain/shaders/impostor.gdshader" id="4_o6im2"]
+[ext_resource type="ArrayMesh" uid="uid://ckl6lb6jodl4x" path="res://demo/assets/population/Trees/Birch/Small/small_birch_trunk.obj" id="5_7x8hn"]
+[ext_resource type="Texture2D" uid="uid://bwn23n4rnbk6n" path="res://demo/assets/population/Trees/Birch/Small/Imposter/base_SmallBirch_albedo.png" id="5_v8ejk"]
+[ext_resource type="Texture2D" uid="uid://cakd1uvf4plsb" path="res://demo/assets/population/Trees/Birch/Small/Imposter/base_SmallBirch_depth.png" id="6_rm6mq"]
+[ext_resource type="Texture2D" uid="uid://cck1y6w6wuot2" path="res://demo/assets/population/Trees/Birch/Small/Imposter/base_SmallBirch_normal.png" id="7_cqg4m"]
+[ext_resource type="Texture2D" uid="uid://dkmrkcn5u7dkd" path="res://demo/assets/population/Trees/Birch/Small/Imposter/base_SmallBirch_orm.png" id="8_2rr3u"]
+
+[sub_resource type="CapsuleShape3D" id="CapsuleShape3D_l4xv8"]
+height = 12.1841
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_rt47f"]
+render_priority = 0
+shader = ExtResource("4_o6im2")
+shader_parameter/albedo = Color(1, 1, 1, 1)
+shader_parameter/specular = 0.5
+shader_parameter/metallic = 0.0
+shader_parameter/roughness = 1.0
+shader_parameter/imposterFrames = Vector2(8, 8)
+shader_parameter/positionOffset = Vector3(-0.485584, 7.86859, -0.746038)
+shader_parameter/isFullSphere = false
+shader_parameter/alpha_clamp = 0.5
+shader_parameter/dither = false
+shader_parameter/scale = 15.0726
+shader_parameter/depth_scale = 0.0
+shader_parameter/normalmap_depth = 1.0
+shader_parameter/aabb_max = 7.53629
+shader_parameter/imposterTextureAlbedo = ExtResource("5_v8ejk")
+shader_parameter/imposterTextureNormal = ExtResource("7_cqg4m")
+shader_parameter/imposterTextureDepth = ExtResource("6_rm6mq")
+shader_parameter/imposterTextureOrm = ExtResource("8_2rr3u")
+
+[sub_resource type="QuadMesh" id="QuadMesh_tc2tj"]
+material = SubResource("ShaderMaterial_rt47f")
+custom_aabb = AABB(-9.66739, -0.5, -9.28091, 27.5454, 25.1058, 25.6046)
+
+[node name="SmallBirch" type="Node3D"]
+
+[node name="StaticBody3D" type="StaticBody3D" parent="."]
+collision_mask = 0
+
+[node name="LoD0" type="MeshInstance3D" parent="StaticBody3D"]
+material_override = ExtResource("1_vkyg2")
+visibility_range_end = 64.0
+mesh = ExtResource("2_cajwo")
+skeleton = NodePath("../..")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="StaticBody3D"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 5.12612, 0)
+shape = SubResource("CapsuleShape3D_l4xv8")
+
+[node name="LoD1" type="MeshInstance3D" parent="."]
+material_override = ExtResource("1_vkyg2")
+visibility_range_begin = 63.0
+visibility_range_end = 383.0
+mesh = ExtResource("3_1yfo1")
+
+[node name="mesh-impostor" type="MeshInstance3D" parent="."]
+visibility_range_begin = 384.0
+mesh = SubResource("QuadMesh_tc2tj")
+skeleton = NodePath("")

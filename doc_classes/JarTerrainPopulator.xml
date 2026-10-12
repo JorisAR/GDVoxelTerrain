@@ -18,7 +18,7 @@
 			If [code]true[/code], instances point along the surface normal; otherwise along the volume's up direction (trees grow straight up on slopes).
 		</member>
 		<member name="cluster_radius" type="float" setter="set_cluster_radius" getter="get_cluster_radius" default="10.0">
-			Radius in meters of a cluster: the density falls off like a Gaussian with this radius around each cluster center.
+			Radius of a cluster in meters: full density within 60% of it, fading to none at the edge, so features form groves without lone stragglers between them.
 		</member>
 		<member name="cluster_spacing" type="float" setter="set_cluster_spacing" getter="get_cluster_spacing" default="0.0">
 			Typical distance in meters between cluster centers (one random center per cell of this size). [code]0[/code] disables clustering.

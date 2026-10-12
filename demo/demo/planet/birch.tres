@@ -1,0 +1,19 @@
+[gd_resource type="JarTerrainFeature" format=3 uid="uid://bwqai7nepg1v1"]
+
+[ext_resource type="PackedScene" uid="uid://bor821nc1eytt" path="res://demo/assets/population/Trees/Birch/Medium/MediumBirch.tscn" id="1_scene"]
+
+[resource]
+scene = ExtResource("1_scene")
+density = 0.01
+footprint = 4.0
+draw_distance = 900.0
+minimum_scale = 0.5
+maximum_scale = 0.75
+sink = 0.4
+minimum_height = 3.0
+maximum_height = 180.0
+height_falloff = 30.0
+maximum_slope = 30.0
+slope_falloff = 6.0
+cluster_spacing = 140.0
+cluster_radius = 26.0

@@ -181,6 +181,21 @@
 		<member name="dual_contouring_feature_threshold" type="float" setter="set_dual_contouring_feature_threshold" getter="get_dual_contouring_feature_threshold" default="0.1">
 			How eagerly dual contouring snaps vertices to sharp features, as a fraction of the strongest surface direction in a cell. Lower values sharpen subtler creases but can add noise on curved surfaces; higher values behave more like surface nets.
 		</member>
+		<member name="editor_preview_colliders" type="bool" setter="set_preview_colliders" getter="get_preview_colliders" default="false">
+			If [code]true[/code], the editor preview builds chunk and feature colliders too (needed only for physics in the editor).
+		</member>
+		<member name="editor_preview_details" type="bool" setter="set_preview_details" getter="get_preview_details" default="false">
+			If [code]true[/code], the editor preview shows details (grass...). Only while previewing; the game uses [member population_details_enabled].
+		</member>
+		<member name="editor_preview_enabled" type="bool" setter="set_editor_preview" getter="get_editor_preview" default="false">
+			If [code]true[/code], the volume builds and shows its terrain in the editor, around the editor's 3D camera (otherwise it only runs in the game), with the other [code]editor_preview_*[/code] settings. The generated chunks and population are not saved with the scene. Turning it off frees them.
+		</member>
+		<member name="editor_preview_features" type="bool" setter="set_preview_features" getter="get_preview_features" default="false">
+			If [code]true[/code], the editor preview shows features (trees, rocks...). Only while previewing; the game uses [member population_features_enabled].
+		</member>
+		<member name="editor_preview_min_lod" type="int" setter="set_preview_min_lod" getter="get_preview_min_lod" default="1">
+			Finest level of detail the editor preview builds: [code]0[/code] is full detail; each level up halves the resolution (and costs about a quarter as much near the camera).
+		</member>
 		<member name="extent" type="float" setter="set_extent" getter="get_extent" default="16384.0">
 			Edge length, in meters, of the cube the volume covers (centered on the volume's origin). Make it larger than the shape, e.g. at least twice the radius plus the noise height for a planet. Together with [member voxel_size] this sets the octree depth. Applied when the volume enters the tree.
 		</member>
@@ -223,8 +238,14 @@
 		<member name="population_biome_map" type="JarBiomeMap" setter="set_biome_map" getter="get_biome_map">
 			Biomes of this volume: each biome adds its own features and details where it occurs, and its own ground materials in the terrain shader. The volume's own [member population_terrain_features] and [member population_terrain_details] grow everywhere.
 		</member>
+		<member name="population_details_enabled" type="bool" setter="set_details_enabled" getter="get_details_enabled" default="true">
+			If [code]false[/code], no details are generated or shown (they disappear at once). Turning them back on remeshes the volume to bring them back.
+		</member>
 		<member name="population_feature_cell_size" type="float" setter="set_feature_cell_size" getter="get_feature_cell_size" default="64.0">
 			Edge length in meters of the cells features are generated in. Smaller cells follow the surface more closely and stream in finer steps; larger cells mean fewer, bigger jobs and nodes.
+		</member>
+		<member name="population_features_enabled" type="bool" setter="set_features_enabled" getter="get_features_enabled" default="true">
+			If [code]false[/code], no features are generated or shown, including the [JarBiome] features of [member population_biome_map]. Removed features stay removed when they come back.
 		</member>
 		<member name="population_terrain_details" type="JarTerrainDetail[]" setter="set_terrain_details" getter="get_terrain_details" default="[]">
 			[JarTerrainDetail]s scattered over full-detail chunks: grass, pebbles, small plants.

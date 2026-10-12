@@ -53,6 +53,11 @@ class JarVoxelChunk : public Node3D
     void _update_multi_mesh_instances(int n);
 
   public:
+    void clear_details() { _update_multi_mesh_instances(0); }
+
+  private:
+
+  public:
     JarVoxelChunk();
     ~JarVoxelChunk();
 

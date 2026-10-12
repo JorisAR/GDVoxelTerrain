@@ -1,13 +1,19 @@
-[gd_resource type="JarBiome" load_steps=5 format=3]
+[gd_resource type="JarBiome" format=3 uid="uid://khfaq0u8m2va"]
 
-[ext_resource type="JarTerrainFeature" path="res://demo/planet/pine.tres" id="1"]
-[ext_resource type="JarTerrainFeature" path="res://demo/planet/broadleaf.tres" id="2"]
-[ext_resource type="JarTerrainFeature" path="res://demo/planet/bush.tres" id="3"]
-[ext_resource type="JarTerrainDetail" path="res://demo/planet/grass.tres" id="4"]
+[ext_resource type="JarTerrainFeature" uid="uid://bjhffms4m1hay" path="res://demo/planet/pine.tres" id="1"]
+[ext_resource type="JarTerrainFeature" uid="uid://cv2l3s85f2k8k" path="res://demo/planet/broadleaf.tres" id="2"]
+[ext_resource type="JarTerrainFeature" uid="uid://buqkk75rsywt7" path="res://demo/planet/broadleaf_large.tres" id="3"]
+[ext_resource type="JarTerrainFeature" uid="uid://bwqai7nepg1v1" path="res://demo/planet/birch.tres" id="4"]
+[ext_resource type="JarTerrainFeature" uid="uid://orb1lwt4uinu" path="res://demo/planet/bush.tres" id="6"]
+[ext_resource type="JarTerrainDetail" uid="uid://bi8dl4k1gc8kr" path="res://demo/planet/grass_tall.tres" id="8"]
+[ext_resource type="JarTerrainDetail" uid="uid://kgkqqc8u7o3o" path="res://demo/planet/poppies.tres" id="9"]
+[ext_resource type="JarTerrainDetail" uid="uid://cw17bih6mp6ww" path="res://demo/planet/poppies_orange.tres" id="10"]
+[ext_resource type="JarTerrainDetail" uid="uid://t48xac4ovvlj" path="res://demo/planet/ground_elder.tres" id="11"]
+[ext_resource type="JarTerrainDetail" uid="uid://cudfru0whs7mb" path="res://demo/planet/lupine.tres" id="12"]
 
 [resource]
-resource_name = "Temperate forest"
 temperature = 0.1
 moisture = 0.2
-features = Array[JarTerrainFeature]([ExtResource("1"), ExtResource("2"), ExtResource("3")])
-details = Array[JarTerrainDetail]([ExtResource("4")])
+features = Array[JarTerrainFeature]([ExtResource("1"), ExtResource("3"), ExtResource("2"), ExtResource("4"), ExtResource("6")])
+details = Array[JarTerrainDetail]([ExtResource("8"), ExtResource("9"), ExtResource("10"), ExtResource("11"), ExtResource("12")])
+resource_name = "Temperate forest"

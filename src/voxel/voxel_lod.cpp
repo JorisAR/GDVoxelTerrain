@@ -1,3 +1,6 @@
+#include <godot_cpp/classes/editor_interface.hpp>
+#include <godot_cpp/classes/engine.hpp>
+#include <godot_cpp/classes/sub_viewport.hpp>
 #include "voxel_lod.h"
 #include "voxel_viewer.h"
 #include "voxel_volume.h"
@@ -17,6 +20,18 @@ JarVoxelLoD::JarVoxelLoD(bool automaticUpdate, float automaticUpdateDistance, in
 std::vector<glm::vec3> JarVoxelLoD::gather_viewers(const JarVoxelVolume &volume)
 {
     std::vector<glm::vec3> positions;
+    // Editor preview: the editor's 3D camera is the only viewer.
+    if (Engine::get_singleton()->is_editor_hint())
+    {
+        if (EditorInterface *editor = EditorInterface::get_singleton())
+            if (SubViewport *viewport = editor->get_editor_viewport_3d(0))
+                if (Camera3D *camera = viewport->get_camera_3d())
+                {
+                    const Vector3 p = volume.to_local(camera->get_global_position());
+                    positions.emplace_back(p.x, p.y, p.z);
+                }
+        return positions;
+    }
     for (const JarVoxelViewer *viewer : JarVoxelViewer::get_viewers())
     {
         if (!viewer->is_enabled() || !viewer->is_inside_tree())
@@ -103,10 +118,10 @@ int JarVoxelLoD::lod_for_viewer(const glm::vec3 &position, const glm::vec3 &view
 
 int JarVoxelLoD::lod_at(const glm::vec3 &position) const
 {
-    if (_viewerPositions.empty())
-        return std::min(lod_for_viewer(position, glm::vec3(0.0f)), _maxLod);
     int lod = std::numeric_limits<int>::max();
+    if (_viewerPositions.empty())
+        lod = lod_for_viewer(position, glm::vec3(0.0f));
     for (const glm::vec3 &viewer : _viewerPositions)
         lod = std::min(lod, lod_for_viewer(position, viewer));
-    return std::min(lod, _maxLod);
+    return std::min(std::max(lod, _minLod), _maxLod);
 }

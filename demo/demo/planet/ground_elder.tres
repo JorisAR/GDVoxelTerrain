@@ -1,0 +1,24 @@
+[gd_resource type="JarTerrainDetail" format=3 uid="uid://t48xac4ovvlj"]
+
+[ext_resource type="ArrayMesh" uid="uid://da5dtcwbsnyve" path="res://demo/assets/population/Flowers/GroundElder/Small/ground_elder.obj" id="1_mesh"]
+[ext_resource type="Material" uid="uid://2rk4h8strikl" path="res://demo/assets/population/Flowers/GroundElder/GroundElderMaterial.tres" id="2_mat"]
+
+[sub_resource type="FastNoiseLite" id="Mask"]
+seed = 2
+frequency = 0.02
+
+[resource]
+mesh = ExtResource("1_mesh")
+material = ExtResource("2_mat")
+density = 0.8
+draw_distance = 45.0
+minimum_scale = 0.5
+maximum_scale = 0.8
+align_with_normal = true
+minimum_height = 2.0
+height_falloff = 2.0
+maximum_slope = 32.0
+slope_falloff = 6.0
+mask_noise = SubResource("Mask")
+mask_threshold = 0.3
+mask_falloff = 0.15

@@ -9,6 +9,8 @@ func _ready() -> void:
 	await _test_features()
 	await _test_details()
 	await _test_biomes()
+	await _test_toggles()
+	await _test_planet_orientation()
 	print("Population tests: %s" % ("ALL PASSED" if _failures == 0 else "%d FAILED" % _failures))
 	get_tree().quit(1 if _failures > 0 else 0)
 
@@ -187,6 +189,91 @@ func _test_details() -> void:
 	world.volume.queue_free()
 	world.viewer.queue_free()
 	await get_tree().process_frame
+
+## population_features_enabled / population_details_enabled: off removes
+## them at once, on brings them back.
+func _test_toggles() -> void:
+	var detail := JarTerrainDetail.new()
+	detail.mesh = BoxMesh.new()
+	detail.density = 1.0
+	detail.maximum_slope = 90.0
+	var feature := _box_feature(0.01)
+	var world := TestWorld.flat(self, Vector3(3, 30, 5), func(v: JarVoxelVolume):
+		v.population_terrain_features = [feature]
+		v.population_terrain_details = [detail])
+	var volume: JarVoxelVolume = world.volume
+	await _settle(volume)
+	var before := _population_counts(volume)
+	volume.population_features_enabled = false
+	volume.population_details_enabled = false
+	for i in 3:
+		await get_tree().process_frame
+	var off := _population_counts(volume)
+	_check("toggles off remove population", before.x > 0 and before.y > 0 and off == Vector2i.ZERO,
+		"features %d -> %d, details %d -> %d" % [before.x, off.x, before.y, off.y])
+	volume.population_features_enabled = true
+	volume.population_details_enabled = true
+	await _settle(volume)
+	var on := _population_counts(volume)
+	_check("toggles on bring it back", on.x == before.x and on.y > before.y * 0.9,
+		"features %d, details %d" % [on.x, on.y])
+	world.volume.queue_free()
+	world.viewer.queue_free()
+	await get_tree().process_frame
+
+## On a planet, features stand along the local up (or the surface normal with
+## align_with_normal). Flat ground hides a transposed basis (rotations about
+## up look the same), so this needs a sphere.
+func _test_planet_orientation() -> void:
+	var sdf := JarTerrainSdf.new()
+	sdf.shape = JarTerrainSdf.SHAPE_SPHERE
+	sdf.radius = 400.0
+	var noise := FastNoiseLite.new()
+	noise.frequency = 0.01
+	sdf.noise = noise
+	sdf.height = 20.0
+	sdf.erosion = false
+	var upright := _box_feature(0.01)
+	upright.maximum_slope = 90.0
+	var aligned := _box_feature(0.01)
+	aligned.align_with_normal = true
+	var holder := Node3D.new()
+	add_child(holder)
+	var volume := JarVoxelVolume.new()
+	volume.chunk_scene = TestWorld.CHUNK_SCENE
+	volume.extent = 1024.0
+	volume.sdf = sdf
+	volume.population_terrain_features = [upright, aligned]
+	holder.add_child(volume)
+	var viewer := JarVoxelViewer.new()
+	var spot := Vector3(1.0, 0.4, 0.7).normalized() * 430.0
+	viewer.position = spot
+	holder.add_child(viewer)
+	await _settle(volume)
+	var worst := [0.0, 0.0]
+	var counts := [0, 0]
+	for f in volume.get_features_near(spot, 120.0):
+		var t: Transform3D = f.transform
+		var i := 1 if f.feature == aligned else 0
+		var target: Vector3 = sdf.sample_normal(t.origin) if i == 1 else volume.get_up_direction_at(t.origin)
+		worst[i] = maxf(worst[i], rad_to_deg(t.basis.y.angle_to(target)))
+		counts[i] += 1
+	_check("planet features stand along up", counts[0] > 10 and worst[0] < 1.0, "%d, worst %.2f degrees" % [counts[0], worst[0]])
+	_check("planet features align with the normal", counts[1] > 10 and worst[1] < 2.0, "%d, worst %.2f degrees" % [counts[1], worst[1]])
+	holder.queue_free()
+	await get_tree().process_frame
+
+## (feature instances, detail instances) currently in multimeshes.
+func _population_counts(volume: JarVoxelVolume) -> Vector2i:
+	var counts := Vector2i.ZERO
+	for n in volume.find_children("*", "MultiMeshInstance3D", true, false):
+		if n.is_queued_for_deletion() or not n.multimesh or not n.is_visible_in_tree():
+			continue
+		if n.get_parent() is JarVoxelChunk:
+			counts.y += n.multimesh.instance_count
+		else:
+			counts.x += n.multimesh.instance_count
+	return counts
 
 func _origins(features: Array) -> Array:
 	var result := []

@@ -7,7 +7,9 @@
 
 #include "terrain_detail.h"
 #include "biome_map.h"
+#include "ground_palette.h"
 #include "up_field.h"
+#include <memory>
 
 using namespace godot;
 
@@ -22,12 +24,18 @@ class ChunkDetailGenerator
   public:
     explicit ChunkDetailGenerator(const UpField &upField) : _upField(upField) {}
 
+    // Floats per instance in the buffers: a TRANSFORM_3D transform, then the
+    // custom data (PopulationRendering::write_custom; the LOD range is the
+    // chunk's to set).
+    static constexpr int Stride = 16;
+
     // Thread-safe given read-only details: one MultiMesh buffer per detail
     // (see ChunkMeshData::detail_buffers), with chunk-relative transforms.
     // details[i] grows everywhere for biomes[i] == -1, else weighted by that biome.
     std::vector<PackedFloat32Array> generate_detail_buffers(const std::vector<Ref<JarTerrainDetail>> &details,
                                                             const std::vector<int> &detailBiomes,
                                                             const Ref<JarBiomeMap> &biomeMap,
+                                                            const std::shared_ptr<const GroundPalette> &ground,
                                                             const ChunkMeshData &chunkMeshData);
 };
 

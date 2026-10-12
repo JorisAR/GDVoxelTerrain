@@ -1,20 +1,17 @@
-[gd_resource type="JarTerrainFeature" load_steps=3 format=3]
+[gd_resource type="JarTerrainFeature" format=3 uid="uid://2dvalovk54ou"]
 
-[ext_resource type="ArrayMesh" path="res://demo/assets/population/features/rock_mesh.tres" id="1_mesh"]
-[ext_resource type="Material" path="res://demo/assets/population/features/feature_material.tres" id="2_mat"]
+[ext_resource type="PackedScene" uid="uid://bkw6yyxcqcujg" path="res://demo/assets/population/Rocks/Rock/rock.tscn" id="1_scene"]
 
 [resource]
-mesh = ExtResource("1_mesh")
-material = ExtResource("2_mat")
-density = 0.004
-footprint = 2.0
-draw_distance = 500.0
-minimum_scale = 0.5
-maximum_scale = 2.5
+scene = ExtResource("1_scene")
+density = 0.006
+draw_distance = 600.0
+minimum_scale = 0.2
+maximum_scale = 0.7
 align_with_normal = true
-sink = 0.3
+sink = 0.6
 minimum_height = -3.0
 maximum_slope = 60.0
 slope_falloff = 10.0
-cluster_spacing = 60.0
-cluster_radius = 14.0
+cluster_spacing = 110.0
+cluster_radius = 16.0

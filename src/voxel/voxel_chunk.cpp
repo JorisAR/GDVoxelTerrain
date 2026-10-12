@@ -1,5 +1,6 @@
 #include "voxel_chunk.h"
 #include "chunk_detail_generator.h"
+#include "population_rendering.h"
 #include "voxel_volume.h"
 #include "voxel_octree_node.h"
 #include <godot_cpp/classes/multi_mesh.hpp>
@@ -196,33 +197,55 @@ void JarVoxelChunk::update_chunk(JarVoxelVolume &terrain, VoxelOctreeNode *node,
     //generate details. Chunks are pooled and change LOD, so anything that should
     //not show details must drop the instances left over from its previous use.
     // Transforms were computed on the mesh thread; only the upload happens here.
+    // Two multimeshes per detail share its instances: the mesh near, the far
+    // mesh beyond far_distance.
     const std::vector<PackedFloat32Array> &buffers = chunk_mesh_data->detail_buffers;
     const auto terrain_details = terrain.population_details();
     const int detail_count = lod > 0 ? 0 : std::min<int>(buffers.size(), terrain_details.size());
-    _update_multi_mesh_instances(detail_count);
-    for (int i = 0; i < detail_count; i++)
+    _update_multi_mesh_instances(2 * detail_count);
+    const float margin = 0.87f * terrain.get_chunk_size() * terrain.get_voxel_size(); // half the chunk's diagonal
+    for (int i = 0; i < 2 * detail_count; i++)
     {
         MultiMeshInstance3D *multi_mesh_instance = multi_mesh_instances[i];
-        Ref<JarTerrainDetail> detail = terrain_details[i].item;
-        if (detail.is_null())
+        const Ref<JarTerrainDetail> detail = terrain_details[i / 2].item;
+        const bool far = (i & 1) != 0;
+        const bool has_far = detail.is_valid() && detail->get_far_mesh().is_valid() && detail->get_far_distance() > 0.0f;
+        const Ref<Mesh> mesh = detail.is_null() ? Ref<Mesh>() : (far ? detail->get_far_mesh() : detail->get_mesh());
+        const PackedFloat32Array &buffer = buffers[i / 2];
+        if (mesh.is_null() || (far && !has_far) || buffer.is_empty())
         {
+            multi_mesh_instance->set_visible(false);
             if (multi_mesh_instance->get_multimesh().is_valid())
                 multi_mesh_instance->get_multimesh()->set_instance_count(0);
             continue;
         }
+        multi_mesh_instance->set_visible(true);
         Ref<MultiMesh> multi_mesh = multi_mesh_instance->get_multimesh();
         if (multi_mesh.is_null())
         {
             multi_mesh.instantiate();
             multi_mesh->set_transform_format(MultiMesh::TRANSFORM_3D);
+            multi_mesh->set_use_custom_data(true);
             multi_mesh_instance->set_multimesh(multi_mesh);
         }
-        multi_mesh->set_mesh(detail->get_mesh());
-        multi_mesh->set_instance_count(buffers[i].size() / 12);
-        if (!buffers[i].is_empty())
-            multi_mesh->set_buffer(buffers[i]);
+        const float draw = detail->get_draw_distance();
+        const float split = has_far ? detail->get_far_distance() : 0.0f;
+        const float begin = far ? split : 0.0f, end = far || !has_far ? draw : split;
+        // This level's range in each instance's custom data (y, z).
+        PackedFloat32Array data = buffer;
+        float *w = data.ptrw();
+        for (int64_t k = 0; k + ChunkDetailGenerator::Stride <= data.size(); k += ChunkDetailGenerator::Stride)
+        {
+            w[k + 13] = begin;
+            w[k + 14] = end > 0.0f ? end : 1e20f;
+        }
+        multi_mesh->set_mesh(mesh);
+        multi_mesh->set_instance_count(data.size() / ChunkDetailGenerator::Stride);
+        multi_mesh->set_buffer(data);
         multi_mesh_instance->set_material_override(detail->get_material());
-        multi_mesh_instance->set_visibility_range_end(detail->get_draw_distance());
+        PopulationRendering::set_lod_range(multi_mesh_instance,
+                                           PopulationRendering::effective_material(mesh, detail->get_material()), begin,
+                                           end, margin);
         multi_mesh_instance->set_cast_shadows_setting(detail->get_shadows_enabled()
                                                           ? MeshInstance3D::SHADOW_CASTING_SETTING_ON
                                                           : MeshInstance3D::SHADOW_CASTING_SETTING_OFF);

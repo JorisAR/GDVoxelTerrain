@@ -1,19 +1,18 @@
-[gd_resource type="JarTerrainFeature" load_steps=4 format=3]
+[gd_resource type="JarTerrainFeature" format=3 uid="uid://dstsdy4017c0s"]
 
-[ext_resource type="ArrayMesh" path="res://demo/assets/population/features/pine_mesh.tres" id="1_mesh"]
-[ext_resource type="Material" path="res://demo/assets/population/features/foliage_material.tres" id="2_mat"]
+[ext_resource type="PackedScene" uid="uid://cn4kufx0ulban" path="res://demo/assets/population/Trees/Pine/Small/SmallPine.tscn" id="1_scene"]
 
 [resource]
-mesh = ExtResource("1_mesh")
-material = ExtResource("2_mat")
-density = 0.003
+scene = ExtResource("1_scene")
+density = 0.01
 footprint = 2.5
 draw_distance = 1200.0
-minimum_scale = 0.45
-maximum_scale = 0.9
+minimum_scale = 0.4
+maximum_scale = 0.8
 sink = 0.3
 minimum_height = 4.0
 maximum_height = 300.0
 height_falloff = 40.0
-maximum_slope = 30.0
 slope_falloff = 8.0
+cluster_spacing = 140.0
+cluster_radius = 28.0

@@ -1,0 +1,15 @@
+[gd_resource type="ShaderMaterial" format=3 uid="uid://rdwmxynmlx60"]
+
+[ext_resource type="Shader" path="res://demo/assets/population/StylizedShader.gdshader" id="1_4bm86"]
+[ext_resource type="Texture2D" uid="uid://b8msp6oba6i2b" path="res://addons/jar_voxel_terrain/textures/noise/3d_voronoi.png" id="2_v74c7"]
+
+[resource]
+render_priority = 0
+shader = ExtResource("1_4bm86")
+shader_parameter/specular = 0.47
+shader_parameter/roughness = 0.38
+shader_parameter/metalic = 0.0
+shader_parameter/albedo = Color(0.5985, 0.63, 0.623175, 1)
+shader_parameter/noiseScale = 0.2
+shader_parameter/normalScale = 0.2
+shader_parameter/noise = ExtResource("2_v74c7")

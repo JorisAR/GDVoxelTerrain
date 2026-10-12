@@ -1,0 +1,25 @@
+[remap]
+
+importer="wavefront_obj"
+importer_version=1
+type="Mesh"
+uid="uid://baqi1esbmqjid"
+path="res://.godot/imported/medium_birch_lod1.obj-20d675ab1c7d28bbcbd0fd4d31ec1e8d.mesh"
+
+[deps]
+
+files=["res://.godot/imported/medium_birch_lod1.obj-20d675ab1c7d28bbcbd0fd4d31ec1e8d.mesh"]
+
+source_file="res://demo/assets/population/Trees/Birch/Medium/medium_birch_lod1.obj"
+dest_files=["res://.godot/imported/medium_birch_lod1.obj-20d675ab1c7d28bbcbd0fd4d31ec1e8d.mesh", "res://.godot/imported/medium_birch_lod1.obj-20d675ab1c7d28bbcbd0fd4d31ec1e8d.mesh"]
+
+[params]
+
+generate_tangents=true
+generate_lods=true
+generate_shadow_mesh=true
+generate_lightmap_uv2=false
+generate_lightmap_uv2_texel_size=0.2
+scale_mesh=Vector3(1, 1, 1)
+offset_mesh=Vector3(0, 0, 0)
+force_disable_mesh_compression=false

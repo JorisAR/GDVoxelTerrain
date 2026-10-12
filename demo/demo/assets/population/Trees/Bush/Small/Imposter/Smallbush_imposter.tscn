@@ -1,0 +1,37 @@
+[gd_scene format=3 uid="uid://ddav7sqhehmwc"]
+
+[ext_resource type="Shader" path="res://addons/jar_voxel_terrain/shaders/impostor.gdshader" id="1_g3omy"]
+[ext_resource type="Texture2D" uid="uid://dhkmcto8qc0hl" path="res://demo/assets/population/Trees/Bush/Small/Imposter/base_Smallbush_albedo.png" id="2_phw2p"]
+[ext_resource type="Texture2D" uid="uid://3yg7fdjn1hfq" path="res://demo/assets/population/Trees/Bush/Small/Imposter/base_Smallbush_depth.png" id="3_xgace"]
+[ext_resource type="Texture2D" uid="uid://dn5gmk346loet" path="res://demo/assets/population/Trees/Bush/Small/Imposter/base_Smallbush_normal.png" id="4_lghrq"]
+[ext_resource type="Texture2D" uid="uid://busuqgaiw37r2" path="res://demo/assets/population/Trees/Bush/Small/Imposter/base_Smallbush_orm.png" id="5_nem13"]
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_exs6j"]
+render_priority = 0
+shader = ExtResource("1_g3omy")
+shader_parameter/albedo = Color(1, 1, 1, 1)
+shader_parameter/specular = 0.5
+shader_parameter/metallic = 0.0
+shader_parameter/roughness = 1.0
+shader_parameter/imposterFrames = Vector2(8, 8)
+shader_parameter/positionOffset = Vector3(0.136059, 1.91659, 0.0106735)
+shader_parameter/isFullSphere = false
+shader_parameter/alpha_clamp = 0.5
+shader_parameter/dither = false
+shader_parameter/scale = 4.12158
+shader_parameter/depth_scale = 0.0
+shader_parameter/normalmap_depth = 1.0
+shader_parameter/aabb_max = 2.06079
+shader_parameter/imposterTextureAlbedo = ExtResource("2_phw2p")
+shader_parameter/imposterTextureNormal = ExtResource("4_lghrq")
+shader_parameter/imposterTextureDepth = ExtResource("3_xgace")
+shader_parameter/imposterTextureOrm = ExtResource("5_nem13")
+
+[sub_resource type="QuadMesh" id="QuadMesh_f2wid"]
+material = SubResource("ShaderMaterial_exs6j")
+custom_aabb = AABB(-2.08091, -0.464147, -2.52005, 6.65089, 7.14222, 7.59217)
+
+[node name="Impostor" type="Node3D"]
+
+[node name="mesh-impostor" type="MeshInstance3D" parent="."]
+mesh = SubResource("QuadMesh_f2wid")

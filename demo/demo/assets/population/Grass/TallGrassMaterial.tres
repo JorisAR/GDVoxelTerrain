@@ -1,0 +1,11 @@
+[gd_resource type="ShaderMaterial" format=3 uid="uid://d08w1x05v5cj"]
+
+[ext_resource type="Shader" path="res://demo/assets/population/Grass/Grass.gdshader" id="1_a45jx"]
+[ext_resource type="Texture2D" uid="uid://b8msp6oba6i2b" path="res://addons/jar_voxel_terrain/textures/noise/3d_voronoi.png" id="2_gv30q"]
+
+[resource]
+render_priority = 0
+shader = ExtResource("1_a45jx")
+shader_parameter/scale = 0.002
+shader_parameter/normalScale = 1.0
+shader_parameter/noise = ExtResource("2_gv30q")

@@ -1,0 +1,36 @@
+[gd_scene format=3 uid="uid://dfq3h8vaqv5na"]
+
+[ext_resource type="Material" uid="uid://cfwekwy5qcx3u" path="res://demo/assets/population/Trees/Poplar/PoplarMaterial.tres" id="1_mgn52"]
+[ext_resource type="ArrayMesh" uid="uid://cxq7ml6lyg2vv" path="res://demo/assets/population/Trees/Poplar/Medium/medium_tree.obj" id="2_aoddj"]
+[ext_resource type="ArrayMesh" uid="uid://btopvttgblnn2" path="res://demo/assets/population/Trees/Poplar/Medium/medium_tree_lod1.obj" id="3_4bd42"]
+[ext_resource type="QuadMesh" uid="uid://brtovvf5idxeq" path="res://demo/assets/population/Trees/Poplar/Medium/Imposter/MediumPoplar_mesh.tres" id="3_nfbey"]
+[ext_resource type="ArrayMesh" uid="uid://dh2is5h11nrbq" path="res://demo/assets/population/Trees/Poplar/Medium/medium_tree_trunk.obj" id="5_vbr4i"]
+
+[sub_resource type="CapsuleShape3D" id="CapsuleShape3D_l4xv8"]
+height = 12.1841
+
+[node name="MediumPoplar" type="Node3D"]
+
+[node name="StaticBody3D" type="StaticBody3D" parent="."]
+collision_mask = 0
+
+[node name="LoD0" type="MeshInstance3D" parent="StaticBody3D"]
+material_override = ExtResource("1_mgn52")
+visibility_range_end = 64.0
+mesh = ExtResource("2_aoddj")
+skeleton = NodePath("../..")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="StaticBody3D"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 5.12612, 0)
+shape = SubResource("CapsuleShape3D_l4xv8")
+
+[node name="LoD1" type="MeshInstance3D" parent="."]
+material_override = ExtResource("1_mgn52")
+visibility_range_begin = 63.0
+visibility_range_end = 383.0
+mesh = ExtResource("3_4bd42")
+
+[node name="mesh-impostor2" type="MeshInstance3D" parent="."]
+visibility_range_begin = 384.0
+mesh = ExtResource("3_nfbey")
+skeleton = NodePath("")

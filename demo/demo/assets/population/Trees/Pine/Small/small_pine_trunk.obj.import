@@ -1,0 +1,25 @@
+[remap]
+
+importer="wavefront_obj"
+importer_version=1
+type="Mesh"
+uid="uid://drhmdftftn0rk"
+path="res://.godot/imported/small_pine_trunk.obj-9a7f0f74e9a492b276775836cc604424.mesh"
+
+[deps]
+
+files=["res://.godot/imported/small_pine_trunk.obj-9a7f0f74e9a492b276775836cc604424.mesh"]
+
+source_file="res://demo/assets/population/Trees/Pine/Small/small_pine_trunk.obj"
+dest_files=["res://.godot/imported/small_pine_trunk.obj-9a7f0f74e9a492b276775836cc604424.mesh", "res://.godot/imported/small_pine_trunk.obj-9a7f0f74e9a492b276775836cc604424.mesh"]
+
+[params]
+
+generate_tangents=true
+generate_lods=true
+generate_shadow_mesh=true
+generate_lightmap_uv2=false
+generate_lightmap_uv2_texel_size=0.2
+scale_mesh=Vector3(1, 1, 1)
+offset_mesh=Vector3(0, 0, 0)
+force_disable_mesh_compression=false

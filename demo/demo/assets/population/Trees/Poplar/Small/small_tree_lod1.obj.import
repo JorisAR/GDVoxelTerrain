@@ -1,0 +1,25 @@
+[remap]
+
+importer="wavefront_obj"
+importer_version=1
+type="Mesh"
+uid="uid://bf0dp26mu7axu"
+path="res://.godot/imported/small_tree_lod1.obj-2c42e34c1c8849d41536414863ac4bea.mesh"
+
+[deps]
+
+files=["res://.godot/imported/small_tree_lod1.obj-2c42e34c1c8849d41536414863ac4bea.mesh"]
+
+source_file="res://demo/assets/population/Trees/Poplar/Small/small_tree_lod1.obj"
+dest_files=["res://.godot/imported/small_tree_lod1.obj-2c42e34c1c8849d41536414863ac4bea.mesh", "res://.godot/imported/small_tree_lod1.obj-2c42e34c1c8849d41536414863ac4bea.mesh"]
+
+[params]
+
+generate_tangents=true
+generate_lods=true
+generate_shadow_mesh=true
+generate_lightmap_uv2=false
+generate_lightmap_uv2_texel_size=0.2
+scale_mesh=Vector3(1, 1, 1)
+offset_mesh=Vector3(0, 0, 0)
+force_disable_mesh_compression=false

@@ -1,0 +1,11 @@
+[gd_scene format=3 uid="uid://bg5s2fqo1hh0a"]
+
+[ext_resource type="Material" uid="uid://2rk4h8strikl" path="res://demo/assets/population/Flowers/GroundElder/GroundElderMaterial.tres" id="1_4mwhu"]
+[ext_resource type="ArrayMesh" uid="uid://da5dtcwbsnyve" path="res://demo/assets/population/Flowers/GroundElder/Small/ground_elder.obj" id="2_o832n"]
+
+[node name="LargePoplar" type="Node3D"]
+
+[node name="Lupine" type="MeshInstance3D" parent="."]
+material_override = ExtResource("1_4mwhu")
+visibility_range_end = 256.0
+mesh = ExtResource("2_o832n")

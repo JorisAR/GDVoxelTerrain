@@ -1,0 +1,24 @@
+[gd_resource type="JarTerrainDetail" format=3 uid="uid://kgkqqc8u7o3o"]
+
+[ext_resource type="ArrayMesh" uid="uid://ceys400mwnkx0" path="res://demo/assets/population/Flowers/Poppies/Group/poppies.obj" id="1_mesh"]
+[ext_resource type="Material" uid="uid://bkk705qqpv55h" path="res://demo/assets/population/Flowers/Poppies/poppyMaterial.tres" id="2_mat"]
+
+[sub_resource type="FastNoiseLite" id="Mask"]
+seed = 1
+frequency = 0.015
+
+[resource]
+mesh = ExtResource("1_mesh")
+material = ExtResource("2_mat")
+density = 0.6
+draw_distance = 45.0
+minimum_scale = 0.5
+maximum_scale = 0.8
+align_with_normal = true
+minimum_height = 2.0
+height_falloff = 2.0
+maximum_slope = 32.0
+slope_falloff = 6.0
+mask_noise = SubResource("Mask")
+mask_threshold = 0.4
+mask_falloff = 0.15

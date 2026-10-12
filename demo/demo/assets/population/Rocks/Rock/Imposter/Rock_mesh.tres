@@ -1,0 +1,32 @@
+[gd_resource type="QuadMesh" format=3 uid="uid://bsudwbbwfw8lq"]
+
+[ext_resource type="Shader" path="res://addons/jar_voxel_terrain/shaders/impostor.gdshader" id="1_tumwd"]
+[ext_resource type="Texture2D" uid="uid://bxfapat18luvt" path="res://demo/assets/population/Rocks/Rock/Imposter/base_Rock_albedo.png" id="2_hy3vn"]
+[ext_resource type="Texture2D" uid="uid://bfr7cw3plhprm" path="res://demo/assets/population/Rocks/Rock/Imposter/base_Rock_depth.png" id="3_lmpjo"]
+[ext_resource type="Texture2D" uid="uid://xdwsweca5gr2" path="res://demo/assets/population/Rocks/Rock/Imposter/base_Rock_normal.png" id="4_uva47"]
+[ext_resource type="Texture2D" uid="uid://iuy4vh1hbinh" path="res://demo/assets/population/Rocks/Rock/Imposter/base_Rock_orm.png" id="5_c3p1s"]
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_hvhvq"]
+render_priority = 0
+shader = ExtResource("1_tumwd")
+shader_parameter/albedo = Color(1, 1, 1, 1)
+shader_parameter/specular = 0.5
+shader_parameter/metallic = 0.0
+shader_parameter/roughness = 1.0
+shader_parameter/imposterFrames = Vector2(8, 8)
+shader_parameter/positionOffset = Vector3(0.0115948, -0.0472342, -0.029539)
+shader_parameter/isFullSphere = true
+shader_parameter/alpha_clamp = 0.5
+shader_parameter/dither = false
+shader_parameter/scale = 1.80269
+shader_parameter/depth_scale = 0.0
+shader_parameter/normalmap_depth = 1.0
+shader_parameter/aabb_max = 0.901346
+shader_parameter/imposterTextureAlbedo = ExtResource("2_hy3vn")
+shader_parameter/imposterTextureNormal = ExtResource("4_uva47")
+shader_parameter/imposterTextureDepth = ExtResource("3_lmpjo")
+shader_parameter/imposterTextureOrm = ExtResource("5_c3p1s")
+
+[resource]
+material = SubResource("ShaderMaterial_hvhvq")
+custom_aabb = AABB(-1.01905, -0.979387, -1.17783, 3.09193, 2.79646, 3.44486)

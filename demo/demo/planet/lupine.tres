@@ -1,0 +1,24 @@
+[gd_resource type="JarTerrainDetail" format=3 uid="uid://cudfru0whs7mb"]
+
+[ext_resource type="ArrayMesh" uid="uid://gs8qsge0j1vb" path="res://demo/assets/population/Flowers/Lupine/Small/lupine.obj" id="1_mesh"]
+[ext_resource type="Material" uid="uid://c2gxuroct6pyh" path="res://demo/assets/population/Flowers/Lupine/LupineMaterial.tres" id="2_mat"]
+
+[sub_resource type="FastNoiseLite" id="Mask"]
+seed = 3
+frequency = 0.02
+
+[resource]
+mesh = ExtResource("1_mesh")
+material = ExtResource("2_mat")
+density = 0.6
+draw_distance = 45.0
+minimum_scale = 0.5
+maximum_scale = 0.8
+align_with_normal = true
+minimum_height = 2.0
+height_falloff = 2.0
+maximum_slope = 32.0
+slope_falloff = 6.0
+mask_noise = SubResource("Mask")
+mask_threshold = 0.4
+mask_falloff = 0.15

@@ -1,0 +1,10 @@
+[gd_scene format=3 uid="uid://c735logyhvo6f"]
+
+[ext_resource type="Material" uid="uid://dw28l5puradt7" path="res://demo/assets/population/Grass/GrassMaterial.tres" id="1_aq1jt"]
+[ext_resource type="ArrayMesh" uid="uid://dfauqcn2r2g5f" path="res://demo/assets/population/Grass/grass_high_poly.obj" id="2_obpy5"]
+
+[node name="Grass" type="Node3D"]
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="."]
+material_override = ExtResource("1_aq1jt")
+mesh = ExtResource("2_obpy5")

@@ -1,0 +1,25 @@
+[remap]
+
+importer="wavefront_obj"
+importer_version=1
+type="Mesh"
+uid="uid://dfauqcn2r2g5f"
+path="res://.godot/imported/grass_high_poly.obj-cdc4435b9704a7c5a8b8641d1edef95f.mesh"
+
+[deps]
+
+files=["res://.godot/imported/grass_high_poly.obj-cdc4435b9704a7c5a8b8641d1edef95f.mesh"]
+
+source_file="res://demo/assets/population/Grass/grass_high_poly.obj"
+dest_files=["res://.godot/imported/grass_high_poly.obj-cdc4435b9704a7c5a8b8641d1edef95f.mesh", "res://.godot/imported/grass_high_poly.obj-cdc4435b9704a7c5a8b8641d1edef95f.mesh"]
+
+[params]
+
+generate_tangents=true
+generate_lods=true
+generate_shadow_mesh=true
+generate_lightmap_uv2=false
+generate_lightmap_uv2_texel_size=0.2
+scale_mesh=Vector3(0.5, 0.5, 0.5)
+offset_mesh=Vector3(0, 0, 0)
+force_disable_mesh_compression=true

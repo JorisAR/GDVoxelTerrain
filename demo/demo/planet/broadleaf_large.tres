@@ -1,0 +1,24 @@
+[gd_resource type="JarTerrainFeature" format=3 uid="uid://buqkk75rsywt7"]
+
+[ext_resource type="PackedScene" uid="uid://wwxjhostwr0t" path="res://demo/assets/population/Trees/Poplar/Large/LargePoplar.tscn" id="1_scene"]
+[ext_resource type="FastNoiseLite" path="res://demo/planet/forest_noise.tres" id="2_forest"]
+
+[resource]
+scene = ExtResource("1_scene")
+density = 0.003
+footprint = 7.0
+draw_distance = 1000.0
+minimum_scale = 0.5
+maximum_scale = 0.7
+sink = 0.4
+minimum_height = 3.0
+maximum_height = 180.0
+height_falloff = 30.0
+maximum_slope = 30.0
+slope_falloff = 6.0
+mask_noise = ExtResource("2_forest")
+mask_threshold = 0.15
+mask_falloff = 0.3
+mask_invert = true
+cluster_spacing = 200.0
+cluster_radius = 24.0

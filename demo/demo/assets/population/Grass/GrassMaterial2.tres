@@ -1,0 +1,25 @@
+[gd_resource type="ShaderMaterial" format=3 uid="uid://drhjba13c6p4q"]
+
+[ext_resource type="Shader" path="res://demo/assets/population/Grass/Grass2.gdshader" id="1_rrypx"]
+
+[sub_resource type="FastNoiseLite" id="FastNoiseLite_ehr43"]
+
+[sub_resource type="NoiseTexture2D" id="NoiseTexture2D_klsjg"]
+noise = SubResource("FastNoiseLite_ehr43")
+
+[sub_resource type="FastNoiseLite" id="FastNoiseLite_yn5wx"]
+
+[sub_resource type="NoiseTexture2D" id="NoiseTexture2D_ytaev"]
+noise = SubResource("FastNoiseLite_yn5wx")
+
+[resource]
+render_priority = 0
+shader = ExtResource("1_rrypx")
+shader_parameter/player_position = Vector3(0, 0, 0)
+shader_parameter/clumping_factor = 1.0
+shader_parameter/wind_speed = 1.0
+shader_parameter/clump_noise = SubResource("NoiseTexture2D_klsjg")
+shader_parameter/wind_noise = SubResource("NoiseTexture2D_ytaev")
+shader_parameter/base_color = Color(0.05, 0.2, 0.01, 1)
+shader_parameter/tip_color = Color(0.5, 0.5, 0.1, 1)
+shader_parameter/subsurface_scattering_color = Color(1, 0.75, 0.1, 1)

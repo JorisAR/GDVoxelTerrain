@@ -1,11 +1,10 @@
-[gd_resource type="JarBiome" load_steps=3 format=3]
+[gd_resource type="JarBiome" format=3 uid="uid://bi4h1jyrnamyk"]
 
-[ext_resource type="JarTerrainFeature" path="res://demo/planet/pine_sparse.tres" id="1"]
-[ext_resource type="JarTerrainFeature" path="res://demo/planet/rock_field.tres" id="2"]
+[ext_resource type="JarTerrainFeature" uid="uid://dstsdy4017c0s" path="res://demo/planet/pine_sparse.tres" id="1"]
+[ext_resource type="JarTerrainFeature" uid="uid://q33lgxadlw2i" path="res://demo/planet/rock_field.tres" id="2"]
 
 [resource]
-resource_name = "Alpine tundra"
 temperature = -0.9
-moisture = 0.0
 features = Array[JarTerrainFeature]([ExtResource("1"), ExtResource("2")])
 ground_material = 8
+resource_name = "Alpine tundra"

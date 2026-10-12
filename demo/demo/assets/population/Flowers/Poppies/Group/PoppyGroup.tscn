@@ -1,0 +1,12 @@
+[gd_scene format=3 uid="uid://c57t5pioomana"]
+
+[ext_resource type="Material" uid="uid://bkk705qqpv55h" path="res://demo/assets/population/Flowers/Poppies/poppyMaterial.tres" id="1_sw364"]
+[ext_resource type="ArrayMesh" uid="uid://ceys400mwnkx0" path="res://demo/assets/population/Flowers/Poppies/Group/poppies.obj" id="2_t2ewg"]
+
+[node name="PoppyGroup" type="Node3D"]
+
+[node name="Poppy" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.0426161, 0, 0)
+material_override = ExtResource("1_sw364")
+visibility_range_end = 256.0
+mesh = ExtResource("2_t2ewg")

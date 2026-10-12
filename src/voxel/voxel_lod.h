@@ -28,12 +28,15 @@ class JarVoxelLoD
 
     int _maxChunkSize = 10; // nodes above this size always use LOD 0 (they are never chunks)
     int _maxLod = 6;
+    int _minLod = 0;
     std::vector<glm::vec3> _viewerPositions; // local space, as of the last (re)build
 
     bool is_in_lod_shell(int lod, const glm::vec3 &pos, const glm::vec3 &viewer) const;
     int lod_for_viewer(const glm::vec3 &position, const glm::vec3 &viewer) const;
 
   public:
+    // Chunks are never finer than this level (editor preview).
+    void set_min_lod(int lod) { _minLod = std::max(0, lod); }
     // Current viewer positions in the volume's local space (main thread).
     static std::vector<glm::vec3> gather_viewers(const JarVoxelVolume &volume);
     JarVoxelLoD() = default;

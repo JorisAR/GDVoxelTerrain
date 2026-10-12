@@ -1,0 +1,32 @@
+[gd_resource type="QuadMesh" format=3 uid="uid://be8ne6askr7qq"]
+
+[ext_resource type="Shader" uid="uid://dtbv3bsaq7q2d" path="res://addons/jar_voxel_terrain/shaders/impostor.gdshader" id="1_7fsvh"]
+[ext_resource type="Texture2D" uid="uid://bb01tfepelt3n" path="res://demo/assets/population/Trees/Pine/Large/Imposter/base_LargePine_albedo.png" id="2_v8too"]
+[ext_resource type="Texture2D" uid="uid://qdkim7jbbupe" path="res://demo/assets/population/Trees/Pine/Large/Imposter/base_LargePine_depth.png" id="3_mpwam"]
+[ext_resource type="Texture2D" uid="uid://d0ivw2sgy1u1w" path="res://demo/assets/population/Trees/Pine/Large/Imposter/base_LargePine_normal.png" id="4_hnma1"]
+[ext_resource type="Texture2D" uid="uid://bxy2ltwq3iu8a" path="res://demo/assets/population/Trees/Pine/Large/Imposter/base_LargePine_orm.png" id="5_7no3c"]
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_dsf2u"]
+render_priority = 0
+shader = ExtResource("1_7fsvh")
+shader_parameter/albedo = Color(1, 1, 1, 1)
+shader_parameter/specular = 0.5
+shader_parameter/metallic = 0.0
+shader_parameter/roughness = 1.0
+shader_parameter/imposterFrames = Vector2(8, 8)
+shader_parameter/positionOffset = Vector3(0.348469, 11.5863, -0.187951)
+shader_parameter/isFullSphere = false
+shader_parameter/alpha_clamp = 0.5
+shader_parameter/dither = false
+shader_parameter/scale = 14.7602
+shader_parameter/depth_scale = 0.0
+shader_parameter/normalmap_depth = 1.0
+shader_parameter/aabb_max = 7.3801
+shader_parameter/imposterTextureAlbedo = ExtResource("2_v8too")
+shader_parameter/imposterTextureNormal = ExtResource("4_hnma1")
+shader_parameter/imposterTextureDepth = ExtResource("3_mpwam")
+shader_parameter/imposterTextureOrm = ExtResource("5_7no3c")
+
+[resource]
+material = SubResource("ShaderMaterial_dsf2u")
+custom_aabb = AABB(-3.5459, -2.07585, -4.19336, 11.6831, 40.9864, 12.0162)

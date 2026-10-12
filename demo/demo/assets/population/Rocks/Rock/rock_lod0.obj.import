@@ -1,0 +1,25 @@
+[remap]
+
+importer="wavefront_obj"
+importer_version=1
+type="Mesh"
+uid="uid://dicryfen0ea4w"
+path="res://.godot/imported/rock_lod0.obj-aece00dc4218dab47fb5fab1d1e08354.mesh"
+
+[deps]
+
+files=["res://.godot/imported/rock_lod0.obj-aece00dc4218dab47fb5fab1d1e08354.mesh"]
+
+source_file="res://demo/assets/population/Rocks/Rock/rock_lod0.obj"
+dest_files=["res://.godot/imported/rock_lod0.obj-aece00dc4218dab47fb5fab1d1e08354.mesh", "res://.godot/imported/rock_lod0.obj-aece00dc4218dab47fb5fab1d1e08354.mesh"]
+
+[params]
+
+generate_tangents=true
+generate_lods=true
+generate_shadow_mesh=true
+generate_lightmap_uv2=false
+generate_lightmap_uv2_texel_size=0.2
+scale_mesh=Vector3(0.3, 0.3, 0.3)
+offset_mesh=Vector3(0, 0, 0)
+force_disable_mesh_compression=false

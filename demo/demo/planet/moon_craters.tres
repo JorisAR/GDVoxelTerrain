@@ -1,11 +1,9 @@
-[gd_resource type="JarCraterSdf" load_steps=2 format=3]
+[gd_resource type="JarCraterSdf" format=3 uid="uid://p0ja4axgdl71"]
 
-[ext_resource type="JarTerrainSdf" path="res://demo/planet/moon_terrain.tres" id="1_terrain"]
+[ext_resource type="JarTerrainSdf" uid="uid://da7ojhqqhsfdd" path="res://demo/planet/moon_terrain.tres" id="1_terrain"]
 
 [resource]
-sdf = ExtResource("1_terrain")
 size = 45.0
-octaves = 3
 density = 0.4
-depth = 0.3
 rim = 0.12
+sdf = ExtResource("1_terrain")

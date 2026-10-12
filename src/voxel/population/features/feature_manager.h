@@ -5,7 +5,9 @@
 #include "signed_distance_field.h"
 #include "terrain_feature.h"
 #include "biome_map.h"
+#include "ground_palette.h"
 #include "up_field.h"
+#include <godot_cpp/classes/shape3d.hpp>
 #include <atomic>
 #include <glm/glm.hpp>
 #define GLM_ENABLE_EXPERIMENTAL
@@ -34,8 +36,11 @@ class JarVoxelVolume;
 // every time; edits and remove_features() record their bounds and features
 // inside them never come back.
 //
-// Scans and generation run on the shared worker pool; nodes are created on the
-// main thread within a time budget.
+// Scans and generation run on the shared worker pool (low priority); nodes are
+// created on the main thread within a time budget. A feature's scene is read
+// once into a template (see JarTerrainFeature): its meshes become one
+// multimesh per cell, its collision shapes one static body per cell near
+// viewers.
 class FeatureManager
 {
   public:
@@ -43,6 +48,7 @@ class FeatureManager
     {
         int feature;
         Transform3D transform; // volume space
+        glm::vec3 ground;      // linear color of the ground there
     };
 
     explicit FeatureManager(JarVoxelVolume &volume);
@@ -70,11 +76,38 @@ class FeatureManager
         bool scanDone = false;
         std::atomic<int> activeJobs{0};
     };
+    struct Placed
+    {
+        Transform3D transform; // volume space
+        glm::vec3 ground;
+    };
     struct Cell
     {
         bool ready = false;
-        std::vector<std::vector<Transform3D>> perFeature; // volume space
-        std::vector<Node3D *> groups;                     // one node per feature, null when hidden
+        std::vector<std::vector<Placed>> perFeature;
+        std::vector<Node3D *> groups;    // one node per feature, null when hidden
+        std::vector<Node3D *> colliders; // one body per feature, null when far
+    };
+    // What a feature draws and collides with, relative to its transform.
+    struct Template
+    {
+        struct Part
+        {
+            Ref<Mesh> mesh;
+            Ref<Material> material; // override, may be null
+            Transform3D local;
+            float begin = 0.0f, end = 0.0f; // visibility range, end 0 = no limit
+            GeometryInstance3D::ShadowCastingSetting shadows = GeometryInstance3D::SHADOW_CASTING_SETTING_ON;
+        };
+        struct Collider
+        {
+            Ref<Shape3D> shape;
+            Transform3D local;
+        };
+        std::vector<Part> parts;
+        std::vector<Collider> colliders;
+        uint32_t layer = 1, mask = 1;
+        bool nodes = false; // instantiate the scene per feature instead
     };
 
     JarVoxelVolume &_volume;
@@ -83,6 +116,7 @@ class FeatureManager
     std::vector<Bounds> _removed; // edits and explicit removals, volume space
     std::vector<Ref<JarTerrainFeature>> _features;
     std::vector<int> _featureBiomes; // per feature: biome index, -1 = everywhere
+    std::vector<Template> _templates; // per feature
     Ref<JarBiomeMap> _biomeMap;
     float _cellSize = 64.0f;
     float _range = 0.0f; // largest draw distance
@@ -97,6 +131,8 @@ class FeatureManager
     void apply_results();
     void update_visibility(const std::vector<glm::vec3> &viewers);
     void build_groups(const glm::ivec3 &key, Cell &cell, const std::vector<glm::vec3> &viewers);
+    Node3D *build_colliders(const Template &t, const std::vector<Placed> &placed) const;
+    static Template make_template(const Ref<JarTerrainFeature> &feature);
     void free_groups(Cell &cell);
     bool is_removed(const glm::vec3 &position) const;
     Bounds cell_bounds(const glm::ivec3 &key) const;
@@ -104,7 +140,8 @@ class FeatureManager
     static std::vector<Instance> generate_cell(const glm::ivec3 &key, float cellSize,
                                                const std::vector<Ref<JarTerrainFeature>> &features,
                                                const std::vector<int> &featureBiomes, const Ref<JarBiomeMap> &biomes,
-                                               const Ref<JarSignedDistanceField> &sdf, const UpField &up);
+                                               const Ref<JarSignedDistanceField> &sdf, const UpField &up,
+                                               const std::shared_ptr<const GroundPalette> &ground);
     static std::vector<glm::ivec3> scan_cells(const std::vector<glm::vec3> &viewers, float range, float cellSize,
                                               const Ref<JarSignedDistanceField> &sdf);
 };

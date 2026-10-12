@@ -1,5 +1,6 @@
 #include "chunk_detail_generator.h"
 #include "chunk_mesh_data.h"
+#include "population_rendering.h"
 #include "voxel_volume.h"
 #include <cstring>
 
@@ -15,7 +16,8 @@ uint32_t float_bits(float f)
 
 std::vector<PackedFloat32Array> ChunkDetailGenerator::generate_detail_buffers(
     const std::vector<Ref<JarTerrainDetail>> &details, const std::vector<int> &detailBiomes,
-    const Ref<JarBiomeMap> &biomeMap, const ChunkMeshData &chunkMeshData)
+    const Ref<JarBiomeMap> &biomeMap, const std::shared_ptr<const GroundPalette> &ground,
+    const ChunkMeshData &chunkMeshData)
 {
     if (details.empty())
         return {};
@@ -29,6 +31,7 @@ std::vector<PackedFloat32Array> ChunkDetailGenerator::generate_detail_buffers(
     auto painted = [&](int v) { return v < paintedAmount.size() ? paintedAmount[v] : 0.0f; };
 
     std::vector<std::vector<Transform3D>> transforms(details.size());
+    std::vector<std::vector<glm::vec3>> colors(details.size());
     for (int64_t d = 0; d < int64_t(details.size()); d++)
     {
         Ref<JarTerrainDetail> detail = details[d];
@@ -76,6 +79,7 @@ std::vector<PackedFloat32Array> ChunkDetailGenerator::generate_detail_buffers(
                 Transform3D t = detail->build_transform(position, up, normal, rotation, scale);
                 t.origin -= Vector3(chunkCenter.x, chunkCenter.y, chunkCenter.z);
                 transforms[d].push_back(t);
+                colors[d].push_back(ground ? ground->color_at(position, _upField) : glm::vec3(0.3f, 0.35f, 0.2f));
             }
         }
     }
@@ -84,10 +88,11 @@ std::vector<PackedFloat32Array> ChunkDetailGenerator::generate_detail_buffers(
     for (size_t d = 0; d < transforms.size(); d++)
     {
         PackedFloat32Array &buffer = buffers[d];
-        buffer.resize(transforms[d].size() * 12);
+        buffer.resize(transforms[d].size() * Stride);
         float *w = buffer.ptrw();
-        for (const Transform3D &t : transforms[d])
+        for (size_t i = 0; i < transforms[d].size(); i++)
         {
+            const Transform3D &t = transforms[d][i];
             // MultiMesh TRANSFORM_3D layout: basis rows interleaved with origin.
             for (int row = 0; row < 3; row++)
             {
@@ -96,6 +101,9 @@ std::vector<PackedFloat32Array> ChunkDetailGenerator::generate_detail_buffers(
                 *w++ = t.basis.rows[row].z;
                 *w++ = t.origin[row];
             }
+            // Custom data: the ground color; the chunk fills in the LOD range.
+            PopulationRendering::write_custom(w, colors[d][i], 0.0f, 0.0f);
+            w += 4;
         }
     }
     return buffers;

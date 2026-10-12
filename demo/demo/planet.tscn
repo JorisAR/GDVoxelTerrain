@@ -4,6 +4,7 @@
 [ext_resource type="JarTerrainSdf" uid="uid://dqn1tb1t75fft" path="res://demo/planet/planet_terrain.tres" id="2_terrain"]
 [ext_resource type="Material" path="res://demo/planet/planet_material.tres" id="3_material"]
 [ext_resource type="JarTerrainFeature" path="res://demo/planet/rock.tres" id="6_rock"]
+[ext_resource type="JarTerrainDetail" path="res://demo/planet/grass.tres" id="6_grass"]
 [ext_resource type="Script" uid="uid://557h1ey0uo8c" path="res://addons/jar_voxel_terrain/nodes/water/planet_water.gd" id="9_water"]
 [ext_resource type="Script" uid="uid://bdr052q72xws1" path="res://addons/jar_voxel_terrain/nodes/atmosphere/atmosphere.gd" id="10_atmosphere"]
 [ext_resource type="Script" uid="uid://ca8q8yfyo8l3h" path="res://demo/orbit.gd" id="11_orbit"]
@@ -113,6 +114,7 @@ meshing_algorithm = 1
 manifold = true
 lod_automatic_update_distance = 16.0
 population_terrain_features = Array[JarTerrainFeature]([ExtResource("6_rock")])
+population_terrain_details = Array[JarTerrainDetail]([ExtResource("6_grass")])
 population_biome_map = ExtResource("17_biomes")
 
 [node name="Water" type="Node3D" parent="Planet" unique_id=1585027726]

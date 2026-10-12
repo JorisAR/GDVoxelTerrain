@@ -1,0 +1,32 @@
+[gd_resource type="QuadMesh" format=3 uid="uid://cidvyg58m0tsu"]
+
+[ext_resource type="Shader" path="res://addons/jar_voxel_terrain/shaders/impostor.gdshader" id="1_qtt5b"]
+[ext_resource type="Texture2D" uid="uid://bh3dwpu1ycdo2" path="res://demo/assets/population/Trees/Birch/Medium/Imposter/base_MediumBirch_albedo.png" id="2_kb6ow"]
+[ext_resource type="Texture2D" uid="uid://d1p6tx5dm2lkp" path="res://demo/assets/population/Trees/Birch/Medium/Imposter/base_MediumBirch_depth.png" id="3_hg0hm"]
+[ext_resource type="Texture2D" uid="uid://bfu7c4h330e1s" path="res://demo/assets/population/Trees/Birch/Medium/Imposter/base_MediumBirch_normal.png" id="4_u6415"]
+[ext_resource type="Texture2D" uid="uid://5l8v4fiq8k5e" path="res://demo/assets/population/Trees/Birch/Medium/Imposter/base_MediumBirch_orm.png" id="5_tbx6a"]
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_85iky"]
+render_priority = 0
+shader = ExtResource("1_qtt5b")
+shader_parameter/albedo = Color(1, 1, 1, 1)
+shader_parameter/specular = 0.5
+shader_parameter/metallic = 0.0
+shader_parameter/roughness = 1.0
+shader_parameter/imposterFrames = Vector2(8, 8)
+shader_parameter/positionOffset = Vector3(0.689298, 14.1727, -0.639819)
+shader_parameter/isFullSphere = false
+shader_parameter/alpha_clamp = 0.5
+shader_parameter/dither = false
+shader_parameter/scale = 20.9748
+shader_parameter/depth_scale = 0.0
+shader_parameter/normalmap_depth = 1.0
+shader_parameter/aabb_max = 10.4874
+shader_parameter/imposterTextureAlbedo = ExtResource("2_kb6ow")
+shader_parameter/imposterTextureNormal = ExtResource("4_u6415")
+shader_parameter/imposterTextureDepth = ExtResource("3_hg0hm")
+shader_parameter/imposterTextureOrm = ExtResource("5_tbx6a")
+
+[resource]
+material = SubResource("ShaderMaterial_85iky")
+custom_aabb = AABB(-9.77687, -0.5, -11.3689, 31.3985, 44.018, 32.1874)

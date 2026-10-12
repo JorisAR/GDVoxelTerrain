@@ -14,6 +14,9 @@
 		<member name="cast_shadows" type="bool" setter="set_cast_shadows" getter="get_cast_shadows" default="true">
 			If [code]true[/code], [member mesh] instances cast shadows. Scenes set this themselves.
 		</member>
+		<member name="collision_distance" type="float" setter="set_collision_distance" getter="get_collision_distance" default="64.0">
+			With a batched [member scene]: distance in meters from a viewer within which the scene's collision shapes exist (one static body per cell, with the collision layer and mask of the scene's body).
+		</member>
 		<member name="density" type="float" setter="set_density" getter="get_density" default="0.01">
 			Instances per square meter where the rules and mask allow them. Trees are typically around [code]0.001[/code] to [code]0.01[/code].
 		</member>
@@ -32,5 +35,16 @@
 		<member name="scene" type="PackedScene" setter="set_scene" getter="get_scene">
 			Scene instantiated for each feature, positioned by its root [Node3D]. Use it for colliders, scripts or LOD setups; it costs nodes per feature, so keep [member draw_distance] moderate.
 		</member>
+		<member name="scene_mode" type="int" setter="set_scene_mode" getter="get_scene_mode" enum="JarTerrainFeature.SceneMode" default="0">
+			How [member scene] is used. See [enum SceneMode].
+		</member>
 	</members>
+	<constants>
+		<constant name="SCENE_MODE_BATCHED" value="0" enum="SceneMode">
+			The scene is a template: each of its [MeshInstance3D]s is drawn for all features of a cell as one multimesh, between its own visibility range begin and end (levels of detail, impostors); its [CollisionShape3D]s become colliders within [member collision_distance]. Scripts and other nodes are ignored. Materials that include [code]res://addons/jar_voxel_terrain/shaders/jar_population.gdshaderinc[/code] switch levels per instance and can blend with the ground color.
+		</constant>
+		<constant name="SCENE_MODE_NODES" value="1" enum="SceneMode">
+			The scene is instantiated for every feature (scripts, lights, anything else). Much more expensive.
+		</constant>
+	</constants>
 </class>

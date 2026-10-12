@@ -37,6 +37,37 @@ func _ready() -> void:
 	floor_snap_length = 0.5
 	floor_max_angle = deg_to_rad(50.0)
 	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+	_add_population_buttons()
+
+var _features_button: CheckButton
+var _details_button: CheckButton
+
+## Population on / off (G / H, or these buttons once Esc frees the mouse):
+## population is the costliest part of the terrain.
+func _add_population_buttons() -> void:
+	var box := HBoxContainer.new()
+	box.set_anchors_and_offsets_preset(Control.PRESET_TOP_RIGHT)
+	box.grow_horizontal = Control.GROW_DIRECTION_BEGIN
+	box.position.y = 8.0
+	$HUD.add_child(box)
+	_features_button = _population_button(box, "Trees & rocks (G)", func(on: bool): _set_population(on, null))
+	_details_button = _population_button(box, "Grass & flowers (H)", func(on: bool): _set_population(null, on))
+
+func _population_button(box: Control, text: String, toggled: Callable) -> CheckButton:
+	var button := CheckButton.new()
+	button.text = text
+	button.button_pressed = true
+	button.focus_mode = Control.FOCUS_NONE
+	button.toggled.connect(toggled)
+	box.add_child(button)
+	return button
+
+func _set_population(features: Variant, details: Variant) -> void:
+	for volume: JarVoxelVolume in _volumes():
+		if features != null:
+			volume.population_features_enabled = features
+		if details != null:
+			volume.population_details_enabled = details
 
 func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventMouseMotion and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
@@ -47,6 +78,10 @@ func _unhandled_input(event: InputEvent) -> void:
 		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE if Input.mouse_mode == Input.MOUSE_MODE_CAPTURED else Input.MOUSE_MODE_CAPTURED
 	elif event.is_action_pressed("ui_focus_next"):
 		flying = not flying
+	elif event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_G:
+		_features_button.button_pressed = not _features_button.button_pressed
+	elif event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_H:
+		_details_button.button_pressed = not _details_button.button_pressed
 	elif event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_M:
 		for volume: JarVoxelVolume in _volumes():
 			volume.meshing_algorithm = (1 - volume.meshing_algorithm) as JarVoxelVolume.MeshingAlgorithm
@@ -171,5 +206,5 @@ func _update_hud() -> void:
 	var volumes := _volumes()
 	var mesher: String = ["surface nets", "dual contouring"][volumes[0].meshing_algorithm] if volumes else ""
 	var brush: String = editor.describe() if editor and editor.has_method("describe") else ""
-	hud.text = "%d fps   %s   |   %s   |   %s (M)\nLMB dig  RMB add  Q brush  scroll size  E smooth  1-8 material  P paint  R preview  Tab fly" % [
+	hud.text = "%d fps   %s   |   %s   |   %s (M)\nLMB dig  RMB add  Q brush  scroll size  E smooth  1-8 material  P paint  R preview  Tab fly  G trees  H grass" % [
 		Engine.get_frames_per_second(), mode, brush, mesher]

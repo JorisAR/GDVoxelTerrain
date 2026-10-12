@@ -1,0 +1,66 @@
+[gd_scene format=3 uid="uid://dt0eay6liiqyd"]
+
+[ext_resource type="Material" uid="uid://cfwekwy5qcx3u" path="res://demo/assets/population/Trees/Poplar/PoplarMaterial.tres" id="1_hsty1"]
+[ext_resource type="ArrayMesh" uid="uid://dvw7c2ncstw0j" path="res://demo/assets/population/Trees/Bush/Small/small_bush.obj" id="2_0ijr2"]
+[ext_resource type="Shader" path="res://addons/jar_voxel_terrain/shaders/impostor.gdshader" id="3_1cb0i"]
+[ext_resource type="ArrayMesh" uid="uid://bfw27k6lnyol6" path="res://demo/assets/population/Trees/Bush/Small/small_bush_lod1.obj" id="3_pahdy"]
+[ext_resource type="Texture2D" uid="uid://dhkmcto8qc0hl" path="res://demo/assets/population/Trees/Bush/Small/Imposter/base_Smallbush_albedo.png" id="4_c56bt"]
+[ext_resource type="Texture2D" uid="uid://3yg7fdjn1hfq" path="res://demo/assets/population/Trees/Bush/Small/Imposter/base_Smallbush_depth.png" id="5_710sx"]
+[ext_resource type="ArrayMesh" uid="uid://0rdiqivai0k0" path="res://demo/assets/population/Trees/Bush/Small/small_bush_trunk.obj" id="5_y0lal"]
+[ext_resource type="Texture2D" uid="uid://dn5gmk346loet" path="res://demo/assets/population/Trees/Bush/Small/Imposter/base_Smallbush_normal.png" id="6_63dh1"]
+[ext_resource type="Texture2D" uid="uid://busuqgaiw37r2" path="res://demo/assets/population/Trees/Bush/Small/Imposter/base_Smallbush_orm.png" id="7_fnsec"]
+
+[sub_resource type="CapsuleShape3D" id="CapsuleShape3D_pala4"]
+radius = 0.224425
+height = 2.69996
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_exs6j"]
+render_priority = 0
+shader = ExtResource("3_1cb0i")
+shader_parameter/albedo = Color(1, 1, 1, 1)
+shader_parameter/specular = 0.5
+shader_parameter/metallic = 0.0
+shader_parameter/roughness = 1.0
+shader_parameter/imposterFrames = Vector2(8, 8)
+shader_parameter/positionOffset = Vector3(0.136059, 1.91659, 0.0106735)
+shader_parameter/isFullSphere = false
+shader_parameter/alpha_clamp = 0.5
+shader_parameter/dither = false
+shader_parameter/scale = 4.12158
+shader_parameter/depth_scale = 0.0
+shader_parameter/normalmap_depth = 1.0
+shader_parameter/aabb_max = 2.06079
+shader_parameter/imposterTextureAlbedo = ExtResource("4_c56bt")
+shader_parameter/imposterTextureNormal = ExtResource("6_63dh1")
+shader_parameter/imposterTextureDepth = ExtResource("5_710sx")
+shader_parameter/imposterTextureOrm = ExtResource("7_fnsec")
+
+[sub_resource type="QuadMesh" id="QuadMesh_f2wid"]
+material = SubResource("ShaderMaterial_exs6j")
+custom_aabb = AABB(-2.08091, -0.464147, -2.52005, 6.65089, 7.14222, 7.59217)
+
+[node name="Smallbush" type="Node3D"]
+
+[node name="StaticBody3D" type="StaticBody3D" parent="."]
+collision_mask = 0
+
+[node name="LoD0" type="MeshInstance3D" parent="StaticBody3D"]
+material_override = ExtResource("1_hsty1")
+visibility_range_end = 32.0
+mesh = ExtResource("2_0ijr2")
+skeleton = NodePath("../..")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="StaticBody3D"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.694471, 0)
+shape = SubResource("CapsuleShape3D_pala4")
+
+[node name="LoD1" type="MeshInstance3D" parent="."]
+material_override = ExtResource("1_hsty1")
+visibility_range_begin = 31.0
+visibility_range_end = 127.0
+mesh = ExtResource("3_pahdy")
+
+[node name="mesh-impostor" type="MeshInstance3D" parent="."]
+visibility_range_begin = 128.0
+mesh = SubResource("QuadMesh_f2wid")
+skeleton = NodePath("")

@@ -1,0 +1,25 @@
+[remap]
+
+importer="wavefront_obj"
+importer_version=1
+type="Mesh"
+uid="uid://gs8qsge0j1vb"
+path="res://.godot/imported/lupine.obj-33a1ef20b98d04ab6661c0bf23498b32.mesh"
+
+[deps]
+
+files=["res://.godot/imported/lupine.obj-33a1ef20b98d04ab6661c0bf23498b32.mesh"]
+
+source_file="res://demo/assets/population/Flowers/Lupine/Small/lupine.obj"
+dest_files=["res://.godot/imported/lupine.obj-33a1ef20b98d04ab6661c0bf23498b32.mesh", "res://.godot/imported/lupine.obj-33a1ef20b98d04ab6661c0bf23498b32.mesh"]
+
+[params]
+
+generate_tangents=true
+generate_lods=true
+generate_shadow_mesh=true
+generate_lightmap_uv2=false
+generate_lightmap_uv2_texel_size=0.2
+scale_mesh=Vector3(1, 1, 1)
+offset_mesh=Vector3(0, 0, 0)
+force_disable_mesh_compression=false

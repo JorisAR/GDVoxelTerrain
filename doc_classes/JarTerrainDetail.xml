@@ -16,6 +16,12 @@
 		<member name="draw_distance" type="float" setter="set_draw_distance" getter="get_draw_distance" default="0.0">
 			Distance in meters beyond which a chunk's details are hidden ([member GeometryInstance3D.visibility_range_end]). [code]0[/code] shows them on every full-detail chunk.
 		</member>
+		<member name="far_distance" type="float" setter="set_far_distance" getter="get_far_distance" default="0.0">
+			Distance in meters beyond which [member far_mesh] replaces [member mesh]. [code]0[/code] disables the far mesh.
+		</member>
+		<member name="far_mesh" type="Mesh" setter="set_far_mesh" getter="get_far_mesh">
+			A cheaper mesh shown from [member far_distance] to [member draw_distance]. With a material that includes [code]res://addons/jar_voxel_terrain/shaders/jar_population.gdshaderinc[/code] the switch happens per instance, otherwise per chunk.
+		</member>
 		<member name="material" type="Material" setter="set_material" getter="get_material">
 			Material override for [member mesh].
 		</member>

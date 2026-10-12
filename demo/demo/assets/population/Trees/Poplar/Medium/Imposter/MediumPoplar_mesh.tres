@@ -1,0 +1,32 @@
+[gd_resource type="QuadMesh" format=3 uid="uid://brtovvf5idxeq"]
+
+[ext_resource type="Shader" uid="uid://dtbv3bsaq7q2d" path="res://addons/jar_voxel_terrain/shaders/impostor.gdshader" id="1_i4iwo"]
+[ext_resource type="Texture2D" uid="uid://btp1vs4fjinex" path="res://demo/assets/population/Trees/Poplar/Medium/Imposter/base_MediumPoplar_albedo.png" id="2_6uu7b"]
+[ext_resource type="Texture2D" uid="uid://bnabngd8kttjw" path="res://demo/assets/population/Trees/Poplar/Medium/Imposter/base_MediumPoplar_depth.png" id="3_70bax"]
+[ext_resource type="Texture2D" uid="uid://da81hp0isdmoi" path="res://demo/assets/population/Trees/Poplar/Medium/Imposter/base_MediumPoplar_normal.png" id="4_8s7il"]
+[ext_resource type="Texture2D" uid="uid://cvdvo8it3yn7u" path="res://demo/assets/population/Trees/Poplar/Medium/Imposter/base_MediumPoplar_orm.png" id="5_c1p6i"]
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_nwam3"]
+render_priority = 0
+shader = ExtResource("1_i4iwo")
+shader_parameter/albedo = Color(1, 1, 1, 1)
+shader_parameter/specular = 0.5
+shader_parameter/metallic = 0.0
+shader_parameter/roughness = 1.0
+shader_parameter/imposterFrames = Vector2(8, 8)
+shader_parameter/positionOffset = Vector3(0.0386105, 12.3889, -0.792621)
+shader_parameter/isFullSphere = false
+shader_parameter/alpha_clamp = 0.5
+shader_parameter/dither = false
+shader_parameter/scale = 19.0991
+shader_parameter/depth_scale = 0.0
+shader_parameter/normalmap_depth = 1.0
+shader_parameter/aabb_max = 9.54955
+shader_parameter/imposterTextureAlbedo = ExtResource("2_6uu7b")
+shader_parameter/imposterTextureNormal = ExtResource("4_8s7il")
+shader_parameter/imposterTextureDepth = ExtResource("3_70bax")
+shader_parameter/imposterTextureOrm = ExtResource("5_c1p6i")
+
+[resource]
+material = SubResource("ShaderMaterial_nwam3")
+custom_aabb = AABB(-8.727, -2.01059, -9.77012, 26.2968, 43.1984, 26.9325)

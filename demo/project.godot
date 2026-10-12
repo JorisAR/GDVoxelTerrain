@@ -28,6 +28,10 @@ window/size/viewport_height=1080
 
 project/assembly_name="godotTerrainTest"
 
+[filesystem]
+
+import/blender/enabled=false
+
 [input]
 
 left_click={
@@ -90,3 +94,26 @@ terrain_update_lod={
 
 3d_physics/layer_1="terrain"
 3d_physics/layer_2="characters"
+
+[shader_globals]
+
+wind_noise_texture={
+"type": "sampler2D",
+"value": "res://addons/jar_voxel_terrain/textures/noise/3_channel_noise.png"
+}
+wind_dir={
+"type": "vec3",
+"value": Vector3(1, 0, 0.4)
+}
+wind_strength={
+"type": "float",
+"value": 1.0
+}
+global_cell_noise={
+"type": "sampler2D",
+"value": "res://addons/jar_voxel_terrain/textures/noise/CellNoise.tres"
+}
+global_cell_noise_dist={
+"type": "sampler2D",
+"value": "res://addons/jar_voxel_terrain/textures/noise/CellNoiseDist.tres"
+}

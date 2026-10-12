@@ -152,7 +152,35 @@ void JarVoxelVolume::_bind_methods()
     ClassDB::bind_method(D_METHOD("raycast_sdf", "from", "to"), &JarVoxelVolume::raycast_sdf);
 
     //-------------------------------------------------- POPULATION --------------------------------------------------
+    ADD_GROUP("Editor Preview", "editor_preview_");
+    ClassDB::bind_method(D_METHOD("get_editor_preview"), &JarVoxelVolume::get_editor_preview);
+    ClassDB::bind_method(D_METHOD("set_editor_preview", "value"), &JarVoxelVolume::set_editor_preview);
+    ADD_PROPERTY(PropertyInfo(Variant::BOOL, "editor_preview_enabled"), "set_editor_preview", "get_editor_preview");
+    ClassDB::bind_method(D_METHOD("get_preview_features"), &JarVoxelVolume::get_preview_features);
+    ClassDB::bind_method(D_METHOD("set_preview_features", "value"), &JarVoxelVolume::set_preview_features);
+    ADD_PROPERTY(PropertyInfo(Variant::BOOL, "editor_preview_features"), "set_preview_features",
+                 "get_preview_features");
+    ClassDB::bind_method(D_METHOD("get_preview_details"), &JarVoxelVolume::get_preview_details);
+    ClassDB::bind_method(D_METHOD("set_preview_details", "value"), &JarVoxelVolume::set_preview_details);
+    ADD_PROPERTY(PropertyInfo(Variant::BOOL, "editor_preview_details"), "set_preview_details", "get_preview_details");
+    ClassDB::bind_method(D_METHOD("get_preview_colliders"), &JarVoxelVolume::get_preview_colliders);
+    ClassDB::bind_method(D_METHOD("set_preview_colliders", "value"), &JarVoxelVolume::set_preview_colliders);
+    ADD_PROPERTY(PropertyInfo(Variant::BOOL, "editor_preview_colliders"), "set_preview_colliders",
+                 "get_preview_colliders");
+    ClassDB::bind_method(D_METHOD("get_preview_min_lod"), &JarVoxelVolume::get_preview_min_lod);
+    ClassDB::bind_method(D_METHOD("set_preview_min_lod", "value"), &JarVoxelVolume::set_preview_min_lod);
+    ADD_PROPERTY(PropertyInfo(Variant::INT, "editor_preview_min_lod", PROPERTY_HINT_RANGE, "0,8,1"),
+                 "set_preview_min_lod", "get_preview_min_lod");
+
     ADD_GROUP("Population", "population_");
+    ClassDB::bind_method(D_METHOD("get_features_enabled"), &JarVoxelVolume::get_features_enabled);
+    ClassDB::bind_method(D_METHOD("set_features_enabled", "value"), &JarVoxelVolume::set_features_enabled);
+    ADD_PROPERTY(PropertyInfo(Variant::BOOL, "population_features_enabled"), "set_features_enabled",
+                 "get_features_enabled");
+    ClassDB::bind_method(D_METHOD("get_details_enabled"), &JarVoxelVolume::get_details_enabled);
+    ClassDB::bind_method(D_METHOD("set_details_enabled", "value"), &JarVoxelVolume::set_details_enabled);
+    ADD_PROPERTY(PropertyInfo(Variant::BOOL, "population_details_enabled"), "set_details_enabled",
+                 "get_details_enabled");
     ClassDB::bind_method(D_METHOD("get_terrain_features"), &JarVoxelVolume::get_terrain_features);
     ClassDB::bind_method(D_METHOD("set_terrain_features", "value"), &JarVoxelVolume::set_terrain_features);
     ADD_PROPERTY(PropertyInfo(Variant::ARRAY, "population_terrain_features", PROPERTY_HINT_TYPE_STRING,
@@ -565,6 +593,8 @@ void JarVoxelVolume::set_collider_budget_ms(float value)
 }
 bool JarVoxelVolume::is_in_collider_range(const glm::vec3 &pos) const
 {
+    if (!colliders_enabled())
+        return false;
     if (_colliderDistance <= 0.0f)
         return true; // disabled -> original behaviour (collider on every near-LOD chunk)
     return _voxelLod.distance_to_nearest_viewer(pos) <= _colliderDistance;
@@ -611,9 +641,145 @@ void JarVoxelVolume::set_lod_automatic_update_distance(float value)
     _lod_automatic_update_distance = value;
 }
 
+bool JarVoxelVolume::is_active() const
+{
+    return _editorPreview || !godot::Engine::get_singleton()->is_editor_hint();
+}
+
+// Editor preview: the volume builds around the editor's camera. Its chunks and
+// population nodes have no owner, so they are never saved with the scene.
+void JarVoxelVolume::set_editor_preview(bool value)
+{
+    if (_editorPreview == value)
+        return;
+    _editorPreview = value;
+    if (!godot::Engine::get_singleton()->is_editor_hint() || !is_inside_tree())
+        return;
+    if (value)
+    {
+        initialize();
+        set_process_internal(true);
+    }
+    else
+    {
+        set_process_internal(false);
+        teardown();
+    }
+}
+
+// Back to a volume that never built: no octree, chunks, workers or population.
+void JarVoxelVolume::teardown()
+{
+    if (!_voxelRoot)
+        return;
+    stop_build_worker(); // waits for a running build
+    {
+        std::lock_guard<std::mutex> lock(_buildMutex);
+        _buildShutdown = false;
+        _buildRequested = false;
+        _workerEdits.clear();
+    }
+    _isBuilding = false;
+    if (_featureManager)
+        _featureManager->reset(); // frees its nodes
+    _featureManager.reset();      // waits for its jobs
+    _meshComputeScheduler.reset(); // waits for mesh tasks
+    _voxelRoot.reset();
+    // Everything the volume made: chunks (shown or pooled) and population nodes.
+    for (int i = get_child_count() - 1; i >= 0; --i)
+    {
+        Node *child = get_child(i);
+        if (Object::cast_to<JarVoxelChunk>(child) != nullptr || child->get_owner() == nullptr)
+        {
+            remove_child(child);
+            child->queue_free();
+        }
+    }
+    {
+        std::lock_guard<std::mutex> lock(_poolMutex);
+        _releasedChunks.clear();
+    }
+    _freeChunks.clear();
+    _pendingColliders.clear();
+    _initialBuildRequested = false;
+}
+
+bool JarVoxelVolume::is_previewing() const
+{
+    return _editorPreview && godot::Engine::get_singleton()->is_editor_hint();
+}
+
+void JarVoxelVolume::set_preview_features(bool value)
+{
+    _previewFeatures = value;
+    if (is_previewing() && _featureManager)
+        _featureManager->reset();
+}
+
+void JarVoxelVolume::set_preview_details(bool value)
+{
+    if (_previewDetails == value)
+        return;
+    _previewDetails = value;
+    if (!is_previewing())
+        return;
+    if (!value)
+        for (int i = 0; i < get_child_count(); ++i)
+            if (JarVoxelChunk *chunk = Object::cast_to<JarVoxelChunk>(get_child(i)))
+                chunk->clear_details();
+    remesh_all();
+}
+
+void JarVoxelVolume::set_preview_colliders(bool value)
+{
+    _previewColliders = value;
+    if (is_previewing())
+    {
+        if (_featureManager)
+            _featureManager->reset();
+        remesh_all();
+    }
+}
+
+void JarVoxelVolume::set_preview_min_lod(int value)
+{
+    _previewMinLod = std::clamp(value, 0, 8);
+    if (is_previewing() && _voxelRoot)
+    {
+        _voxelLod.set_min_lod(_previewMinLod);
+        remesh_all();
+    }
+}
+
+void JarVoxelVolume::set_features_enabled(bool value)
+{
+    if (_featuresEnabled == value)
+        return;
+    _featuresEnabled = value;
+    if (_featureManager)
+        _featureManager->reset();
+}
+
+// Off: details disappear at once and are no longer generated. On: they come
+// back as the chunks are remeshed.
+void JarVoxelVolume::set_details_enabled(bool value)
+{
+    if (_detailsEnabled == value)
+        return;
+    _detailsEnabled = value;
+    if (!value)
+    {
+        for (int i = 0; i < get_child_count(); ++i)
+            if (JarVoxelChunk *chunk = Object::cast_to<JarVoxelChunk>(get_child(i)))
+                chunk->clear_details();
+    }
+    else
+        remesh_all();
+}
+
 void JarVoxelVolume::_notification(int p_what)
 {
-    if (godot::Engine::get_singleton()->is_editor_hint())
+    if (!is_active())
     {
         return;
     }
@@ -660,6 +826,7 @@ void JarVoxelVolume::initialize()
     _depth = std::max(ChunkSizeLog2 + 1, int(std::ceil(std::log2(_extent / _voxelSize))));
     _voxelLod = JarVoxelLoD(_lod_automatic_update, _lod_automatic_update_distance, _lod_shell_size,
                             get_chunk_size() * _voxelSize, _lodDetailDistance, _depth - ChunkSizeLog2);
+    _voxelLod.set_min_lod(is_previewing() ? _previewMinLod : 0);
     _meshComputeScheduler = std::make_unique<MeshComputeScheduler>();
     _voxelRoot = std::make_unique<VoxelOctreeNode>(_depth);
     _featureManager = std::make_unique<FeatureManager>(*this);
@@ -1052,6 +1219,10 @@ void JarVoxelVolume::rebuild_materials()
     }
     else
         _runtimeMaterial = base;
+    std::atomic_store(&_groundPalette,
+                      GroundPalette::build(_terrainMaterials.is_empty() ? TerrainMaterialPalette::default_materials()
+                                                                        : _terrainMaterials,
+                                           _biomeMap, _runtimeMaterial));
     apply_rendering_to_chunks();
 }
 
@@ -1122,6 +1293,8 @@ int JarVoxelVolume::lod_at(const glm::vec3 &position) const
 std::vector<JarVoxelVolume::PopulationEntry<JarTerrainFeature>> JarVoxelVolume::population_features() const
 {
     std::vector<PopulationEntry<JarTerrainFeature>> result;
+    if (!_featuresEnabled || (is_previewing() && !_previewFeatures))
+        return result;
     for (int64_t i = 0; i < _terrainFeatures.size(); ++i)
         result.push_back({_terrainFeatures[i], -1});
     if (_biomeMap.is_valid())
@@ -1143,6 +1316,8 @@ std::vector<JarVoxelVolume::PopulationEntry<JarTerrainFeature>> JarVoxelVolume::
 std::vector<JarVoxelVolume::PopulationEntry<JarTerrainDetail>> JarVoxelVolume::population_details() const
 {
     std::vector<PopulationEntry<JarTerrainDetail>> result;
+    if (!_detailsEnabled || (is_previewing() && !_previewDetails))
+        return result;
     for (int64_t i = 0; i < _terrainDetails.size(); ++i)
         result.push_back({_terrainDetails[i], -1});
     if (_biomeMap.is_valid())

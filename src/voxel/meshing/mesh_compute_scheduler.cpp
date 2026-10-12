@@ -69,7 +69,8 @@ void MeshComputeScheduler::run_task(const JarVoxelVolume &terrain, VoxelOctreeNo
     JobSystem::get_pool().enqueue([this, &terrain, &chunk]() {
         auto meshCompute = StitchedSurfaceNets(terrain, chunk);
         ChunkMeshData *chunkMeshData = meshCompute.generate_mesh_data(terrain);
-        if (chunkMeshData != nullptr && chunkMeshData->lod <= ChunkMeshData::MaxCollisionLod)
+        if (chunkMeshData != nullptr && chunkMeshData->lod <= ChunkMeshData::MaxCollisionLod &&
+            terrain.colliders_enabled())
             chunkMeshData->build_collision_mesh();
         if (chunkMeshData != nullptr && chunkMeshData->lod <= 0)
         {
@@ -82,7 +83,8 @@ void MeshComputeScheduler::run_task(const JarVoxelVolume &terrain, VoxelOctreeNo
                 biomes.push_back(entry.biome);
             }
             chunkMeshData->detail_buffers =
-                generator.generate_detail_buffers(details, biomes, terrain.get_biome_map(), *chunkMeshData);
+                generator.generate_detail_buffers(details, biomes, terrain.get_biome_map(),
+                                                  terrain.get_ground_palette(), *chunkMeshData);
         }
         ChunksToProcess.push(std::make_pair(&(chunk), chunkMeshData));
         _activeTasks--; // after the push, so is_meshing() never sees a gap
