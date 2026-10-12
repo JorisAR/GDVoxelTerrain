@@ -31,8 +31,37 @@ func _ready() -> void:
 				_check("%s manifold" % label, r.nonmanifold == 0, "%d non-manifold edges" % r.nonmanifold)
 			holder.queue_free()
 			await get_tree().process_frame
+	await _eroded_mountain()
 	print("Topology tests: %s" % ("ALL PASSED" if _failures == 0 else "%d FAILED" % _failures))
 	get_tree().quit(1 if _failures > 0 else 0)
+
+## Steep eroded mountainside of the demo planet. Its distance field
+## overestimates on pinched slopes; the octree used to drop leaves with
+## surface in them there (holes), and chunk borders showed in the shading
+## (normals averaged from each chunk's own faces).
+func _eroded_mountain() -> void:
+	var holder := Node.new()
+	add_child(holder)
+	var spot := Vector3(2004.3, 2408.4, 2732.2)
+	var volume := JarVoxelVolume.new()
+	volume.chunk_scene = TestWorld.CHUNK_SCENE
+	volume.extent = 10000.0
+	volume.sdf = load("res://demo/planet/planet_terrain.tres")
+	volume.meshing_algorithm = JarVoxelVolume.MESHING_DUAL_CONTOURING
+	volume.manifold = true
+	holder.add_child(volume)
+	var viewer := JarVoxelViewer.new()
+	viewer.position = spot + spot.normalized() * 4.0
+	holder.add_child(viewer)
+	await _settle(volume)
+	var r := Topology.analyze(volume, spot, 40.0)
+	print("INFO eroded mountain %s" % r)
+	_check("eroded mountain no holes", r.open == 0, "%d open edges" % r.open)
+	var seams := Topology.seam_normals(volume, spot, 40.0)
+	_check("eroded mountain chunk borders shade alike", seams.shared > 100 and seams.mismatched * 10 < seams.shared,
+		"%d of %d shared vertices differ" % [seams.mismatched, seams.shared])
+	holder.queue_free()
+	await get_tree().process_frame
 
 func _check(name: String, ok: bool, detail := "") -> void:
 	if not ok:

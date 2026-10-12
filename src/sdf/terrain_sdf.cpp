@@ -32,6 +32,28 @@ uint32_t hash_u32(uint32_t x)
     return x;
 }
 
+// sin(x) on [-pi/2, pi/2] (Taylor to x^9: error below 4e-6).
+inline float sin_half(float x)
+{
+    const float x2 = x * x;
+    return x * (1.0f + x2 * (-1.0f / 6.0f + x2 * (1.0f / 120.0f + x2 * (-1.0f / 5040.0f + x2 * (1.0f / 362880.0f)))));
+}
+
+// sin and cos of any angle, several times faster than std::sin + std::cos
+// (the erosion's stripes take a few dozen per sample).
+inline void fast_sincos(float angle, float &s, float &c)
+{
+    constexpr float Pi = 3.14159265359f, HalfPi = 1.57079632679f;
+    // Wrap to [-pi, pi], then fold into [-pi/2, pi/2] where the series is accurate.
+    float x = angle - Tau * std::floor(angle * (1.0f / Tau) + 0.5f);
+    const float sx = x > HalfPi ? Pi - x : (x < -HalfPi ? -Pi - x : x);
+    float y = x + HalfPi; // cos(x) = sin(x + pi/2)
+    y = y > Pi ? y - Tau : y;
+    const float cy = y > HalfPi ? Pi - y : (y < -HalfPi ? -Pi - y : y);
+    s = sin_half(sx);
+    c = sin_half(cy);
+}
+
 // Random point inside a grid cell, in [0, 1)^3.
 glm::vec3 cell_offset(const glm::ivec3 &cell)
 {
@@ -89,8 +111,7 @@ float JarTerrainSdf::max_layered_height() const
 
 glm::vec3 JarTerrainSdf::height_gradient(const glm::vec3 &surface, const glm::vec3 &up, float h, float step) const
 {
-    // Differences along two tangent directions: forward ones for the local
-    // slope, central ones with a wide step for a low-passed slope.
+    // Forward differences along two tangent directions: the local slope.
     const glm::vec3 t1 = glm::normalize(std::abs(up.y) < 0.9f ? glm::cross(up, glm::vec3(0, 1, 0))
                                                                : glm::cross(up, glm::vec3(1, 0, 0)));
     const glm::vec3 t2 = glm::cross(up, t1);
@@ -101,22 +122,57 @@ glm::vec3 JarTerrainSdf::height_gradient(const glm::vec3 &surface, const glm::ve
             p = glm::normalize(p) * _radius;
         return layered_height(p);
     };
-    if (step <= 1.0f)
-        return t1 * ((at(t1 * e) - h) / e) + t2 * ((at(t2 * e) - h) / e);
-    return t1 * ((at(t1 * e) - at(-t1 * e)) / (2.0f * e)) + t2 * ((at(t2 * e) - at(-t2 * e)) / (2.0f * e));
+    return t1 * ((at(t1 * e) - h) / e) + t2 * ((at(t2 * e) - h) / e);
+}
+
+// Low-passed slope of the layers: tetrahedral differences `step` apart in
+// fixed world directions, projected on the tangent plane. Unlike differences
+// along a tangent frame (which must switch axes somewhere on a sphere), this
+// is continuous everywhere: the frame switch left a ~2 m step in the eroded
+// terrain along two circles of latitude.
+glm::vec3 JarTerrainSdf::broad_gradient(const glm::vec3 &surface, const glm::vec3 &up, float step) const
+{
+    const float d = step / std::sqrt(3.0f);
+    static const glm::vec3 corners[4] = {glm::vec3(1, -1, -1), glm::vec3(-1, -1, 1), glm::vec3(-1, 1, -1),
+                                         glm::vec3(1, 1, 1)};
+    glm::vec3 sum(0.0f);
+    for (const glm::vec3 &c : corners)
+    {
+        glm::vec3 p = surface + c * d;
+        if (_shape == SHAPE_SPHERE)
+            p = glm::normalize(p) * _radius;
+        else
+            p.y = 0.0f;
+        sum += c * layered_height(p);
+    }
+    const glm::vec3 g = sum / (4.0f * d);
+    return g - up * glm::dot(g, up);
 }
 
 JarTerrainSdf::Sample JarTerrainSdf::evaluate(const glm::vec3 &surface, const glm::vec3 &up, bool localGradient) const
 {
     const float h = layered_height(surface);
-    Sample result{h, localGradient ? height_gradient(surface, up, h, 0.5f) : glm::vec3(0.0f), h};
+    Sample result{h, localGradient ? height_gradient(surface, up, h, 0.5f) : glm::vec3(0.0f), h, glm::vec3(0.0f)};
     const float range = max_layered_height();
     if (!_erosion || _octaves <= 0 || _erosionStrength <= 0.0f || range <= 0.0f)
+    {
+        result.broad = localGradient ? result.gradient : height_gradient(surface, up, h, 0.5f);
         return result;
+    }
     // The gully direction field uses the low-passed slope: stripes are measured
     // up to a cell from their pivot, so any fast rotation of the direction (from
     // fine noise detail) would be magnified into steep, rippled slopes.
-    const glm::vec3 gradient = height_gradient(surface, up, h, 0.25f * _erosionScale);
+    return erode(surface, up, broad_gradient(surface, up, 0.25f * _erosionScale), result);
+}
+
+// Adds the erosion to `result` (layered height and gradient filled in), with
+// the given low-passed slope of the layers.
+JarTerrainSdf::Sample JarTerrainSdf::erode(const glm::vec3 &surface, const glm::vec3 &up, const glm::vec3 &gradient,
+                                           Sample result) const
+{
+    const float h = result.layered;
+    const float range = max_layered_height();
+    result.broad = gradient;
 
     const float slope = glm::length(gradient);
     // Gully directions follow the slope, but pretend the input has a fixed
@@ -148,12 +204,20 @@ JarTerrainSdf::Sample JarTerrainSdf::evaluate(const glm::vec3 &surface, const gl
             // so rotating the stripes never distorts far from the pivot.
             const glm::vec3 g = surface / cellSize;
             const glm::ivec3 base = glm::ivec3(glm::floor(g));
+            const glm::vec3 f = g - glm::vec3(base); // position in the cell, [0, 1)
             float c = 0.0f, s = 0.0f, weights = 0.0f;
             const int ySpan = sphere ? 1 : 0;
             for (int dz = -1; dz <= 1; ++dz)
                 for (int dy = -ySpan; dy <= ySpan; ++dy)
                     for (int dx = -1; dx <= 1; ++dx)
                     {
+                        // Cells whose box is a cell away cannot hold a pivot in
+                        // reach: skip them before hashing (same result, faster).
+                        const float bx = dx < 0 ? f.x : (dx > 0 ? 1.0f - f.x : 0.0f);
+                        const float by = dy < 0 ? f.y : (dy > 0 ? 1.0f - f.y : 0.0f);
+                        const float bz = dz < 0 ? f.z : (dz > 0 ? 1.0f - f.z : 0.0f);
+                        if (bx * bx + by * by + bz * bz >= 1.0f)
+                            continue;
                         const glm::ivec3 cell = base + glm::ivec3(dx, dy, dz);
                         glm::vec3 pivot = glm::vec3(cell) + cell_offset(cell);
                         if (!sphere)
@@ -166,9 +230,10 @@ JarTerrainSdf::Sample JarTerrainSdf::evaluate(const glm::vec3 &surface, const gl
                         const float w = falloff * falloff * falloff;
                         if (w <= 0.0f)
                             continue;
-                        const float phase = glm::dot(d, across) * Tau;
-                        c += w * std::cos(phase);
-                        s += w * std::sin(phase);
+                        float ps, pc;
+                        fast_sincos(glm::dot(d, across) * Tau, ps, pc);
+                        c += w * pc;
+                        s += w * ps;
                         weights += w;
                     }
             {
@@ -234,13 +299,14 @@ float JarTerrainSdf::distance(const glm::vec3 &pos) const
     if (far >= band)
         return bound;
 
-    // Height difference divided by the slope is close to a true distance. Only
-    // the erosion's slope is used (it comes for free and makes the steep
-    // gullies); the layers' own slope would cost two more noise samples per
-    // sample, and gentle noise terrain stays within the octree's margin
-    // without it (dual contouring corrects distances by the gradient anyway).
+    // Height difference divided by the slope is close to a true distance. The
+    // slope is the erosion's (exact, it makes the steep gullies) plus the
+    // layers' low-passed one: both come for free. Leaving out the layers'
+    // slope overestimated distances on steep mountainsides so much that the
+    // octree dropped nodes with surface in them (holes).
     const Sample terrain = evaluate(surface, up, false);
-    const float d = (above - terrain.height) / std::sqrt(1.0f + glm::dot(terrain.gradient, terrain.gradient));
+    const glm::vec3 slope = terrain.gradient + terrain.broad;
+    const float d = (above - terrain.height) / std::sqrt(1.0f + glm::dot(slope, slope));
     if (far <= 0.0f)
         return d;
     const float t = far / band;
@@ -328,4 +394,53 @@ void JarTerrainSdf::_bind_methods()
     BIND_PROP(assumed_slope, Variant::FLOAT, PROPERTY_HINT_RANGE, "0.05,3,0.01");
 #undef BIND_PROP
     ClassDB::bind_method(D_METHOD("sample_height", "position"), &JarTerrainSdf::sample_height);
+}
+
+// Gradient of distance(): the radial part is exact (1 / slope normalization),
+// the tangential part is the eroded height's slope by forward differences:
+// three terrain evaluations instead of the generic four distance samples. (The
+// offset samples need their own low-passed slope: the gullies rotate with it,
+// which makes up much of the eroded slope.)
+glm::vec3 JarTerrainSdf::gradient(const glm::vec3 &pos) const
+{
+    glm::vec3 surface, up;
+    float above;
+    frame(pos, surface, up, above);
+    const float reach = max_deviation();
+    const float far = std::abs(above) - reach;
+    if (far >= 2.0f * reach + 1.0f)
+        return up; // the far lower bound grows straight up
+    if (far > 0.0f)
+        return JarSignedDistanceField::gradient(pos); // blend band: rarely sampled
+
+    const Sample c = evaluate(surface, up, false);
+    const bool sphere = _shape == SHAPE_SPHERE;
+    const glm::vec3 t1 = glm::normalize(std::abs(up.y) < 0.9f ? glm::cross(up, glm::vec3(0, 1, 0))
+                                                               : glm::cross(up, glm::vec3(1, 0, 0)));
+    const glm::vec3 t2 = glm::cross(up, t1);
+    constexpr float Step = 0.03f;
+    // distance() = (above - height) / n, with n from the slope: both vary.
+    auto norm = [](const Sample &t) {
+        const glm::vec3 g = t.gradient + t.broad;
+        return std::sqrt(1.0f + glm::dot(g, g));
+    };
+    auto at = [&](const glm::vec3 &offset) {
+        glm::vec3 s = surface + offset;
+        if (sphere)
+            s = glm::normalize(s) * _radius;
+        return evaluate(s, sphere ? s / _radius : up, false);
+    };
+    const Sample a = at(t1 * Step), b = at(t2 * Step);
+    const float n = norm(c);
+    glm::vec3 slope = t1 * ((a.height - c.height) / Step) + t2 * ((b.height - c.height) / Step);
+    glm::vec3 nSlope = t1 * ((norm(a) - n) / Step) + t2 * ((norm(b) - n) / Step);
+    // On a sphere, moving `pos` sideways moves its surface point less.
+    if (sphere)
+    {
+        const float scale = _radius / std::max(glm::length(pos), 1e-3f);
+        slope *= scale;
+        nSlope *= scale;
+    }
+    const float d = (above - c.height) / n;
+    return (up - slope - d * nSlope) / n;
 }

@@ -78,6 +78,7 @@ glm::vec3 StitchedSurfaceNets::place_dual_contouring_vertex(const int node_id, c
     }
     const float cellSize = cellMax.x - cellMin.x;
     _lastVertexSharp = false;
+    SharpPlanes planes;
     glm::vec3 firstNormal(0.0f);
     float minAgreement = 1.0f; // lowest cosine between the samples' normals
     for (int i = 0; i < 8; ++i)
@@ -94,6 +95,15 @@ glm::vec3 StitchedSurfaceNets::place_dual_contouring_vertex(const int node_id, c
         minAgreement = std::min(minAgreement, glm::dot(firstNormal, normal));
         qef.add(n->_center - d * normal, normal);
         averageNormal += normal;
+        // Cluster the sample normals (within ~25 degrees), in corner order.
+        int cluster = -1;
+        for (int c = 0; c < planes.count && cluster < 0; ++c)
+            if (glm::dot(glm::normalize(planes.normals[c]), normal) >= 0.9f)
+                cluster = c;
+        if (cluster < 0 && planes.count < 4)
+            planes.normals[cluster = planes.count++] = glm::vec3(0.0f);
+        if (cluster >= 0)
+            planes.normals[cluster] += normal;
     }
     const float normalLength = glm::length(averageNormal);
     averageNormal = normalLength > 1e-6f ? averageNormal / normalLength : glm::vec3(0.0f);
@@ -132,6 +142,13 @@ glm::vec3 StitchedSurfaceNets::place_dual_contouring_vertex(const int node_id, c
             // sharp feature (not just curvature).
             constexpr float SharpAgreement = 0.8f; // ~37 degrees
             _lastVertexSharp = rank >= 2 && minAgreement < SharpAgreement;
+            _lastPlanes = SharpPlanes();
+            if (_lastVertexSharp)
+            {
+                _lastPlanes = planes;
+                for (int c = 0; c < planes.count; ++c)
+                    _lastPlanes.normals[c] = glm::normalize(planes.normals[c]);
+            }
             return glm::clamp(solution.point, cellMin, cellMax);
         }
     }
@@ -217,6 +234,7 @@ void StitchedSurfaceNets::create_vertex(const int node_id, const std::vector<int
 
     _meshChunk.vertexIndices[node_id] = vertexIndex;
     _sharp.push_back(_dualContouring && _lastVertexSharp ? 1 : 0);
+        _sharpPlanes.push_back(_dualContouring && _lastVertexSharp ? _lastPlanes : SharpPlanes());
     _verts.push_back({vertexPosition.x, vertexPosition.y, vertexPosition.z});
     _normals.push_back({normal.x, normal.y, normal.z});
     _vertexMaterials.push_back(VertexMaterials::from(materials));
@@ -659,6 +677,7 @@ void StitchedSurfaceNets::create_component_vertices(const int node_id, const std
         }
         position -= _chunk->_center;
         _sharp.push_back(_dualContouring && _lastVertexSharp ? 1 : 0);
+        _sharpPlanes.push_back(_dualContouring && _lastVertexSharp ? _lastPlanes : SharpPlanes());
         _verts.push_back({position.x, position.y, position.z});
         _normals.push_back({normal.x, normal.y, normal.z});
         _vertexMaterials.push_back(VertexMaterials::from(materials));
@@ -713,6 +732,12 @@ void StitchedSurfaceNets::add_quad(int n0, int n1, int n2, int n3, bool flip)
 // Smooth normals within a surface, but not across sharp creases: each triangle
 // corner averages only the neighbouring faces within CreaseAngle of its own
 // face, and vertices whose corners disagree are duplicated.
+//
+// Vertices on smooth surface keep the normal from their samples for the faces
+// that agree with it: that normal depends only on the vertex's cell, so chunks
+// sharing a border vertex shade it identically (face averages would differ, as
+// each chunk only sees its own faces: visible seams). Only faces folded away
+// from it, and sharp features, get averaged normals on copies.
 void StitchedSurfaceNets::split_creases()
 {
     constexpr float SharpCreaseCos = 0.82f;  // ~35 degrees
@@ -741,14 +766,39 @@ void StitchedSurfaceNets::split_creases()
         const float creaseCos = _sharp[v] ? SharpCreaseCos : SmoothCreaseCos;
         // Normals already assigned to this vertex (first) and its copies.
         std::vector<std::pair<Vector3, int>> variants;
+        const bool keepSample = !_sharp[v];
+        const Vector3 sample = _normals[v];
+        if (keepSample)
+            variants.emplace_back(sample, int(v));
+        const SharpPlanes &planes = _sharpPlanes[v];
         for (int t : tris)
         {
             const Vector3 own = faceNormals[t].normalized();
-            Vector3 sum;
-            for (int o : tris)
-                if (faceNormals[o].normalized().dot(own) >= creaseCos)
-                    sum += faceNormals[o];
-            const Vector3 n = sum.length_squared() > 0.0f ? sum.normalized() : own;
+            if (keepSample && own.dot(sample) >= SmoothCreaseCos)
+                continue; // stays on the vertex, with its sample normal
+            Vector3 n;
+            if (planes.count >= 2)
+            {
+                // The surface direction of the cell closest to this face.
+                float best = -2.0f;
+                for (int c = 0; c < planes.count; ++c)
+                {
+                    const Vector3 p(planes.normals[c].x, planes.normals[c].y, planes.normals[c].z);
+                    if (p.dot(own) > best)
+                    {
+                        best = p.dot(own);
+                        n = p;
+                    }
+                }
+            }
+            else
+            {
+                Vector3 sum;
+                for (int o : tris)
+                    if (faceNormals[o].normalized().dot(own) >= creaseCos)
+                        sum += faceNormals[o];
+                n = sum.length_squared() > 0.0f ? sum.normalized() : own;
+            }
 
             int target = -1;
             for (const auto &[normal, index] : variants)

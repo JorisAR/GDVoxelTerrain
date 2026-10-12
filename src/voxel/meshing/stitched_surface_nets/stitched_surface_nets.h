@@ -74,6 +74,16 @@ class StitchedSurfaceNets
     // place_dual_contouring_vertex for the vertex being created.
     std::vector<uint8_t> _sharp;
     bool _lastVertexSharp = false;
+    // Surface directions meeting at a sharp vertex: its cell's sample normals,
+    // clustered. Faces there take the closest one, which only depends on the
+    // cell, so chunks sharing the vertex shade it alike.
+    struct SharpPlanes
+    {
+        uint8_t count = 0;
+        glm::vec3 normals[4];
+    };
+    std::vector<SharpPlanes> _sharpPlanes; // per vertex, empty unless sharp
+    SharpPlanes _lastPlanes;
     void split_creases();
 
     void add_tri(int n0, int n1, int n2, bool flip);

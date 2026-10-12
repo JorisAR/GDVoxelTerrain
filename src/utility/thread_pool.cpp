@@ -27,6 +27,14 @@ void ThreadPool::enqueue(std::function<void()> task) {
     condition.notify_one();
 }
 
+void ThreadPool::enqueue_background(std::function<void()> task) {
+    {
+        std::unique_lock<std::mutex> lock(queueMutex);
+        backgroundTasks.push(std::move(task));
+    }
+    condition.notify_one();
+}
+
 void ThreadPool::parallel_for(size_t count, const std::function<void(size_t)> &fn) {
     if (count == 0)
         return;
@@ -51,15 +59,34 @@ void ThreadPool::parallel_for(size_t count, const std::function<void(size_t)> &f
 }
 
 void ThreadPool::workerThread() {
+    const size_t backgroundLimit = std::max<size_t>(1, workers.size() / 2);
     while (true) {
         std::function<void()> task;
+        bool background = false;
         {
             std::unique_lock<std::mutex> lock(queueMutex);
-            condition.wait(lock, [this] { return stop || !tasks.empty(); });
-            if (stop && tasks.empty()) return;
-            task = std::move(tasks.front());
-            tasks.pop();
+            // Background work may use all workers once stopping (to drain).
+            auto backgroundReady = [&] { return !backgroundTasks.empty() && (stop || runningBackground < backgroundLimit); };
+            condition.wait(lock, [&] { return stop || !tasks.empty() || backgroundReady(); });
+            if (!tasks.empty()) {
+                task = std::move(tasks.front());
+                tasks.pop();
+            } else if (backgroundReady()) {
+                task = std::move(backgroundTasks.front());
+                backgroundTasks.pop();
+                background = true;
+                ++runningBackground;
+            } else {
+                return; // stopping, nothing left
+            }
         }
         task();
+        if (background) {
+            {
+                std::unique_lock<std::mutex> lock(queueMutex);
+                --runningBackground;
+            }
+            condition.notify_one(); // a waiting background task may start now
+        }
     }
 }

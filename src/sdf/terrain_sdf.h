@@ -59,16 +59,20 @@ class JarTerrainSdf : public JarSignedDistanceField
         float height;       // eroded height above the base surface
         glm::vec3 gradient; // tangent gradient of the height (see evaluate)
         float layered;      // height before erosion
+        glm::vec3 broad;    // low-passed tangent gradient of the layers (see evaluate)
     };
 
     void frame(const glm::vec3 &pos, glm::vec3 &surface, glm::vec3 &up, float &above) const;
     float layered_height(const glm::vec3 &surface) const; // base noise + mountains
     float max_layered_height() const;
     glm::vec3 height_gradient(const glm::vec3 &surface, const glm::vec3 &up, float h, float step) const;
+    glm::vec3 broad_gradient(const glm::vec3 &surface, const glm::vec3 &up, float step) const;
     float max_deviation() const;
     // Without `localGradient` the gradient only holds the erosion's part (the
-    // layers' slope costs two more noise samples); add it with height_gradient.
+    // layers' local slope costs two more noise samples); `broad` then has the
+    // layers' slope low-passed over the erosion scale, which comes for free.
     Sample evaluate(const glm::vec3 &surface, const glm::vec3 &up, bool localGradient = true) const;
+    Sample erode(const glm::vec3 &surface, const glm::vec3 &up, const glm::vec3 &broadGradient, Sample result) const;
 
     template <typename T> void set_shape_property(T &field, const T &value)
     {
@@ -83,6 +87,8 @@ class JarTerrainSdf : public JarSignedDistanceField
 
     // Terrain height (above the base plane / sphere) at a position, for scripts.
     float sample_height(const Vector3 &position) const;
+    // Cheaper than the generic tetrahedral differences (see terrain_sdf.cpp).
+    glm::vec3 gradient(const glm::vec3 &pos) const override;
 
     int get_shape() const { return _shape; }
     void set_shape(int v) { set_shape_property(_shape, v); }

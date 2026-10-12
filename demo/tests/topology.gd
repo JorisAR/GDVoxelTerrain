@@ -54,3 +54,44 @@ static func analyze(volume: JarVoxelVolume, center: Vector3, radius: float) -> D
 		elif edges[k] > 2:
 			nonmanifold += 1
 	return {open = open, nonmanifold = nonmanifold, triangles = triangles, duplicates = duplicates}
+
+## Vertices that neighbouring chunks of the same LOD share (same position)
+## must have the same normal, or the shading shows the chunk borders. For
+## split (crease) vertices each copy is compared with the closest copy in the
+## other chunk. Returns {shared, mismatched} (over `degrees`).
+static func seam_normals(volume: JarVoxelVolume, center: Vector3, radius: float, degrees := 5.0) -> Dictionary:
+	var at := {}
+	for c in volume.get_children():
+		if not (c is JarVoxelChunk and c.visible):
+			continue
+		var mesh: Mesh = c.get_mesh_instance().mesh
+		if mesh == null or mesh.get_surface_count() == 0:
+			continue
+		var arrays := mesh.surface_get_arrays(0)
+		var verts: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
+		var normals: PackedVector3Array = arrays[Mesh.ARRAY_NORMAL]
+		for i in verts.size():
+			var w: Vector3 = c.position + verts[i]
+			if w.distance_to(center) > radius:
+				continue
+			var key := "%d,%d,%d,%d" % [roundi(w.x * 1000.0), roundi(w.y * 1000.0), roundi(w.z * 1000.0), c.get_lod()]
+			if not at.has(key):
+				at[key] = {}
+			if not at[key].has(c):
+				at[key][c] = []
+			at[key][c].append(normals[i].normalized())
+	var shared := 0
+	var mismatched := 0
+	for key in at:
+		var chunks: Dictionary = at[key]
+		if chunks.size() < 2:
+			continue
+		var list := chunks.keys()
+		for a in range(1, list.size()):
+			for n: Vector3 in chunks[list[a]]:
+				var best := 180.0
+				for m: Vector3 in chunks[list[0]]:
+					best = minf(best, rad_to_deg(n.angle_to(m)))
+				shared += 1
+				mismatched += 1 if best > degrees else 0
+	return {shared = shared, mismatched = mismatched}

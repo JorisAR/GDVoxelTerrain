@@ -302,7 +302,14 @@ void VoxelOctreeNode::build_post(JarVoxelVolume &terrain)
 bool VoxelOctreeNode::has_surface(const JarVoxelVolume &terrain, const float value)
 {
     //(3*(1/2)^3)^(1/3) = 1.44224957 for d instead of r
-    return std::abs(value) < (1 << _size) * terrain.get_voxel_size() * 1.44224957f * 1.75f; 
+    // The extra leaf and a half (at this node's LOD) matters for the last
+    // subdivision: the mesher needs the finest leaves up to a cell beyond the
+    // surface, so a node twice the leaf size must be kept up to ~2.6 leaves
+    // from it, and SDFs that are not exact distances (eroded terrain
+    // overestimates up to ~2x on pinched slopes) otherwise lose leaves there:
+    // holes in the mesh.
+    const float voxel = terrain.get_voxel_size();
+    return std::abs(value) < (1 << _size) * voxel * 1.44224957f * 1.75f + 1.5f * (1 << std::max<int>(LoD, 0)) * voxel;
 }
 
 void VoxelOctreeNode::modify_sdf_in_bounds(JarVoxelVolume &terrain, const ModifySettings &settings)

@@ -177,7 +177,7 @@ void FeatureManager::start_scan(const std::vector<glm::vec3> &viewers)
     std::shared_ptr<Shared> shared = _shared;
     shared->activeJobs++;
     const float range = _range, cellSize = _cellSize;
-    JobSystem::get_pool().enqueue([shared, viewers, range, cellSize, sdf]() {
+    JobSystem::get_pool().enqueue_background([shared, viewers, range, cellSize, sdf]() {
         std::vector<glm::ivec3> keys = scan_cells(viewers, range, cellSize, sdf);
         {
             std::lock_guard<std::mutex> lock(shared->mutex);
@@ -200,7 +200,7 @@ void FeatureManager::start_generation(const glm::ivec3 &key)
     const std::vector<int> featureBiomes = _featureBiomes;
     const Ref<JarBiomeMap> biomes = _biomeMap;
     const UpField up = _volume.get_up_field();
-    JobSystem::get_pool().enqueue([shared, key, cellSize, features, featureBiomes, biomes, sdf, up]() {
+    JobSystem::get_pool().enqueue_background([shared, key, cellSize, features, featureBiomes, biomes, sdf, up]() {
         std::vector<Instance> instances = generate_cell(key, cellSize, features, featureBiomes, biomes, sdf, up);
         {
             std::lock_guard<std::mutex> lock(shared->mutex);
@@ -402,6 +402,75 @@ std::vector<glm::ivec3> FeatureManager::scan_cells(const std::vector<glm::vec3> 
     return std::vector<glm::ivec3>(keys.begin(), keys.end());
 }
 
+namespace
+{
+// Distance down from `top` (outside, at distance `d`) to the first surface
+// within `range`, or -1. Secant steps along the ray (an SDF changes almost
+// linearly along it near a surface, even where it is not an exact distance),
+// kept between 0.7 and 3 times the distance so they neither crawl nor jump
+// far through thin parts; once past the surface, false position (Illinois)
+// within the bracket. A few samples instead of a dozen or more.
+float find_surface_below(const JarSignedDistanceField &sdf, const glm::vec3 &top, const glm::vec3 &up, float d,
+                         float range)
+{
+    constexpr float Tolerance = 0.02f;
+    auto sample = [&](float t) { return sdf.distance(top - up * t); };
+    // Outside: secant steps (the first one conservative).
+    float a = 0.0f, fa = d, prev = 0.0f, fPrev = d;
+    float b = -1.0f, fb = 0.0f;
+    for (int step = 0; step < 48; ++step)
+    {
+        if (fa < Tolerance)
+            return a;
+        const float secant = step > 0 && fPrev > fa ? fa * (a - prev) / (fPrev - fa) : 0.7f * fa;
+        const float next = a + std::clamp(secant, std::max(0.7f * fa, Tolerance), 3.0f * fa);
+        if (next > range)
+            return -1.0f;
+        const float fn = sample(next);
+        if (fn < 0.0f)
+        {
+            b = next;
+            fb = fn;
+            break;
+        }
+        prev = a;
+        fPrev = fa;
+        a = next;
+        fa = fn;
+    }
+    if (b < 0.0f)
+        return -1.0f;
+    // Bracketed: false position, Illinois variant (halve the end that stays).
+    int side = 0;
+    for (int step = 0; step < 24; ++step)
+    {
+        if (-fb < Tolerance)
+            return b;
+        if (fa < Tolerance)
+            return a;
+        const float c = (a * fb - b * fa) / (fb - fa);
+        const float fc = sample(c);
+        if (fc < 0.0f)
+        {
+            b = c;
+            fb = fc;
+            if (side == -1)
+                fa *= 0.5f;
+            side = -1;
+        }
+        else
+        {
+            a = c;
+            fa = fc;
+            if (side == 1)
+                fb *= 0.5f;
+            side = 1;
+        }
+    }
+    return std::abs(fa) < std::abs(fb) ? a : b;
+}
+} // namespace
+
 std::vector<FeatureManager::Instance> FeatureManager::generate_cell(
     const glm::ivec3 &key, float cellSize, const std::vector<Ref<JarTerrainFeature>> &features,
     const std::vector<int> &featureBiomes, const Ref<JarBiomeMap> &biomes, const Ref<JarSignedDistanceField> &sdf,
@@ -478,25 +547,15 @@ std::vector<FeatureManager::Instance> FeatureManager::generate_cell(
             const float spread = feature.distribution(onPlane, up) * biome_weight(onPlane);
             if (keep >= spread)
                 continue;
-            glm::vec3 p = onPlane + up * (side * 0.5f);
-            float d = sdf->distance(p);
+            const glm::vec3 top = onPlane + up * (side * 0.5f);
+            float d = sdf->distance(top);
             if (d < 0.0f)
                 continue; // surface above the sampled square: not this cell's
-            float travelled = 0.0f;
-            bool hit = false;
-            for (int step = 0; step < 128 && travelled <= side; ++step)
-            {
-                if (d < 0.02f)
-                {
-                    hit = true;
-                    break;
-                }
-                const float advance = std::max(d * 0.7f, 0.02f); // noise SDFs overestimate a little
-                p -= up * advance;
-                travelled += advance;
-                d = sdf->distance(p);
-            }
-            if (!hit || glm::any(glm::lessThan(p, lo)) || glm::any(glm::greaterThanEqual(p, hi)))
+            const float t = find_surface_below(*sdf.ptr(), top, up, d, side);
+            if (t < 0.0f)
+                continue;
+            const glm::vec3 p = top - up * t;
+            if (glm::any(glm::lessThan(p, lo)) || glm::any(glm::greaterThanEqual(p, hi)))
                 continue;
             const glm::vec3 normal = sdf->normal(p);
             const glm::vec3 localUp = upField.up(p);

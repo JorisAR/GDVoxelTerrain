@@ -10,6 +10,7 @@ func _ready() -> void:
 	_test_modifiers()
 	_test_mesh_sdfs()
 	_test_eroded_terrain()
+	_test_eroded_planet()
 	_test_craters()
 	print("SDF tests: %s" % ("ALL PASSED" if _failures == 0 else "%d FAILED" % _failures))
 	get_tree().quit(1 if _failures > 0 else 0)
@@ -188,6 +189,39 @@ func _test_eroded_terrain() -> void:
 		_check("eroded %s continuous" % label, max_jump < 0.02, "largest jump over 1 mm: %.4f" % max_jump)
 		_check("eroded %s distance-like" % label, slopes[100] < 1.6 and slopes[190] < 2.9,
 			"gradient length median %.2f, 95%% %.2f" % [slopes[100], slopes[190]])
+
+## The demo planet's eroded terrain: no step where the tangent frame of the
+## slope estimate used to switch axes (|up.y| = 0.9, a ~2 m cliff along two
+## circles of latitude), and the gradient override agrees with differences of
+## the distance itself.
+func _test_eroded_planet() -> void:
+	var sdf: JarTerrainSdf = load("res://demo/planet/planet_terrain.tres")
+	var worst := {0.9: 0.0, 0.8: 0.0}
+	for y0: float in worst:
+		for i in 200:
+			var a := TAU * i / 200.0
+			var hs: Array[float] = []
+			for k in [-3, -1, 1, 3]:
+				var y: float = y0 + k * 1e-5
+				var r := sqrt(1.0 - y * y)
+				hs.append(sdf.sample_height(Vector3(cos(a) * r, y, sin(a) * r) * sdf.radius))
+			# Middle difference minus the mean of the outer ones: a step stands out.
+			worst[y0] = maxf(worst[y0], absf((hs[2] - hs[1]) - 0.5 * ((hs[1] - hs[0]) + (hs[3] - hs[2]))))
+	_check("eroded planet no step at the frame switch", worst[0.9] < 0.3, "%.3f m (elsewhere %.3f m)" % [worst[0.9], worst[0.8]])
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 5
+	var angles: Array[float] = []
+	for i in 300:
+		var up := Vector3(rng.randf_range(-1, 1), rng.randf_range(-1, 1), rng.randf_range(-1, 1)).normalized()
+		var p := up * (sdf.radius + sdf.sample_height(up * sdf.radius) + rng.randf_range(-2.0, 2.0))
+		var e := 0.02
+		var numeric := Vector3(sdf.sample(p + Vector3(e, 0, 0)) - sdf.sample(p - Vector3(e, 0, 0)),
+			sdf.sample(p + Vector3(0, e, 0)) - sdf.sample(p - Vector3(0, e, 0)),
+			sdf.sample(p + Vector3(0, 0, e)) - sdf.sample(p - Vector3(0, 0, e)))
+		angles.append(rad_to_deg(sdf.sample_normal(p).angle_to(numeric)))
+	angles.sort()
+	_check("eroded planet gradient matches differences", angles[150] < 1.0 and angles[285] < 3.0,
+		"angle median %.2f, 95%% %.2f degrees" % [angles[150], angles[285]])
 
 ## Craters on flat ground: bowls lower it, rims raise it a little, the change
 ## stays within the crater size, and the field stays continuous.
