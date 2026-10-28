@@ -1,0 +1,75 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="JarVoxelDebris" inherits="Node" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
+	<brief_description>
+		Makes terrain that edits cut loose fall, and merges it back where it comes to rest.
+	</brief_description>
+	<description>
+		Add it as a child of a [JarVoxelVolume]. After every edit, solid pieces of terrain no longer connected to the rest (at most [member max_size] voxels across) are cut out of the volume and become [JarVoxelDebrisBody] rigid bodies. They fall with the volume's gravity ([Area3D] gravity on planets) and collide with the terrain, characters and each other. A piece resting on the volume for [member merge_delay] seconds is merged back into it where it lies, with its materials, unless [member merge] is off.
+		Detection runs on the volume's build thread after each edit and searches the edit's surroundings up to [member max_size] voxels away: a larger piece reaches past that and stays where it is. Pieces smaller than a few voxels are removed instead of falling.
+		The pieces are shown as the terrain they came from (same material and shading, textures fixed to the piece). For networked games, turn [member merge] off and let the authority call [method merge_debris] when [signal debris_settled] fires.
+		Nothing happens in the editor. Without this node the volume runs no debris code at all.
+	</description>
+	<tutorials>
+	</tutorials>
+	<methods>
+		<method name="get_bodies" qualifiers="const">
+			<return type="JarVoxelDebrisBody[]" />
+			<description>
+				The pieces currently falling or resting, oldest first.
+			</description>
+		</method>
+		<method name="merge_debris">
+			<return type="void" />
+			<param index="0" name="body" type="JarVoxelDebrisBody" />
+			<description>
+				Puts [param body] back into the volume where it lies now (also when [member merge] is off). The body stops moving and is freed once the terrain shows it ([signal debris_merged]).
+			</description>
+		</method>
+	</methods>
+	<members>
+		<member name="collision_layer" type="int" setter="set_collision_layer" getter="get_collision_layer" default="0">
+			Physics layers of the pieces. 0 uses the volume's [member JarVoxelVolume.collision_layer]. Gravity areas (an [Area3D] with point gravity on a planet) only act on bodies in the layers their mask watches, so include one of those.
+		</member>
+		<member name="collision_mask" type="int" setter="set_collision_mask" getter="get_collision_mask" default="0">
+			Physics layers the pieces collide with. 0 uses the volume's layer and mask (so they land on the terrain).
+		</member>
+		<member name="density" type="float" setter="set_density" getter="get_density" default="2000.0">
+			Mass of the pieces per cubic meter, in kg (rock is about 2500, soil about 1500).
+		</member>
+		<member name="enabled" type="bool" setter="set_enabled" getter="get_enabled" default="true">
+			Whether edits make pieces fall. Pieces already falling are not affected.
+		</member>
+		<member name="max_bodies" type="int" setter="set_max_bodies" getter="get_max_bodies" default="16">
+			Most pieces at once; beyond this the oldest is merged back (or removed, with [member merge] off).
+		</member>
+		<member name="max_size" type="int" setter="set_max_size" getter="get_max_size" default="24">
+			Largest piece that falls, in voxels across (on every axis). Larger loose pieces stay where they are. Also how far around each edit is searched: larger values cost more time per edit on the build thread.
+		</member>
+		<member name="merge" type="bool" setter="set_merge" getter="get_merge" default="true">
+			Merge pieces back into the volume once they rest on it. Off: they stay rigid bodies (see [member max_bodies]).
+		</member>
+		<member name="merge_delay" type="float" setter="set_merge_delay" getter="get_merge_delay" default="0.5">
+			Seconds a piece must rest before it merges (and before [signal debris_settled]).
+		</member>
+	</members>
+	<signals>
+		<signal name="debris_detached">
+			<param index="0" name="body" type="JarVoxelDebrisBody" />
+			<description>
+				A piece broke off and starts falling.
+			</description>
+		</signal>
+		<signal name="debris_merged">
+			<param index="0" name="body" type="JarVoxelDebrisBody" />
+			<description>
+				A piece is part of the terrain again; [param body] is freed right after.
+			</description>
+		</signal>
+		<signal name="debris_settled">
+			<param index="0" name="body" type="JarVoxelDebrisBody" />
+			<description>
+				A piece came to rest (for [member merge_delay] seconds).
+			</description>
+		</signal>
+	</signals>
+</class>

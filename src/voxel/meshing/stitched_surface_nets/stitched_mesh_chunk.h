@@ -3,6 +3,7 @@
 
 #include "voxel_octree_node.h"
 #include <glm/glm.hpp>
+#include <memory>
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
@@ -35,6 +36,12 @@ class StitchedMeshChunk
     bool should_have_boundary_quad(const std::vector<int> &neighbours, const bool on_ring) const;
 
     StitchedMeshChunk(const JarVoxelVolume &terrain, const VoxelOctreeNode &chunk);
+    // A tile of a voxel block, laid out like a chunk: cells firstCell + 1 ..
+    // firstCell + 16 are its own, the outer layer is shared with the
+    // neighbouring tiles. No LOD seams. The samples live in `storage`.
+    StitchedMeshChunk(const VoxelBlock &block, const glm::ivec3 &firstCell,
+                      std::vector<std::unique_ptr<VoxelOctreeNode>> &storage);
+    static constexpr int TileCells = 16; // own cells per tile and axis
 
     bool is_edge_chunk() const
     {

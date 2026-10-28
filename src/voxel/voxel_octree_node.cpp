@@ -397,7 +397,9 @@ void VoxelOctreeNode::modify_sdf_in_bounds(JarVoxelVolume &terrain, const Modify
     // Paint the edit's material as a one-hot weight vector. Weights blend at
     // material boundaries via the parent-average and the mesher's edge
     // interpolation; all-zero means "unpainted" (procedural shader coloring).
-    if (settings.material >= 0 && std::abs(new_value - old_value) > 0.01f)
+    if (settings.materials && std::abs(new_value - old_value) > 0.01f)
+        _materials = settings.materials->at(settings.to_sdf(_center));
+    else if (settings.material >= 0 && std::abs(new_value - old_value) > 0.01f)
     {
         _materials = MaterialWeights::one_hot(settings.material);
     }
@@ -564,4 +566,33 @@ void VoxelOctreeNode::get_voxel_leaves_in_bounds_excluding_bounds(const JarVoxel
         child.get_voxel_leaves_in_bounds_excluding_bounds(terrain, acceptance_bounds, rejection_bounds, LOD, result);
 }
 
-
+void VoxelOctreeNode::sample_into(const JarVoxelVolume &terrain, VoxelBlock &block)
+{
+    const float half = 0.5f * block.spacing;
+    const Bounds bounds = get_bounds(terrain.get_voxel_size());
+    const Bounds reach(block.origin - glm::vec3(half),
+                       block.origin + glm::vec3(block.size) * block.spacing - glm::vec3(half));
+    if (!bounds.intersects(reach))
+        return;
+    if (!is_leaf())
+    {
+        for (auto &child : *_children)
+            child.sample_into(terrain, block);
+        return;
+    }
+    // A leaf: the cells whose centers it holds take its sample.
+    const glm::vec3 lo = (bounds.min - block.origin) / block.spacing;
+    const glm::vec3 hi = (bounds.max - block.origin) / block.spacing;
+    const glm::ivec3 first = glm::max(glm::ivec3(glm::ceil(lo - 1e-3f)), glm::ivec3(0));
+    const glm::ivec3 last = glm::min(glm::ivec3(glm::floor(hi - 1e-3f)), block.size - 1);
+    const float value = get_value();
+    for (int z = first.z; z <= last.z; ++z)
+        for (int y = first.y; y <= last.y; ++y)
+            for (int x = first.x; x <= last.x; ++x)
+            {
+                const int64_t i = block.index(glm::ivec3(x, y, z));
+                block.values[i] = value;
+                block.materials[i] = _materials;
+                block.normals[i] = _normal;
+            }
+}

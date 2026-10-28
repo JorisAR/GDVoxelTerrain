@@ -82,6 +82,10 @@ func _unhandled_input(event: InputEvent) -> void:
 		_features_button.button_pressed = not _features_button.button_pressed
 	elif event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_H:
 		_details_button.button_pressed = not _details_button.button_pressed
+	elif event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_J:
+		# Falling terrain on / off (JarVoxelDebris nodes under the volumes).
+		for debris: JarVoxelDebris in _debris_nodes():
+			debris.enabled = not debris.enabled
 	elif event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_M:
 		for volume: JarVoxelVolume in _volumes():
 			volume.meshing_algorithm = (1 - volume.meshing_algorithm) as JarVoxelVolume.MeshingAlgorithm
@@ -158,6 +162,16 @@ func _follow_frame() -> void:
 	if frame:
 		_frame_transform = frame.global_transform
 
+var _debris: Array[Node] = []
+var _debris_searched := false
+
+## The scene's JarVoxelDebris nodes (falling terrain), found once.
+func _debris_nodes() -> Array[Node]:
+	if not _debris_searched:
+		_debris_searched = true
+		_debris = get_tree().root.find_children("*", "JarVoxelDebris", true, false)
+	return _debris
+
 func _volumes() -> Array[Node]:
 	return get_tree().root.find_children("*", "JarVoxelVolume", true, false)
 
@@ -206,5 +220,7 @@ func _update_hud() -> void:
 	var volumes := _volumes()
 	var mesher: String = ["surface nets", "dual contouring"][volumes[0].meshing_algorithm] if volumes else ""
 	var brush: String = editor.describe() if editor and editor.has_method("describe") else ""
-	hud.text = "%d fps   %s   |   %s   |   %s (M)\nLMB dig  RMB add  Q brush  scroll size  E smooth  1-8 material (0 auto)  P paint  R preview  Tab fly  G trees  H grass" % [
-		Engine.get_frames_per_second(), mode, brush, mesher]
+	var debris := _debris_nodes()
+	var falling: String = ("   |   falling terrain %s (J)" % ("on" if debris[0].enabled else "off")) if debris else ""
+	hud.text = "%d fps   %s   |   %s   |   %s (M)%s\nLMB dig  RMB add  Q brush  scroll size  E smooth  1-8 material (0 auto)  P paint  R preview  Tab fly  G trees  H grass  J falling terrain" % [
+		Engine.get_frames_per_second(), mode, brush, mesher, falling]

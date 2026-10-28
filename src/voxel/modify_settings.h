@@ -2,6 +2,8 @@
 #define MODIFY_SETTINGS_H
 
 #include "bounds.h"
+#include "material_weights.h"
+#include <memory>
 #include "sdf_operations.h"
 #include "signed_distance_field.h"
 #include <godot_cpp/variant/transform3d.hpp>
@@ -14,6 +16,14 @@ inline glm::mat4 to_glm(const Transform3D &t)
                      glm::vec4(b.rows[0].z, b.rows[1].z, b.rows[2].z, 0.0f),
                      glm::vec4(t.origin.x, t.origin.y, t.origin.z, 1.0f));
 }
+
+// Per-voxel materials of an edit (e.g. a copied piece of terrain): asked for
+// each node the edit changes, at its position in the edit SDF's space.
+struct EditMaterials
+{
+    virtual ~EditMaterials() = default;
+    virtual MaterialWeights at(const glm::vec3 &sdfPoint) const = 0;
+};
 
 // One queued edit, fully resolved into the volume's local space.
 struct ModifySettings
@@ -31,6 +41,10 @@ struct ModifySettings
     int material = 0;
     // Paint only: change materials inside the SDF, keep the shape.
     bool paintOnly = false;
+    // Per-voxel materials instead of `material` (null: none).
+    std::shared_ptr<const EditMaterials> materials;
+
+    glm::vec3 to_sdf(const glm::vec3 &volumePoint) const { return glm::vec3(toSdf * glm::vec4(volumePoint, 1.0f)); }
 
     float sample(const glm::vec3 &volumePoint) const
     {

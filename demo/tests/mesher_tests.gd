@@ -43,8 +43,51 @@ func _ready() -> void:
 	_check("dc box corner vertex", corner_err < 0.02, "error %.3f" % corner_err)
 	_check("dc no spikes above apex", _highest_vertex_near(Vector3(0.3, 0, 0.3), 3.0) < apex + 0.02)
 
+	# Region meshes (voxel blocks through the chunk mesher, in tiles): a ball
+	# floating above the ground, spanning several tiles, meshes closed.
+	var ball := JarSphereSdf.new()
+	ball.radius = 9.6
+	var ball_center := Vector3(20.3, ground + 40.0, 0.7)
+	camera.position = ball_center + Vector3(0, 12, 0)
+	volume.force_update_lod()
+	volume.edit(ball, JarVoxelVolume.SDF_OPERATION_UNION, Transform3D(Basis(), ball_center))
+	await _settle()
+	var region := volume.get_region_mesh(AABB(ball_center - Vector3.ONE * 11.0, Vector3.ONE * 22.0))
+	_check("region mesh made", region != null and region.get_surface_count() == 1)
+	if region:
+		var r := _closed_area(region)
+		var expected := 4.0 * PI * ball.radius * ball.radius
+		_check("region mesh closed", r.open == 0, "%d open edges" % r.open)
+		_check("region mesh area", absf(r.area - expected) < 0.05 * expected, "%.0f of %.0f m2" % [r.area, expected])
+
 	print("Mesher tests: %s" % ("ALL PASSED" if _failures == 0 else "%d FAILED" % _failures))
 	get_tree().quit(1 if _failures > 0 else 0)
+
+## Open edges (welded at 1 mm) and total area of a mesh.
+func _closed_area(mesh: Mesh) -> Dictionary:
+	var arrays := mesh.surface_get_arrays(0)
+	var verts: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
+	var indices: PackedInt32Array = arrays[Mesh.ARRAY_INDEX]
+	var key := func(v: Vector3) -> Vector3i: return Vector3i((v * 1000.0).round())
+	var edges := {}
+	var area := 0.0
+	for t in range(0, indices.size(), 3):
+		var a := verts[indices[t]]
+		var b := verts[indices[t + 1]]
+		var c := verts[indices[t + 2]]
+		area += (b - a).cross(c - a).length() * 0.5
+		for e in [[a, b], [b, c], [c, a]]:
+			var ka: Vector3i = key.call(e[0])
+			var kb: Vector3i = key.call(e[1])
+			if ka == kb:
+				continue
+			var k := [ka, kb] if str(ka) < str(kb) else [kb, ka]
+			edges[k] = edges.get(k, 0) + 1
+	var open := 0
+	for k in edges:
+		if edges[k] == 1:
+			open += 1
+	return {open = open, area = area}
 
 func _check(name: String, ok: bool, detail := "") -> void:
 	if not ok:

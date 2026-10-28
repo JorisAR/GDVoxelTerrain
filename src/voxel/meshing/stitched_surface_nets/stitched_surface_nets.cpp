@@ -10,13 +10,29 @@
 #include "qef.h"
 #include <limits>
 
+MesherSettings MesherSettings::from(const JarVoxelVolume &terrain)
+{
+    MesherSettings s;
+    s.cubicVoxels = terrain.get_cubic_voxels();
+    s.dualContouring = terrain.get_meshing_algorithm() == JarVoxelVolume::MESHING_DUAL_CONTOURING;
+    s.manifold = terrain.get_manifold();
+    s.featureThreshold = terrain.get_dual_contouring_feature_threshold();
+    s.materialMode = static_cast<MaterialMode>(terrain.get_material_mode());
+    s.sdf = terrain.get_sdf_ptr();
+    return s;
+}
+
 StitchedSurfaceNets::StitchedSurfaceNets(const JarVoxelVolume &terrain, const VoxelOctreeNode &chunk)
-    : _chunk(&chunk), _cubicVoxels(terrain.get_cubic_voxels()),
-      _dualContouring(terrain.get_meshing_algorithm() == JarVoxelVolume::MESHING_DUAL_CONTOURING),
-      _manifold(terrain.get_manifold() && !terrain.get_cubic_voxels()),
-      _featureThreshold(terrain.get_dual_contouring_feature_threshold()),
-      _materialMode(static_cast<MaterialMode>(terrain.get_material_mode())), _sdf(terrain.get_sdf_ptr()),
-      _meshChunk(StitchedMeshChunk(terrain, chunk))
+    : StitchedSurfaceNets(MesherSettings::from(terrain), StitchedMeshChunk(terrain, chunk), chunk._center)
+{
+    _chunk = &chunk;
+}
+
+StitchedSurfaceNets::StitchedSurfaceNets(const MesherSettings &settings, StitchedMeshChunk &&input,
+                                         const glm::vec3 &origin)
+    : _origin(origin), _cubicVoxels(settings.cubicVoxels), _dualContouring(settings.dualContouring),
+      _manifold(settings.manifold && !settings.cubicVoxels), _featureThreshold(settings.featureThreshold),
+      _materialMode(settings.materialMode), _meshChunk(std::move(input)), _sdf(settings.sdf)
 {
     if (_manifold)
     {
@@ -37,8 +53,8 @@ glm::vec3 StitchedSurfaceNets::gradient_at(int node_id)
     if (_hasGradient[node_id])
         return _gradients[node_id];
     const VoxelOctreeNode *node = _meshChunk.nodes[node_id];
-    if (node->has_normal())
-        _gradients[node_id] = node->get_normal(); // edits store exact normals of exact distances
+    if (node->has_normal() || _sdf == nullptr)
+        _gradients[node_id] = node->has_normal() ? node->get_normal() : glm::vec3(0.0f, 1.0f, 0.0f); // edits store exact normals
     else
     {
         // The volume SDF may not be an exact distance (e.g. height minus noise
@@ -105,7 +121,7 @@ glm::vec3 StitchedSurfaceNets::place_dual_contouring_vertex(const int node_id, c
     for (int i = 0; i < 8; ++i)
         if ((cornerMask >> i) & 1)
             (_meshChunk.nodes[neighbours[i]]->has_normal() ? anyEdited : anyUntouched) = true;
-    const bool editedCell = anyEdited && anyUntouched;
+    const bool editedCell = anyEdited && anyUntouched && _sdf != nullptr;
     _lastVertexSharp = false;
     SharpPlanes planes;
     Qef clusterQefs[4]; // the samples of each normal cluster (one surface each)
@@ -288,7 +304,7 @@ void StitchedSurfaceNets::create_vertex(const int node_id, const std::vector<int
             normal = exactNormal; // exact surface normal instead of the value-difference estimate
     }
 
-    vertexPosition -= _chunk->_center;
+    vertexPosition -= _origin;
     int vertexIndex = _verts.size();
     register_edge_node(node_id, neighbours, on_ring);
 
@@ -301,6 +317,46 @@ void StitchedSurfaceNets::create_vertex(const int node_id, const std::vector<int
 }
 
 ChunkMeshData *StitchedSurfaceNets::generate_mesh_data(const JarVoxelVolume &terrain)
+{
+    Array meshData;
+    PackedFloat32Array painted;
+    if (!generate_arrays(meshData, painted))
+        return nullptr;
+    meshData[Mesh::ARRAY_CUSTOM1] = biome_weights(meshData[Mesh::ARRAY_VERTEX], terrain.get_biome_map(),
+                                                  terrain.get_up_field(), _origin);
+    ChunkMeshData *output = new ChunkMeshData(meshData, _chunk->get_lod(), _meshChunk.is_edge_chunk(),
+                                              _chunk->get_bounds(terrain.get_voxel_size()));
+    output->boundaries = _meshChunk._lodH2LBoundaries | (_meshChunk._lodL2HBoundaries << 8);
+    output->mesh_version = terrain.get_mesh_version();
+    output->painted = painted;
+    return output;
+}
+
+PackedByteArray StitchedSurfaceNets::biome_weights(const PackedVector3Array &verts, const Ref<JarBiomeMap> &biomes,
+                                                   const UpField &up, const glm::vec3 &origin)
+{
+    PackedByteArray custom1;
+    custom1.resize(verts.size() * 4);
+    uint8_t *w = custom1.ptrw();
+    for (int64_t v = 0; v < verts.size(); ++v)
+    {
+        float weights[4] = {1.0f, 0.0f, 0.0f, 0.0f};
+        if (biomes.is_valid() && biomes->biome_count() > 1)
+        {
+            const Vector3 p = verts[v];
+            const BiomeWeights b = biomes->evaluate(glm::vec3(p.x, p.y, p.z) + origin, up);
+            weights[0] = 0.0f;
+            for (int i = 0; i < b.count; ++i)
+                if (b.ids[i] < 4)
+                    weights[b.ids[i]] += b.weights[i];
+        }
+        for (int i = 0; i < 4; ++i)
+            w[4 * v + i] = uint8_t(std::clamp(weights[i], 0.0f, 1.0f) * 255.0f + 0.5f);
+    }
+    return custom1;
+}
+
+bool StitchedSurfaceNets::generate_arrays(Array &meshData, PackedFloat32Array &painted)
 {
     // One scratch buffer for all neighbour queries: allocating a vector per
     // voxel was a large share of meshing time.
@@ -318,8 +374,8 @@ ChunkMeshData *StitchedSurfaceNets::generate_mesh_data(const JarVoxelVolume &ter
         create_vertex(node_id, neighbours, false);
     }
 
-    if (_verts.size() == 0)    
-        return nullptr;    
+    if (_verts.size() == 0)
+        return false;    
 
     // if on lod boundary, add an additional pass
     for (size_t node_id = _meshChunk.innerNodeCount; node_id < _meshChunk.innerNodeCount + _meshChunk.ringNodeCount;
@@ -404,8 +460,8 @@ ChunkMeshData *StitchedSurfaceNets::generate_mesh_data(const JarVoxelVolume &ter
         }
     }
 
-    if (_indices.size() == 0)    
-        return nullptr;
+    if (_indices.size() == 0)
+        return false;
     
 
     if (_meshChunk.is_edge_chunk())
@@ -472,53 +528,16 @@ ChunkMeshData *StitchedSurfaceNets::generate_mesh_data(const JarVoxelVolume &ter
     if (_dualContouring && !_cubicVoxels)
         split_creases();
 
-    Array meshData;
     meshData.resize(Mesh::ARRAY_MAX);
-    meshData[Mesh::ARRAY_VERTEX] = _verts;
-    meshData[Mesh::ARRAY_NORMAL] = _normals;
     PackedColorArray colors;
     PackedByteArray custom0;
-    PackedFloat32Array painted;
     MaterialMeshBuilder::build(_materialMode, _verts, _normals, _indices, _vertexMaterials, colors, custom0, painted);
     meshData[Mesh::ARRAY_VERTEX] = _verts; // the builder may have split vertices
     meshData[Mesh::ARRAY_NORMAL] = _normals;
     meshData[Mesh::ARRAY_COLOR] = colors;
     meshData[Mesh::ARRAY_CUSTOM0] = custom0;
-    // Biome weights for biomes 0-3 (CUSTOM1, RGBA8): the shader picks each
-    // biome's ground materials.
-    PackedByteArray custom1;
-    custom1.resize(_verts.size() * 4);
-    {
-        const Ref<JarBiomeMap> biomes = terrain.get_biome_map();
-        const UpField up = terrain.get_up_field();
-        const glm::vec3 origin = _chunk->_center;
-        uint8_t *w = custom1.ptrw();
-        for (int64_t v = 0; v < _verts.size(); ++v)
-        {
-            float weights[4] = {1.0f, 0.0f, 0.0f, 0.0f};
-            if (biomes.is_valid() && biomes->biome_count() > 1)
-            {
-                const Vector3 p = _verts[v];
-                const BiomeWeights b = biomes->evaluate(glm::vec3(p.x, p.y, p.z) + origin, up);
-                weights[0] = 0.0f;
-                for (int i = 0; i < b.count; ++i)
-                    if (b.ids[i] < 4)
-                        weights[b.ids[i]] += b.weights[i];
-            }
-            for (int i = 0; i < 4; ++i)
-                w[4 * v + i] = uint8_t(std::clamp(weights[i], 0.0f, 1.0f) * 255.0f + 0.5f);
-        }
-    }
-    meshData[Mesh::ARRAY_CUSTOM1] = custom1;
     meshData[Mesh::ARRAY_INDEX] = _indices;
-
-    ChunkMeshData *output =
-        new ChunkMeshData(meshData, _chunk->get_lod(), _meshChunk.is_edge_chunk(), _chunk->get_bounds(terrain.get_voxel_size()));
-    output->boundaries = _meshChunk._lodH2LBoundaries | (_meshChunk._lodL2HBoundaries << 8);
-    output->mesh_version = terrain.get_mesh_version();
-    output->painted = painted;
-
-    return output;
+    return true;
 }
 
 //this function finds way too many possible nodes.
@@ -744,7 +763,7 @@ void StitchedSurfaceNets::create_component_vertices(const int node_id, const std
             if (glm::dot(exactNormal, exactNormal) > 0.5f)
                 normal = exactNormal;
         }
-        position -= _chunk->_center;
+        position -= _origin;
         _sharp.push_back(_dualContouring && _lastVertexSharp ? 1 : 0);
         _sharpPlanes.push_back(_dualContouring && _lastVertexSharp ? _lastPlanes : SharpPlanes());
         _verts.push_back({position.x, position.y, position.z});
@@ -837,7 +856,7 @@ int StitchedSurfaceNets::add_crossing_vertex(int a, int b)
     VoxelOctreeNode *nb = _meshChunk.nodes[b];
     const float va = na->get_value(), vb = nb->get_value();
     const float t = std::abs(va) / std::max(std::abs(va) + std::abs(vb), 1e-12f);
-    const glm::vec3 position = glm::mix(na->_center, nb->_center, t) - _chunk->_center;
+    const glm::vec3 position = glm::mix(na->_center, nb->_center, t) - _origin;
     glm::vec3 normal = (vb - va) * (nb->_center - na->_center);
     if (_dualContouring)
         normal = glm::mix(gradient_at(a), gradient_at(b), t);

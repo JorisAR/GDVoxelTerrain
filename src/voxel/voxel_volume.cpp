@@ -1,5 +1,6 @@
 #include "voxel_volume.h"
 #include "detail_scheduler.h"
+#include "block_mesher.h"
 #include "terrain_material_palette.h"
 #include <godot_cpp/classes/resource_loader.hpp>
 #include <godot_cpp/classes/shader_material.hpp>
@@ -155,6 +156,7 @@ void JarVoxelVolume::_bind_methods()
     ClassDB::bind_method(D_METHOD("get_up_direction_at", "global_position"), &JarVoxelVolume::get_up_direction_at);
     ClassDB::bind_method(D_METHOD("get_height_at", "global_position"), &JarVoxelVolume::get_height_at);
     ClassDB::bind_method(D_METHOD("raycast_sdf", "from", "to"), &JarVoxelVolume::raycast_sdf);
+    ClassDB::bind_method(D_METHOD("get_region_mesh", "region"), &JarVoxelVolume::get_region_mesh);
 
     //-------------------------------------------------- POPULATION --------------------------------------------------
     ADD_GROUP("Editor Preview", "editor_preview_");
@@ -275,6 +277,13 @@ void JarVoxelVolume::build_worker()
             // Settle averaged inner-node values now, so the mesh threads that run
             // next never lazily write to shared nodes.
             _voxelRoot->update_if_dirty();
+            if (!edits.empty())
+            {
+                std::shared_lock<std::shared_mutex> lock(_extensionsMutex);
+                for (const ModifySettings &settings : edits)
+                    for (VolumeExtension *extension : _extensions)
+                        extension->edit_applied(*this, settings);
+            }
         }
         edits.clear();
         _isBuilding = false;
@@ -377,7 +386,7 @@ void JarVoxelVolume::process_pool()
 
 void JarVoxelVolume::queue_edit(const Ref<JarSignedDistanceField> &sdf, SDF::Operation operation,
                                 const Transform3D &transform, int material, float smoothness, const Bounds &limit,
-                                bool paintOnly)
+                                bool paintOnly, std::shared_ptr<const EditMaterials> materials, bool keepMaterials)
 {
     if (sdf.is_null())
     {
@@ -399,7 +408,8 @@ void JarVoxelVolume::queue_edit(const Ref<JarSignedDistanceField> &sdf, SDF::Ope
     settings.smoothness = smoothness;
     // Ground an edit makes (dug or added) without a material of its own gets the
     // volume's edit material: it shows as such, and details do not grow on it.
-    settings.material = material < 0 && !paintOnly ? _editMaterial : material;
+    settings.material = materials || keepMaterials ? -1 : (material < 0 && !paintOnly ? _editMaterial : material);
+    settings.materials = std::move(materials);
     settings.paintOnly = paintOnly;
 
     // Region the edit can change: the SDF's solid part (plus room for smooth
@@ -462,6 +472,33 @@ void JarVoxelVolume::sphere_edit(const Vector3 &position, const float radius, bo
     const auto operation =
         operation_union ? SDF::Operation::SDF_OPERATION_UNION : SDF::Operation::SDF_OPERATION_SUBTRACTION;
     queue_edit(sdf, operation, Transform3D(Basis(), position), material, 0.0f);
+}
+
+void JarVoxelVolume::edit_with(const Ref<JarSignedDistanceField> &sdf, SDF::Operation operation,
+                               const Transform3D &transform, std::shared_ptr<const EditMaterials> materials,
+                               bool keepMaterials)
+{
+    queue_edit(sdf, operation, transform, -1, 0.0f, Bounds::infinite(), false, std::move(materials), keepMaterials);
+}
+
+void JarVoxelVolume::add_extension(VolumeExtension *extension)
+{
+    std::unique_lock<std::shared_mutex> lock(_extensionsMutex);
+    if (std::find(_extensions.begin(), _extensions.end(), extension) == _extensions.end())
+        _extensions.push_back(extension);
+}
+
+void JarVoxelVolume::remove_extension(VolumeExtension *extension)
+{
+    std::unique_lock<std::shared_mutex> lock(_extensionsMutex);
+    _extensions.erase(std::remove(_extensions.begin(), _extensions.end(), extension), _extensions.end());
+}
+
+void JarVoxelVolume::notify_meshes_committed()
+{
+    std::shared_lock<std::shared_mutex> lock(_extensionsMutex);
+    for (VolumeExtension *extension : _extensions)
+        extension->meshes_committed(*this);
 }
 
 void JarVoxelVolume::paint(const Ref<JarSignedDistanceField> &sdf, const Transform3D &transform, const int material)
@@ -860,6 +897,11 @@ void JarVoxelVolume::process()
         _featureManager->process(); // independent of the octree: runs during builds too
     if (_detailScheduler)
         _detailScheduler->process(); // likewise (only touches chunks)
+    {
+        std::shared_lock<std::shared_mutex> lock(_extensionsMutex);
+        for (VolumeExtension *extension : _extensions)
+            extension->process(*this, get_process_delta_time());
+    }
     if (_isBuilding || !_meshComputeScheduler)
         return; // building, or initialize() failed (missing chunk scene / sdf)
     process_pool(); // reclaim chunks the last build released, ready for reuse
@@ -1015,6 +1057,52 @@ void JarVoxelVolume::process_modify_queue()
 //         //delete and check if parents/children should be deleted.
 //     }
 // }
+
+Ref<ArrayMesh> JarVoxelVolume::get_region_mesh(const AABB &region) const
+{
+    if (!_voxelRoot || _isBuilding)
+        return Ref<ArrayMesh>();
+    VoxelBlock block;
+    sample_region(Bounds(region), block);
+    Array meshData;
+    PackedFloat32Array painted;
+    if (!BlockMesher::mesh(block, MesherSettings::from(*this), meshData, painted))
+        return Ref<ArrayMesh>();
+    meshData[Mesh::ARRAY_CUSTOM1] = StitchedSurfaceNets::biome_weights(meshData[Mesh::ARRAY_VERTEX], _biomeMap,
+                                                                       get_up_field(), block.origin);
+    // Vertices relative to the block -> volume space.
+    PackedVector3Array vertices = meshData[Mesh::ARRAY_VERTEX];
+    const Vector3 origin(block.origin.x, block.origin.y, block.origin.z);
+    Vector3 *v = vertices.ptrw();
+    for (int64_t i = 0; i < vertices.size(); ++i)
+        v[i] += origin;
+    meshData[Mesh::ARRAY_VERTEX] = vertices;
+    Ref<ArrayMesh> mesh;
+    mesh.instantiate();
+    mesh->add_surface_from_arrays(Mesh::PRIMITIVE_TRIANGLES, meshData, Array(), Dictionary(),
+                                  (Mesh::ARRAY_CUSTOM_RGBA8_UNORM << Mesh::ARRAY_FORMAT_CUSTOM0_SHIFT) |
+                                      (Mesh::ARRAY_CUSTOM_RGBA8_UNORM << Mesh::ARRAY_FORMAT_CUSTOM1_SHIFT));
+    return mesh;
+}
+
+void JarVoxelVolume::sample_region(const Bounds &region, VoxelBlock &block) const
+{
+    // Finest voxels are centered at (k + 0.5) * voxel size.
+    const glm::ivec3 first = glm::ivec3(glm::floor(region.min / _voxelSize - 0.5f));
+    const glm::ivec3 last = glm::ivec3(glm::ceil(region.max / _voxelSize - 0.5f));
+    block.spacing = _voxelSize;
+    block.origin = (glm::vec3(first) + 0.5f) * _voxelSize;
+    block.resize(last - first + 1);
+    if (!_voxelRoot)
+        return;
+    _voxelRoot->sample_into(*this, block);
+    const JarSignedDistanceField *sdf = get_sdf_ptr();
+    if (sdf == nullptr)
+        return;
+    for (int64_t i = 0; i < block.cell_count(); ++i)
+        if (block.normals[i] == 0u && std::abs(block.values[i]) < 2.0f * _voxelSize)
+            block.normals[i] = Octahedral::encode(sdf->normal(block.position(block.cell(i))));
+}
 
 void JarVoxelVolume::get_voxel_leaves_in_bounds(const Bounds &bounds, std::vector<VoxelOctreeNode *> &nodes) const
 {

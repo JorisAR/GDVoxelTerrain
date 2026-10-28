@@ -56,6 +56,13 @@
 				Returns the height of [param global_position] above [member sea_level], measured along the volume's up direction (see [member up_mode]).
 			</description>
 		</method>
+		<method name="get_region_mesh" qualifiers="const">
+			<return type="ArrayMesh" />
+			<param index="0" name="region" type="AABB" />
+			<description>
+				Meshes the terrain inside [param region] (in the volume's local space) at full detail, as one surface with vertices in the volume's local space, e.g. to bake or export part of the terrain. Uses the volume's meshing settings. Returns [code]null[/code] if the region holds no surface or the volume is building.
+			</description>
+		</method>
 		<method name="get_runtime_material" qualifiers="const">
 			<return type="Material" />
 			<description>

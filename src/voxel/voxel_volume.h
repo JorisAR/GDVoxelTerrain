@@ -13,6 +13,8 @@
 #include "up_field.h"
 #include "voxel_lod.h"
 #include "voxel_octree_node.h"
+#include "volume_extension.h"
+#include <shared_mutex>
 #include <atomic>
 #include <condition_variable>
 #include <godot_cpp/classes/engine.hpp>
@@ -160,7 +162,14 @@ class JarVoxelVolume : public Node3D
     // Resolves an edit into volume space and queues it. `limit` (volume-local)
     // further restricts the affected region, e.g. modify()'s radius.
     void queue_edit(const Ref<JarSignedDistanceField> &sdf, SDF::Operation operation, const Transform3D &transform,
-                    int material, float smoothness, const Bounds &limit = Bounds::infinite(), bool paintOnly = false);
+                    int material, float smoothness, const Bounds &limit = Bounds::infinite(), bool paintOnly = false,
+                    std::shared_ptr<const EditMaterials> materials = nullptr, bool keepMaterials = false);
+
+    // Extensions (see VolumeExtension). Hooks run under a shared lock (the
+    // build worker's edit_applied alongside the main thread's), adding and
+    // removing under an exclusive one: removal waits until no hook runs.
+    std::vector<VolumeExtension *> _extensions;
+    mutable std::shared_mutex _extensionsMutex;
 
     // void process_delete_chunk_queue();
 
@@ -333,6 +342,24 @@ class JarVoxelVolume : public Node3D
     void set_lod_automatic_update_distance(float value);
 
     void get_voxel_leaves_in_bounds(const Bounds &bounds, std::vector<VoxelOctreeNode *> &nodes) const;
+    // Copies the voxels in `region` (volume space) into `block`, on the finest
+    // voxel grid. Build worker only (VolumeExtension::edit_applied): the octree
+    // must not change meanwhile. Untouched cells near the surface get the
+    // volume SDF's normal.
+    void sample_region(const Bounds &region, VoxelBlock &block) const;
+    // Edits from C++ (e.g. extensions): like edit(), with per-voxel materials,
+    // or the existing materials left as they are (`keepMaterials`).
+    void edit_with(const Ref<JarSignedDistanceField> &sdf, SDF::Operation operation, const Transform3D &transform,
+                   std::shared_ptr<const EditMaterials> materials, bool keepMaterials = false);
+    // Main thread. The extension must stay alive until removed.
+    void add_extension(VolumeExtension *extension);
+    void remove_extension(VolumeExtension *extension);
+    // Main thread: tells the extensions a batch of meshes is on screen.
+    void notify_meshes_committed();
+    // The terrain inside `region` (volume space) meshed as one surface, with
+    // vertices in volume space; null if it holds no surface or a build is
+    // running (main thread).
+    Ref<ArrayMesh> get_region_mesh(const AABB &region) const;
     void get_voxel_leaves_in_bounds(const Bounds &bounds, int lod, std::vector<VoxelOctreeNode *> &nodes) const;
     void get_voxel_leaves_in_bounds_excluding_bounds(const Bounds &bounds, const Bounds &excludeBounds, int lod,
                                                      std::vector<VoxelOctreeNode *> &nodes) const;

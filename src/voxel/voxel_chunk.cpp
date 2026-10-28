@@ -319,16 +319,20 @@ void JarVoxelChunk::hide_multi_mesh_instance(MultiMeshInstance3D *instance)
 // chunk's origin in the volume and the volume's up field.
 void JarVoxelChunk::apply_rendering(const JarVoxelVolume &terrain)
 {
+    apply_terrain_rendering(mesh_instance, terrain, bounds.get_center());
+}
+
+void JarVoxelChunk::apply_terrain_rendering(GeometryInstance3D *instance, const JarVoxelVolume &terrain,
+                                            const glm::vec3 &origin)
+{
     const Ref<Material> volumeMaterial = terrain.get_runtime_material();
-    if (volumeMaterial.is_valid() && mesh_instance->get_material_override() != volumeMaterial)
-        mesh_instance->set_material_override(volumeMaterial);
+    if (volumeMaterial.is_valid() && instance->get_material_override() != volumeMaterial)
+        instance->set_material_override(volumeMaterial);
     const UpField &up = terrain.get_up_field();
-    const glm::vec3 origin = bounds.get_center();
-    mesh_instance->set_instance_shader_parameter("jar_chunk_origin", Vector3(origin.x, origin.y, origin.z));
-    mesh_instance->set_instance_shader_parameter("jar_up_center",
-                                                 Vector4(up.center.x, up.center.y, up.center.z, up.sea_level));
-    mesh_instance->set_instance_shader_parameter("jar_up_axis",
-                                                 Vector4(up.axis.x, up.axis.y, up.axis.z, float(up.mode)));
+    instance->set_instance_shader_parameter("jar_chunk_origin", Vector3(origin.x, origin.y, origin.z));
+    instance->set_instance_shader_parameter("jar_up_center",
+                                            Vector4(up.center.x, up.center.y, up.center.z, up.sea_level));
+    instance->set_instance_shader_parameter("jar_up_axis", Vector4(up.axis.x, up.axis.y, up.axis.z, float(up.mode)));
 }
 
 JarVoxelVolume *JarVoxelChunk::get_volume() const

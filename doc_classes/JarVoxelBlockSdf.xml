@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="JarVoxelBlockSdf" inherits="JarSignedDistanceField" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
+	<brief_description>
+		The distance field of a block of voxels copied from a volume.
+	</brief_description>
+	<description>
+		Used internally (e.g. by [JarVoxelDebris]) to cut a piece of terrain out of a volume or put it back somewhere: edits with it copy the voxels, and can carry their materials along. It cannot be set up from scripts yet.
+	</description>
+	<tutorials>
+	</tutorials>
+</class>

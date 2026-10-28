@@ -54,6 +54,7 @@ void MeshComputeScheduler::process(JarVoxelVolume &terrain)
             node->update_chunk(terrain, chunkMeshData);
         _uploaded.clear();
         terrain.process_pool(); // the replaced chunks go in the same frame
+        terrain.notify_meshes_committed();
     }
 }
 

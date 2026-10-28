@@ -21,7 +21,25 @@
 using namespace godot;
 
 class JarVoxelVolume;
+class JarBiomeMap;
+struct UpField;
 
+// How to mesh: what StitchedSurfaceNets needs besides the samples. From a
+// volume's settings (for its chunks) or chosen by the caller (voxel blocks).
+struct MesherSettings
+{
+    bool cubicVoxels = false;
+    bool dualContouring = false;
+    bool manifold = false;
+    float featureThreshold = 0.1f;
+    MaterialMode materialMode = MaterialMode(0);
+    // Normals of samples that carry none; may be null when they all do.
+    const JarSignedDistanceField *sdf = nullptr;
+    static MesherSettings from(const JarVoxelVolume &terrain);
+};
+
+// Meshes a grid of samples: an octree chunk (with stitched LOD seams) or a
+// tile of a voxel block (StitchedMeshChunk's two constructors).
 class StitchedSurfaceNets
 {
   private:
@@ -35,7 +53,8 @@ class StitchedSurfaceNets
     std::unordered_map<glm::ivec3, int> _innerEdgeNodes;
     std::unordered_map<glm::ivec3, int> _ringEdgeNodes;
 
-    const VoxelOctreeNode *_chunk;
+    const VoxelOctreeNode *_chunk = nullptr; // the octree chunk, if meshing one
+    const glm::vec3 _origin;                  // vertices are relative to it
     const bool _cubicVoxels;
     const bool _dualContouring;
     const bool _manifold;
@@ -99,7 +118,16 @@ class StitchedSurfaceNets
 
   public:
     StitchedSurfaceNets(const JarVoxelVolume &terrain, const VoxelOctreeNode &chunk);
+    StitchedSurfaceNets(const MesherSettings &settings, StitchedMeshChunk &&input, const glm::vec3 &origin);
+    // An octree chunk's mesh, with biome weights and chunk metadata; null if empty.
     ChunkMeshData *generate_mesh_data(const JarVoxelVolume &terrain);
+    // The mesh arrays (CUSTOM1 left empty) and painted amount per vertex;
+    // false if there is no surface. Runs once per instance.
+    bool generate_arrays(Array &meshData, PackedFloat32Array &painted);
+    // Biome weights for biomes 0-3 per vertex (CUSTOM1, RGBA8); vertices are
+    // relative to `origin` in the volume.
+    static PackedByteArray biome_weights(const PackedVector3Array &verts, const Ref<JarBiomeMap> &biomes,
+                                         const UpField &up, const glm::vec3 &origin);
 };
 
 #endif // SURFACE_NETS_H

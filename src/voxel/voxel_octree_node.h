@@ -7,6 +7,7 @@
 #include "octree_node.h"
 #include "material_weights.h"
 #include "octahedral.h"
+#include "voxel_block.h"
 #include <algorithm>
 #include <array>
 #include <atomic>
@@ -99,6 +100,19 @@ class VoxelOctreeNode : public OctreeNode<VoxelOctreeNode>
     void build(JarVoxelVolume &terrain, BuildContext *ctx = nullptr);
     bool has_normal() const { return _normal != 0; }
     glm::vec3 get_normal() const { return Octahedral::decode(_normal); }
+    uint32_t get_packed_normal() const { return _normal; }
+    // A standalone sample (not part of a tree), e.g. a voxel block's cell fed
+    // to the mesher.
+    void set_sample(float value, const MaterialWeights &materials, uint32_t normal)
+    {
+        _value = value;
+        _materials = materials;
+        _normal = normal;
+        set_flag(FlagGenerated, true);
+    }
+    // Copies this subtree's leaves into the block's cells they cover (build
+    // worker: the tree must not change meanwhile).
+    void sample_into(const JarVoxelVolume &terrain, VoxelBlock &block);
     // Recomputes averaged values of dirty inner nodes in this subtree. The build
     // worker calls it after every build/edit, so mesh threads only ever read.
     void update_if_dirty();

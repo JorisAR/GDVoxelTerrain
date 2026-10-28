@@ -159,6 +159,38 @@ StitchedMeshChunk::StitchedMeshChunk(const JarVoxelVolume &terrain, const VoxelO
     }
 }
 
+StitchedMeshChunk::StitchedMeshChunk(const VoxelBlock &block, const glm::ivec3 &firstCell,
+                                     std::vector<std::unique_ptr<VoxelOctreeNode>> &storage)
+{
+    _lodH2LBoundaries = 0;
+    _lodL2HBoundaries = 0;
+    half_leaf_size = glm::vec3(block.spacing * 0.5f);
+    const int count = ChunkRes * ChunkRes * ChunkRes;
+    storage.clear();
+    storage.reserve(count);
+    nodes.resize(count);
+    positions.resize(count);
+    vertexIndices.assign(count, -1);
+    faceDirs.assign(count, 0);
+    _leavesLut.resize(count);
+    int i = 0;
+    for (int z = 0; z < ChunkRes; ++z)
+        for (int y = 0; y < ChunkRes; ++y)
+            for (int x = 0; x < ChunkRes; ++x, ++i)
+            {
+                const glm::ivec3 cell = firstCell + glm::ivec3(x, y, z);
+                storage.push_back(std::make_unique<VoxelOctreeNode>(nullptr, block.position(cell), 0));
+                // Every sample carries a normal: the mesher needs no SDF then.
+                storage.back()->set_sample(block.value_at(cell), block.materials_at(cell),
+                                           Octahedral::encode(block.normal_at(cell)));
+                nodes[i] = storage.back().get();
+                positions[i] = glm::ivec3(x, y, z);
+                _leavesLut[x + ChunkRes * (y + ChunkRes * z)] = i + 1;
+            }
+    innerNodeCount = count;
+    ringNodeCount = 0;
+}
+
 // The quad around a grid edge is emitted by the chunk that owns the edge's
 // start node (grid positions 1..16 are this chunk's own nodes; 0 and 17 belong
 // to neighbours). Neighbours of the same LOD emit the other quads, so skipping

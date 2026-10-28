@@ -1,4 +1,5 @@
 #include "register_types.h"
+#include "voxel_block_sdf.h"
 #include "box_sdf.h"
 #include "capsule_sdf.h"
 #include "cone_sdf.h"
@@ -20,6 +21,7 @@
 #include "terrain_sdf.h"
 #include "voxel_chunk.h"
 #include "voxel_volume.h"
+#include "voxel_debris.h"
 #include "voxel_viewer.h"
 #include "job_system.h"
 using namespace godot;
@@ -47,6 +49,7 @@ void initialize_jar_voxel_terrain_module(ModuleInitializationLevel p_level)
         GDREGISTER_CLASS(JarRepeatSdf);
         GDREGISTER_CLASS(JarDisplaceSdf);
         GDREGISTER_CLASS(JarCraterSdf);
+        GDREGISTER_CLASS(JarVoxelBlockSdf);
 
         // POPULATION
         GDREGISTER_ABSTRACT_CLASS(JarTerrainPopulator);
@@ -60,6 +63,8 @@ void initialize_jar_voxel_terrain_module(ModuleInitializationLevel p_level)
         GDREGISTER_CLASS(JarVoxelVolume);
         GDREGISTER_CLASS(JarVoxelChunk);
         GDREGISTER_CLASS(JarVoxelViewer);
+        GDREGISTER_CLASS(JarVoxelDebrisBody);
+        GDREGISTER_CLASS(JarVoxelDebris);
     }
 }
 

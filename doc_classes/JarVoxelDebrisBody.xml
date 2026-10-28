@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="JarVoxelDebrisBody" inherits="RigidBody3D" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
+	<brief_description>
+		A piece of terrain that broke off a volume (see [JarVoxelDebris]).
+	</brief_description>
+	<description>
+		Created by [JarVoxelDebris]: a rigid body with the piece's mesh and a convex collision shape. It keeps the voxels it was cut out as, so it can be merged back into the terrain wherever it comes to rest.
+	</description>
+	<tutorials>
+	</tutorials>
+	<methods>
+		<method name="get_voxel_count" qualifiers="const">
+			<return type="int" />
+			<description>
+				Solid voxels in the piece.
+			</description>
+		</method>
+		<method name="is_merging" qualifiers="const">
+			<return type="bool" />
+			<description>
+				Whether the piece is being merged back into the terrain (it no longer moves).
+			</description>
+		</method>
+	</methods>
+</class>
