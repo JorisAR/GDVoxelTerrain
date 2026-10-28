@@ -28,7 +28,7 @@ func _ready() -> void:
 	add_child(scene)
 	var camera: Camera3D = scene.find_children("*", "Camera3D", true, false)[0]
 	var pos := _vec(OS.get_environment("POS"))
-	var moon: Node3D = scene.get_node_or_null("MoonOrbit/Moon")
+	var moon: Node3D = scene.get_node_or_null("Planet/MoonOrbit/Moon")
 	if OS.get_environment("ON_MOON") != "" and moon:
 		# POS / LOOK relative to the moon (it orbits, so world positions drift).
 		pos += moon.global_position

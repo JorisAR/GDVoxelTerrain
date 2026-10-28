@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="JarBodyClouds" inherits="JarBodyLayer" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
+	<brief_description>
+		A basic cloud layer above the body's sea level.
+	</brief_description>
+	<description>
+		A shell [member altitude] meters above sea level (a sphere, or a plane on a flat body), with drifting noise clouds, large-scale weather regions, self-shadowing and a dark night side.
+	</description>
+	<tutorials>
+	</tutorials>
+	<methods>
+		<method name="get_active_material">
+			<return type="ShaderMaterial" />
+			<description>
+				The material in use: [member material] or the default.
+			</description>
+		</method>
+	</methods>
+	<members>
+		<member name="altitude" type="float" setter="set_altitude" getter="get_altitude" default="320.0">
+			Height of the cloud layer above sea level, in meters.
+		</member>
+		<member name="material" type="ShaderMaterial" setter="set_material" getter="get_material">
+			The clouds' look. Empty: the default [code]clouds.gdshader[/code].
+		</member>
+	</members>
+</class>

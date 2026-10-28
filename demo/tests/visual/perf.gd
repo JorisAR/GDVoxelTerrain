@@ -29,7 +29,7 @@ func _ready() -> void:
 			l.shadow_enabled = false
 	add_child(scene)
 	var camera: Camera3D = scene.find_children("*", "Camera3D", true, false)[0]
-	var moon: Node3D = scene.get_node_or_null("MoonOrbit/Moon")
+	var moon: Node3D = scene.get_node_or_null("Planet/MoonOrbit/Moon")
 	var on_moon := OS.get_environment("ON_MOON") == "1" and moon != null
 	var place := func():
 		if on_moon:

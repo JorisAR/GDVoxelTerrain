@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="JarBodyWater" inherits="JarBodyLayer" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
+	<brief_description>
+		Water at the body's sea level.
+	</brief_description>
+	<description>
+		A sphere on round bodies, a plane on flat ones: a coarse mesh for distant water plus a dense patch that follows the camera; the shader projects both onto the exact sea level, so coasts are precise up close. Fogs the view under water.
+		The default materials ([code]water.gdshader[/code], [code]underwater.gdshader[/code]) are created at runtime; assign your own to change the look.
+	</description>
+	<tutorials>
+	</tutorials>
+	<methods>
+		<method name="get_active_material">
+			<return type="ShaderMaterial" />
+			<description>
+				The water material in use: [member material] or the default.
+			</description>
+		</method>
+		<method name="get_active_underwater_material">
+			<return type="ShaderMaterial" />
+			<description>
+				The underwater material in use.
+			</description>
+		</method>
+	</methods>
+	<members>
+		<member name="level_offset" type="float" setter="set_level_offset" getter="get_level_offset" default="0.0">
+			Raises (or lowers) the water above the body's sea level, in meters.
+		</member>
+		<member name="material" type="ShaderMaterial" setter="set_material" getter="get_material">
+			The water's look. Empty: the default [code]water.gdshader[/code].
+		</member>
+		<member name="patch_resolution" type="int" setter="set_patch_resolution" getter="get_patch_resolution" default="200">
+			Quads along each side of the dense patch.
+		</member>
+		<member name="patch_size" type="float" setter="set_patch_size" getter="get_patch_size" default="1200.0">
+			Width of the dense patch around the camera, in meters.
+		</member>
+		<member name="underwater_material" type="ShaderMaterial" setter="set_underwater_material" getter="get_underwater_material">
+			The fog under water. Empty: the default [code]underwater.gdshader[/code].
+		</member>
+	</members>
+</class>

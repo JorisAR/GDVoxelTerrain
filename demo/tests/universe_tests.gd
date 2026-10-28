@@ -1,0 +1,225 @@
+extends Node
+## Headless checks for JarVoxelUniverse: gravity from celestial bodies (sum,
+## anchor correction, sharpened up), scripted orbits and spin as functions of
+## time, the physics space's default gravity, and bodies with and without
+## volumes. Run:
+##   godot --headless --path demo res://tests/universe_tests.tscn
+
+var _failures := 0
+
+func _ready() -> void:
+	await _test_single_body()
+	await _test_two_bodies()
+	await _test_orbit_and_spin()
+	await _test_rigid_body_falls()
+	await _test_flat_body()
+	await _test_volume_body()
+	await _test_space_gravity_restored()
+	print("Universe tests: %s" % ("ALL PASSED" if _failures == 0 else "%d FAILED" % _failures))
+	get_tree().quit(1 if _failures > 0 else 0)
+
+func _check(name: String, ok: bool, detail := "") -> void:
+	if not ok:
+		_failures += 1
+	print("%s %s %s" % ["PASS" if ok else "FAIL", name, detail])
+
+func _near(a: Vector3, b: Vector3, tolerance := 1e-3) -> bool:
+	return a.distance_to(b) <= tolerance * maxf(1.0, b.length())
+
+## A body without a volume, added under `parent` at `at`.
+func _body(parent: Node, at: Vector3, radius: float, gravity: float) -> JarCelestialBody:
+	var body := JarCelestialBody.new()
+	body.radius = radius
+	body.surface_gravity = gravity
+	body.position = at
+	parent.add_child(body)
+	return body
+
+func _frames(count: int) -> void:
+	for i in count:
+		await get_tree().physics_frame
+
+## Gravity of one body: inverse square outside, linear to zero inside.
+func _test_single_body() -> void:
+	var root := Node3D.new()
+	add_child(root)
+	var body := _body(root, Vector3.ZERO, 100.0, 10.0)
+	await _frames(2)
+	_check("has bodies", JarVoxelUniverse.has_bodies())
+	_check("anchor is the only body", JarVoxelUniverse.get_anchor() == body)
+	var outside := JarVoxelUniverse.get_gravity(Vector3(0, 200, 0))
+	_check("inverse square outside", _near(outside, Vector3(0, -2.5, 0)), str(outside))
+	var inside := JarVoxelUniverse.get_gravity(Vector3(50, 0, 0))
+	_check("linear inside", _near(inside, Vector3(-5, 0, 0)), str(inside))
+	var up := JarVoxelUniverse.get_up(Vector3(0, 0, 300), Vector3.UP)
+	_check("up away from the center", _near(up, Vector3(0, 0, 1)), str(up))
+	_check("up fallback at the center", JarVoxelUniverse.get_up(Vector3.ZERO, Vector3.RIGHT) == Vector3.RIGHT)
+	_check("body gravity matches", _near(body.get_gravity_at(Vector3(0, 200, 0)), outside))
+	root.queue_free()
+	await _frames(2)
+
+## A planet and a small moon: physical strength is the plain sum minus what
+## the anchor falls with; up follows the locally dominant body.
+func _test_two_bodies() -> void:
+	var root := Node3D.new()
+	add_child(root)
+	var planet := _body(root, Vector3.ZERO, 1000.0, 10.0)
+	var moon := _body(root, Vector3(3000, 0, 0), 100.0, 3.0)
+	JarVoxelUniverse.set_anchor_override(planet)
+	await _frames(2)
+	_check("anchor override", JarVoxelUniverse.get_anchor() == planet)
+	# At the planet's center: its own pull is zero, the moon's is subtracted.
+	var at_center := JarVoxelUniverse.get_gravity(Vector3.ZERO)
+	_check("anchor center is in free fall", at_center.length() < 1e-4, str(at_center))
+	var p := Vector3(0, 1500, 0)
+	var expected := planet.get_gravity_at(p) + moon.get_gravity_at(p) - moon.get_gravity_at(planet.get_center())
+	var got := JarVoxelUniverse.get_gravity(p)
+	_check("sum with anchor correction", _near(got, expected), "%s vs %s" % [got, expected])
+	var on_moon := Vector3(3000, 100, 0)
+	_check("dominant body on the moon", JarVoxelUniverse.get_dominant_body(on_moon) == moon)
+	_check("dominant body near the planet", JarVoxelUniverse.get_dominant_body(Vector3(0, 1100, 0)) == planet)
+	# Between the bodies, the sharpened blend leans to the stronger pull more
+	# than the plain sum does.
+	var between := Vector3(2200, 600, 0)
+	var g_planet := planet.get_gravity_at(between)
+	var g_moon := moon.get_gravity_at(between) - moon.get_gravity_at(planet.get_center())
+	var plain := -(g_planet + g_moon).normalized()
+	var sharp := JarVoxelUniverse.get_up(between, Vector3.UP)
+	var dominant := -(g_planet if g_planet.length() > g_moon.length() else g_moon).normalized()
+	_check("sharpened up leans to the dominant pull", sharp.angle_to(dominant) < plain.angle_to(dominant),
+		"%.2f deg vs plain %.2f deg" % [rad_to_deg(sharp.angle_to(dominant)), rad_to_deg(plain.angle_to(dominant))])
+	# Standing on the moon (the anchor there): the planet only adds its tide,
+	# so up is radial to the moon although the planet pulls 1.1 m/s2 there.
+	JarVoxelUniverse.set_anchor_override(moon)
+	var up := JarVoxelUniverse.get_up(on_moon, Vector3.UP)
+	var raw := -(planet.get_gravity_at(on_moon) + moon.get_gravity_at(on_moon)).normalized()
+	_check("up on the moon is radial", rad_to_deg(up.angle_to(Vector3.UP)) < 0.5,
+		"%.3f deg (raw pulls %.2f deg)" % [rad_to_deg(up.angle_to(Vector3.UP)), rad_to_deg(raw.angle_to(Vector3.UP))])
+	var g := JarVoxelUniverse.get_gravity(on_moon)
+	_check("gravity on the moon matches up", rad_to_deg((-g).angle_to(up)) < 0.5, "%.3f deg" % rad_to_deg((-g).angle_to(up)))
+	JarVoxelUniverse.set_anchor_override(null)
+	_check("override cleared", JarVoxelUniverse.get_anchor_override() == null)
+	root.queue_free()
+	await _frames(2)
+
+## Orbits and spin are functions of universe time: the same tick gives the
+## same placement, however it was reached.
+func _test_orbit_and_spin() -> void:
+	var root := Node3D.new()
+	add_child(root)
+	var planet := _body(root, Vector3(10, 20, 30), 500.0, 10.0)
+	var orbit := JarBodyOrbit.new()
+	orbit.radius = 2000.0
+	orbit.period = 100.0
+	orbit.axis = Vector3(0.2, 1, 0)
+	orbit.phase = 30.0
+	planet.add_child(orbit)
+	var moon := JarCelestialBody.new()
+	moon.radius = 50.0
+	moon.spin_period = 10.0
+	moon.spin_axis = Vector3(0, 1, 0)
+	orbit.add_child(moon)
+	await _frames(2)
+	var ticks := 12345
+	JarVoxelUniverse.set_ticks(ticks)
+	await _frames(1)
+	var time := JarVoxelUniverse.get_time()
+	var expected_time := float(ticks + 1) / Engine.physics_ticks_per_second
+	_check("time from ticks", is_equal_approx(time, expected_time), "%f vs %f" % [time, expected_time])
+	var position := moon.global_position
+	var expected := planet.get_center() + orbit.offset_at(time)
+	_check("orbit position from time", _near(position, expected), "%s vs %s" % [position, expected])
+	_check("orbit radius", is_equal_approx(position.distance_to(planet.get_center()), 2000.0))
+	_check("orbit plane", absf((position - planet.get_center()).dot(orbit.axis.normalized())) < 0.05)
+	var angle := fmod(time / 10.0, 1.0) * TAU
+	var spin_x := Vector3(cos(angle), 0, -sin(angle))
+	_check("spin from time", _near(moon.global_basis.x, spin_x), "%s vs %s" % [moon.global_basis.x, spin_x])
+	var basis := moon.global_basis
+	# Run on, then go back to the same tick: identical placement.
+	await _frames(30)
+	_check("orbit moves", moon.global_position.distance_to(position) > 1.0)
+	JarVoxelUniverse.set_ticks(ticks)
+	await _frames(1)
+	_check("orbit is deterministic", moon.global_position == position, str(moon.global_position - position))
+	_check("spin is deterministic", moon.global_basis.is_equal_approx(basis))
+	# Far in the future, angles stay exact (computed in doubles, wrapped).
+	JarVoxelUniverse.set_ticks(60 * 60 * 24 * 365 * 10) # ten years at 60 Hz
+	await _frames(1)
+	var late := JarVoxelUniverse.get_time()
+	_check("orbit exact after years", _near(moon.global_position, planet.get_center() + orbit.offset_at(late)))
+	JarVoxelUniverse.set_ticks(0)
+	root.queue_free()
+	await _frames(2)
+
+## A plain RigidBody3D falls toward the anchor body with no setup.
+func _test_rigid_body_falls() -> void:
+	var root := Node3D.new()
+	add_child(root)
+	var body := _body(root, Vector3(0, -500, 0), 100.0, 10.0)
+	var ball := RigidBody3D.new()
+	var shape := CollisionShape3D.new()
+	shape.shape = SphereShape3D.new()
+	ball.add_child(shape)
+	ball.position = Vector3(160, -380, 0) # 200 m from the center: 2.5 m/s2
+	root.add_child(ball)
+	await _frames(31)
+	var v := ball.linear_velocity
+	var to_center := (body.get_center() - ball.global_position).normalized()
+	var angle := rad_to_deg(v.angle_to(to_center))
+	_check("rigid body falls to the body", absf(v.length() - 1.25) < 0.1 and angle < 2.0,
+		"speed %.3f (expect 1.25), %.2f deg off" % [v.length(), angle])
+	root.queue_free()
+	await _frames(2)
+
+## A flat body (a plane): gravity along its axis, constant with height.
+func _test_flat_body() -> void:
+	var root := Node3D.new()
+	add_child(root)
+	var ground := JarCelestialBody.new()
+	ground.shape = JarCelestialBody.SHAPE_PLANE
+	ground.surface_gravity = 9.8
+	root.add_child(ground)
+	await _frames(2)
+	var g1 := JarVoxelUniverse.get_gravity(Vector3(100, 5, -40))
+	var g2 := JarVoxelUniverse.get_gravity(Vector3(-900, 800, 3))
+	_check("flat gravity along the axis", _near(g1, Vector3(0, -9.8, 0)) and _near(g2, g1), "%s %s" % [g1, g2])
+	_check("flat up", JarVoxelUniverse.get_up(Vector3(5, 5, 5), Vector3.RIGHT) == Vector3.UP)
+	var ball := RigidBody3D.new()
+	var shape := CollisionShape3D.new()
+	shape.shape = SphereShape3D.new()
+	ball.add_child(shape)
+	root.add_child(ball)
+	await _frames(31)
+	_check("flat rigid body falls", _near(ball.linear_velocity, Vector3(0, -4.9, 0), 0.03), str(ball.linear_velocity))
+	root.queue_free()
+	await _frames(2)
+
+## A body with a terrain volume takes its frame from the volume.
+func _test_volume_body() -> void:
+	var body := JarCelestialBody.new()
+	add_child(body)
+	var world := TestWorld.flat(body, Vector3(0, 10, 0))
+	await _frames(2)
+	_check("finds its volume", body.get_terrain() == world.volume)
+	var up := body.get_up_at(Vector3(300, 50, -20))
+	_check("flat volume frame", _near(up, world.volume.global_basis.y.normalized()), str(up))
+	var g := JarVoxelUniverse.get_gravity(Vector3(0, 50, 0))
+	_check("flat volume gravity", _near(g, -up * body.surface_gravity), str(g))
+	body.queue_free()
+	await _frames(2)
+
+## With every body gone, the space falls back to the project's gravity.
+func _test_space_gravity_restored() -> void:
+	_check("no bodies left", not JarVoxelUniverse.has_bodies())
+	var ball := RigidBody3D.new()
+	var shape := CollisionShape3D.new()
+	shape.shape = SphereShape3D.new()
+	ball.add_child(shape)
+	add_child(ball)
+	ball.global_position = Vector3(300, 300, 300)
+	await _frames(31)
+	var g := float(ProjectSettings.get_setting("physics/3d/default_gravity"))
+	var expected := Vector3(ProjectSettings.get_setting("physics/3d/default_gravity_vector")) * g * 0.5
+	_check("project gravity restored", _near(ball.linear_velocity, expected, 0.03), "%s vs %s" % [ball.linear_velocity, expected])
+	_check("universe gravity is project gravity", _near(JarVoxelUniverse.get_gravity(Vector3.ZERO), expected * 2.0))
+	ball.queue_free()

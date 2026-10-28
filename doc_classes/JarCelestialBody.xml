@@ -1,0 +1,86 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="JarCelestialBody" inherits="Node3D" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
+	<brief_description>
+		A planet, moon or star: the frame and gravity everything attached to it shares.
+	</brief_description>
+	<description>
+		Put its [JarVoxelVolume] under it (or set [member volume]) and its layers ([JarBodyWater], [JarBodyAtmosphere], [JarBodyClouds]) and moons ([JarBodyOrbit]) under it. With a volume, the shape, center, up and sea level come from the volume's up field (radial or flat); without one (a distant moon), from [member shape], [member radius] and [member sea_level].
+		Gravity is [member surface_gravity] at the radius, falls off with the square of the distance outside and linearly to zero inside; on a flat body it is constant along the up axis. [JarVoxelUniverse] combines the bodies.
+	</description>
+	<tutorials>
+	</tutorials>
+	<methods>
+		<method name="get_center" qualifiers="const">
+			<return type="Vector3" />
+			<description>
+				The center in global space (on a flat body: a point at height 0).
+			</description>
+		</method>
+		<method name="get_effective_radius" qualifiers="const">
+			<return type="float" />
+			<description>
+				The radius gravity is measured from: [member radius], or the volume's sea level when 0.
+			</description>
+		</method>
+		<method name="get_effective_sea_level" qualifiers="const">
+			<return type="float" />
+			<description>
+				The sea level (a radius on round bodies, a height on flat ones).
+			</description>
+		</method>
+		<method name="get_gravity_at" qualifiers="const">
+			<return type="Vector3" />
+			<param index="0" name="global_position" type="Vector3" />
+			<description>
+				This body's own pull at [param global_position].
+			</description>
+		</method>
+		<method name="get_terrain" qualifiers="const">
+			<return type="JarVoxelVolume" />
+			<description>
+				The body's volume: [member volume], else the first [JarVoxelVolume] child.
+			</description>
+		</method>
+		<method name="get_up_at" qualifiers="const">
+			<return type="Vector3" />
+			<param index="0" name="global_position" type="Vector3" />
+			<description>
+				This body's up at [param global_position].
+			</description>
+		</method>
+	</methods>
+	<members>
+		<member name="gravity_reach" type="float" setter="set_gravity_reach" getter="get_gravity_reach" default="0.0">
+			No gravity beyond this distance from the center (faded over its last 10 percent). 0: unlimited.
+		</member>
+		<member name="radius" type="float" setter="set_radius" getter="get_radius" default="0.0">
+			Where gravity is [member surface_gravity]. 0: the volume's sea level.
+		</member>
+		<member name="sea_level" type="float" setter="set_sea_level" getter="get_sea_level" default="0.0">
+			Without a volume: the sea level above [member radius] (round) or the sea height (flat).
+		</member>
+		<member name="shape" type="int" setter="set_shape" getter="get_shape" enum="JarCelestialBody.Shape" default="0">
+			Without a volume: round or flat.
+		</member>
+		<member name="spin_axis" type="Vector3" setter="set_spin_axis" getter="get_spin_axis" default="Vector3(0, 1, 0)">
+			The axis the body spins about, in its parent's space.
+		</member>
+		<member name="spin_period" type="float" setter="set_spin_period" getter="get_spin_period" default="0.0">
+			Seconds per turn about [member spin_axis] (negative: the other way). 0: no spin.
+		</member>
+		<member name="surface_gravity" type="float" setter="set_surface_gravity" getter="get_surface_gravity" default="9.8">
+			Gravity at the radius, in m/s2.
+		</member>
+		<member name="volume" type="JarVoxelVolume" setter="set_volume" getter="get_volume">
+			The body's terrain. Empty: the first [JarVoxelVolume] child, if any.
+		</member>
+	</members>
+	<constants>
+		<constant name="SHAPE_SPHERE" value="0" enum="Shape">
+			A round body.
+		</constant>
+		<constant name="SHAPE_PLANE" value="1" enum="Shape">
+			A flat body (up is +Y of the node).
+		</constant>
+	</constants>
+</class>

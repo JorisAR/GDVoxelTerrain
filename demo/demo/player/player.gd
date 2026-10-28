@@ -1,12 +1,11 @@
 class_name DemoPlayer
 extends CharacterBody3D
 ## First-person capsule character for any volume: it stands along gravity
-## (Godot's Area3D point gravity for planets, project gravity otherwise),
-## walks, sprints and jumps, and flies with Tab.
+## (JarVoxelUniverse gravity around celestial bodies, Godot's gravity
+## otherwise), walks, sprints and jumps, and flies with Tab.
 ##
-## On moving bodies (an orbiting moon) it moves along with the body whose
-## gravity it is in: Area3D gravity sources in the "gravity_frames" group carry
-## the player with their parent node.
+## On moving bodies (an orbiting, spinning moon) it moves along with the body
+## whose gravity dominates where it is.
 ##
 ## WASD: move   Space: jump / fly up   Shift: sprint / fly down
 ## Tab: toggle flying   Ctrl + scroll: fly speed   M: toggle mesher
@@ -98,9 +97,13 @@ func _unhandled_input(event: InputEvent) -> void:
 func _physics_process(delta: float) -> void:
 	_follow_frame()
 	var gravity := get_gravity()
-	if gravity.length_squared() > 1e-6:
+	if JarVoxelUniverse.has_bodies():
+		gravity = JarVoxelUniverse.get_gravity(global_position)
+		up_direction = JarVoxelUniverse.get_up(global_position, up_direction)
+	elif gravity.length_squared() > 1e-6:
 		up_direction = -gravity.normalized()
-	_align_to(up_direction, delta)
+	# Turn slowly where gravity is weak (between bodies), not at all without it.
+	_align_to(up_direction, delta * clampf(gravity.length() / 2.0, 0.0, 1.0))
 
 	if not _spawned:
 		_spawned = _try_spawn()
@@ -145,13 +148,9 @@ func _try_spawn() -> bool:
 	return true
 
 ## Moves and turns the player with the body it stands on (or flies near): the
-## parent of the highest-priority gravity frame area overlapping the player.
+## celestial body whose gravity dominates at the player.
 func _follow_frame() -> void:
-	var best: Area3D = null
-	for area: Area3D in get_tree().get_nodes_in_group("gravity_frames"):
-		if area.overlaps_body(self) and (best == null or area.priority > best.priority):
-			best = area
-	var frame: Node3D = best.get_parent() if best else null
+	var frame: Node3D = JarVoxelUniverse.get_dominant_body(global_position)
 	if frame != _frame:
 		_frame = frame
 	elif frame:

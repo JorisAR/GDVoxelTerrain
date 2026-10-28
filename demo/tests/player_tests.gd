@@ -7,7 +7,7 @@ var _failures := 0
 var _watching := false
 
 func _ready() -> void:
-	await _test_scene("flat", "res://demo/flat.tscn", "JarVoxelVolume")
+	await _test_scene("flat", "res://demo/flat.tscn", "Ground/JarVoxelVolume")
 	await _test_scene("planet", "res://demo/planet.tscn", "Planet/JarVoxelVolume")
 	await _test_moon()
 	print("Player tests: %s" % ("ALL PASSED" if _failures == 0 else "%d FAILED" % _failures))
@@ -108,13 +108,12 @@ func _ground_distance(player: DemoPlayer, from: Vector3) -> float:
 ## (moving with it) instead of being left behind.
 func _test_moon() -> void:
 	var scene: Node = load("res://demo/planet.tscn").instantiate()
-	var moon: Node3D = scene.get_node("MoonOrbit/Moon")
+	var moon: Node3D = scene.get_node("Planet/MoonOrbit/Moon")
 	var player: DemoPlayer = scene.get_node("Player")
-	# Speed the moon up so a few seconds cover a lot of motion.
-	# Fast, but the orbit's centripetal acceleration must stay well below the
-	# moon's gravity (3 m/s²), or the player floats: ~60 m/s at 6 km.
-	scene.get_node("MoonOrbit").degrees_per_second = 0.6
-	moon.degrees_per_second = 10.0 # fast, but slow enough not to bounce off crater rims
+	# Speed the moon up so a few seconds cover a lot of motion (the player
+	# follows the moon's frame, so the orbit's speed does not throw it off).
+	scene.get_node("Planet/MoonOrbit").period = 600.0
+	moon.spin_period = 36.0 # fast, but slow enough not to bounce off crater rims
 	add_child(scene)
 	await get_tree().physics_frame
 	player.global_position = moon.global_position + Vector3.UP * 360.0

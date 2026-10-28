@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="JarBodyLayer" inherits="Node3D" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
+	<brief_description>
+		Base class of things drawn around a JarCelestialBody.
+	</brief_description>
+	<description>
+		Water, atmosphere and clouds: put them under a [JarCelestialBody] (any depth). They update every frame from the body's frame (center, up, sea level), in the editor too. Without a body they do nothing.
+	</description>
+	<tutorials>
+	</tutorials>
+	<methods>
+		<method name="find_sun">
+			<return type="DirectionalLight3D" />
+			<description>
+				The light used as the sun: [member sun], or the first [DirectionalLight3D] in the scene.
+			</description>
+		</method>
+		<method name="get_body" qualifiers="const">
+			<return type="JarCelestialBody" />
+			<description>
+				The body this layer belongs to: the nearest [JarCelestialBody] above.
+			</description>
+		</method>
+	</methods>
+	<members>
+		<member name="sun" type="DirectionalLight3D" setter="set_sun" getter="get_sun">
+			The light used as the sun. Empty: the first [DirectionalLight3D] in the scene.
+		</member>
+	</members>
+</class>

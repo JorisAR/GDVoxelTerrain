@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="JarBodyOrbit" inherits="Node3D" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
+	<brief_description>
+		Carries its children on a circular orbit around the parent body.
+	</brief_description>
+	<description>
+		Put it under a [JarCelestialBody] and the moon (another [JarCelestialBody]) under it. Its position is a function of [JarVoxelUniverse] time, so it never drifts. It is top level: the parent's spin does not turn the orbit. In the editor it shows the position at time 0.
+	</description>
+	<tutorials>
+	</tutorials>
+	<methods>
+		<method name="get_parent_body" qualifiers="const">
+			<return type="JarCelestialBody" />
+			<description>
+				The body orbited: the nearest [JarCelestialBody] above.
+			</description>
+		</method>
+		<method name="offset_at" qualifiers="const">
+			<return type="Vector3" />
+			<param index="0" name="time" type="float" />
+			<description>
+				The position relative to the parent's center at universe time [param time].
+			</description>
+		</method>
+	</methods>
+	<members>
+		<member name="axis" type="Vector3" setter="set_axis" getter="get_axis" default="Vector3(0, 1, 0)">
+			The orbit's normal, in global space.
+		</member>
+		<member name="period" type="float" setter="set_period" getter="get_period" default="600.0">
+			Seconds per orbit (negative: the other way). 0: stands still.
+		</member>
+		<member name="phase" type="float" setter="set_phase" getter="get_phase" default="0.0">
+			Degrees along the orbit at time 0, from +X projected into the orbit plane.
+		</member>
+		<member name="radius" type="float" setter="set_radius" getter="get_radius" default="1000.0">
+			Distance from the parent's center, in meters.
+		</member>
+	</members>
+</class>

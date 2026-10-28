@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="JarBodyAtmosphere" inherits="JarBodyLayer" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
+	<brief_description>
+		A physically based atmosphere around a round body.
+	</brief_description>
+	<description>
+		Rayleigh and Mie single scattering: blue sky and red sunsets from the ground, a glowing rim from space, haze over distant terrain. Drawn after other transparent objects, so water and clouds get hazed too. Hidden on flat bodies.
+	</description>
+	<tutorials>
+	</tutorials>
+	<methods>
+		<method name="get_active_material">
+			<return type="ShaderMaterial" />
+			<description>
+				The material in use: [member material] or the default.
+			</description>
+		</method>
+	</methods>
+	<members>
+		<member name="material" type="ShaderMaterial" setter="set_material" getter="get_material">
+			The atmosphere's look. Empty: the default [code]atmosphere.gdshader[/code].
+		</member>
+		<member name="thickness" type="float" setter="set_thickness" getter="get_thickness" default="0.25">
+			Height of the atmosphere as a fraction of the sea level radius.
+		</member>
+	</members>
+</class>

@@ -24,6 +24,11 @@
 #include "voxel_debris.h"
 #include "voxel_viewer.h"
 #include "job_system.h"
+#include "voxel_universe.h"
+#include "celestial_body.h"
+#include "body_orbit.h"
+#include "body_layer.h"
+#include <godot_cpp/classes/engine.hpp>
 using namespace godot;
 
 void initialize_jar_voxel_terrain_module(ModuleInitializationLevel p_level)
@@ -65,6 +70,18 @@ void initialize_jar_voxel_terrain_module(ModuleInitializationLevel p_level)
         GDREGISTER_CLASS(JarVoxelViewer);
         GDREGISTER_CLASS(JarVoxelDebrisBody);
         GDREGISTER_CLASS(JarVoxelDebris);
+
+        // UNIVERSE
+        GDREGISTER_CLASS(JarVoxelUniverse);
+        GDREGISTER_INTERNAL_CLASS(JarVoxelUniverseUpdater);
+        GDREGISTER_CLASS(JarCelestialBody);
+        GDREGISTER_CLASS(JarBodyOrbit);
+        GDREGISTER_ABSTRACT_CLASS(JarBodyLayer);
+        GDREGISTER_CLASS(JarBodyWater);
+        GDREGISTER_CLASS(JarBodyAtmosphere);
+        GDREGISTER_CLASS(JarBodyClouds);
+        JarVoxelUniverse::register_settings();
+        Engine::get_singleton()->register_singleton("JarVoxelUniverse", memnew(JarVoxelUniverse));
     }
 }
 
@@ -72,6 +89,8 @@ void uninitialize_jar_voxel_terrain_module(ModuleInitializationLevel p_level)
 {
     if (p_level == MODULE_INITIALIZATION_LEVEL_SCENE)
     {
+        Engine::get_singleton()->unregister_singleton("JarVoxelUniverse");
+        memdelete(JarVoxelUniverse::get_singleton());
         JobSystem::shutdown();
     }
 }
