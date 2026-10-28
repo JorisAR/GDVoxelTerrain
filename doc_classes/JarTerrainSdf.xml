@@ -26,6 +26,9 @@
 		<member name="assumed_slope" type="float" setter="set_assumed_slope" getter="get_assumed_slope" default="0.6">
 			Gully directions follow the input slope, but the filter acts as if the input always had this steepness, because the eroded output is roughly equally steep everywhere. Input much flatter than this (peaks and valleys) gets no gullies.
 		</member>
+		<member name="crease_softness" type="float" setter="set_crease_softness" getter="get_crease_softness" default="2.0">
+			Meters over which gully floors and ridge lines are rounded off. Smaller gullies fade out along these lines; a hard fade leaves V-shaped notches narrower than a voxel, which mesh as jagged teeth. Keep it above about twice the volume's [member JarVoxelVolume.voxel_size]. 0 gives the sharpest creases.
+		</member>
 		<member name="depth" type="float" setter="set_depth" getter="get_depth" default="60.0">
 			Depth in meters that negative [member noise] values reach below the base surface. Larger than [member height] gives deep oceans and low hills.
 		</member>

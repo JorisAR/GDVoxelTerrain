@@ -35,13 +35,15 @@ func _unhandled_key_input(event: InputEvent) -> void:
 	var idx: int = event.keycode - KEY_1
 	if idx >= 0 and idx <= 7:
 		material = idx
+	elif event.keycode == KEY_0:
+		material = -1 # the volume's edit_material
 	elif event.keycode == KEY_Q:
 		_select((_index + 1) % _brushes.size())
 	elif event.keycode == KEY_E:
 		smoothness = 0.0 if smoothness > 0.0 else 0.3
 
 func describe() -> String:
-	return "%s %.2f m  mat %d%s%s" % [_brushes[_index].name, size, material, "  smooth" if smoothness > 0.0 else "",
+	return "%s %.2f m  mat %s%s%s" % [_brushes[_index].name, size, _material_name(), "  smooth" if smoothness > 0.0 else "",
 		"  PAINT" if paint_mode else ""]
 
 func _select(index: int) -> void:

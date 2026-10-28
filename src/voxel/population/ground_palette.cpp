@@ -82,7 +82,13 @@ glm::vec3 GroundPalette::color_at(const glm::vec3 &position, const UpField &up) 
 {
     if (_map.is_null() || _biomes.empty())
         return _fallback;
-    const BiomeWeights w = _map->evaluate(position, up);
+    return color_for(_map->evaluate(position, up));
+}
+
+glm::vec3 GroundPalette::color_for(const BiomeWeights &w) const
+{
+    if (_map.is_null() || _biomes.empty())
+        return _fallback;
     glm::vec3 sum(0.0f);
     float total = 0.0f;
     for (int i = 0; i < w.count; ++i)

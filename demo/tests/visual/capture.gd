@@ -3,7 +3,7 @@ extends Node
 ## Environment: SCENE (res path), VOXEL (voxel size), MESHER (sn|dc, else the
 ## scene's), MANIFOLD=1, POS / LOOK ("x,y,z"), OUT (png path), WIRE=1 for
 ## wireframe, ON_MOON=1 (POS / LOOK relative to the moon), NOFEAT=1 (no
-## population). Checks: HOLES=1 (magenta background, water / atmosphere /
+## population), UP=radial (level on a planet). Checks: HOLES=1 (magenta background, water / atmosphere /
 ## clouds hidden; prints HOLE_PIXELS), PROBE="x,y" with HOLES (what the pixel's
 ## ray hits, the surface there and the open edges around it), SEAMS=1 (normal
 ## mismatch of vertices shared by chunks), TIMING=1 (build phases). Always
@@ -35,7 +35,9 @@ func _ready() -> void:
 	if player:
 		player.global_position = pos - Vector3(0, 1.6, 0)
 	camera.global_position = pos
-	camera.look_at(_vec(OS.get_environment("LOOK")) + (moon.global_position if OS.get_environment("ON_MOON") != "" and moon else Vector3.ZERO))
+	# UP=radial levels the view on a planet (up away from its center).
+	var up := pos.normalized() if OS.get_environment("UP") == "radial" else Vector3.UP
+	camera.look_at(_vec(OS.get_environment("LOOK")) + (moon.global_position if OS.get_environment("ON_MOON") != "" and moon else Vector3.ZERO), up)
 	if OS.get_environment("HOLES") == "1":
 		# Magenta background: any hole between chunks shows up as magenta.
 		for env_node: WorldEnvironment in scene.find_children("*", "WorldEnvironment", true, false):
@@ -65,7 +67,7 @@ func _ready() -> void:
 		frames += 1
 		var busy := false
 		for v in volumes:
-			busy = busy or v.is_building() or v.is_meshing()
+			busy = busy or v.is_building() or v.is_meshing() or v.is_generating_details()
 			if v.is_building():
 				phase["building"] = phase.get("building", 0) + 1
 			elif v.is_meshing():
@@ -81,7 +83,8 @@ func _ready() -> void:
 		print("PHASES frames %d %s, chunks settled at %d ms" % [frames, phase, last_change - start])
 	print("BUILD_MS ", Time.get_ticks_msec() - start)
 	if OS.get_environment("BOX") != "":
-		# Stamp a rotated shape (SHAPE = box | cone | torus) and let it remesh.
+		# Stamp a rotated shape (SHAPE = box | cone | torus | sphere, RADIUS for
+		# the sphere) and let it remesh.
 		var shape: JarSignedDistanceField
 		match OS.get_environment("SHAPE"):
 			"cone":
@@ -90,6 +93,10 @@ func _ready() -> void:
 				cone.bottom_radius = 5.0
 				cone.top_radius = 0.0
 				shape = cone
+			"sphere":
+				var sphere := JarSphereSdf.new()
+				sphere.radius = float(OS.get_environment("RADIUS")) if OS.get_environment("RADIUS") != "" else 5.0
+				shape = sphere
 			"torus":
 				var torus := JarTorusSdf.new()
 				torus.major_radius = 5.0
@@ -101,11 +108,11 @@ func _ready() -> void:
 				shape = box
 		var basis := Basis(Vector3.UP, 0.5) * Basis(Vector3.RIGHT, 0.35)
 		var op := JarVoxelVolume.SDF_OPERATION_SUBTRACTION if OS.get_environment("DIG") == "1" else JarVoxelVolume.SDF_OPERATION_UNION
-		volumes[0].edit(shape, op, Transform3D(basis, _vec(OS.get_environment("BOX"))), 0)
+		volumes[0].edit(shape, op, Transform3D(basis, _vec(OS.get_environment("BOX"))))
 		idle = 0
 		while idle < 60:
 			await get_tree().process_frame
-			idle = 0 if volumes[0].is_building() or volumes[0].is_meshing() else idle + 1
+			idle = 0 if volumes[0].is_building() or volumes[0].is_meshing() or volumes[0].is_generating_details() else idle + 1
 	if OS.get_environment("PREVIEW") != "":
 		# The brush preview ghost (sphere, radius 3) centered at PREVIEW.
 		var ghost := MeshInstance3D.new()

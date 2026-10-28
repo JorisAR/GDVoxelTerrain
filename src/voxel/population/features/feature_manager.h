@@ -2,6 +2,7 @@
 #define JAR_FEATURE_MANAGER_H
 
 #include "bounds.h"
+#include "modify_settings.h"
 #include "signed_distance_field.h"
 #include "terrain_feature.h"
 #include "biome_map.h"
@@ -58,6 +59,9 @@ class FeatureManager
     // Main thread: features with their base inside `bounds` (volume space) are
     // removed now and never generated again.
     void remove_in(const Bounds &bounds);
+    // Features whose ground an edit changes: those where the edit's shape
+    // reaches their base (or buries their lower meter), within `reach`.
+    void remove_edited(const ModifySettings &edit, float reach);
     // Main thread: drops everything (features or settings changed).
     void reset();
     std::vector<Instance> instances_near(const glm::vec3 &position, float radius) const;
@@ -113,7 +117,17 @@ class FeatureManager
     JarVoxelVolume &_volume;
     std::shared_ptr<Shared> _shared;
     std::unordered_map<glm::ivec3, Cell> _cells;
-    std::vector<Bounds> _removed; // edits and explicit removals, volume space
+    // Edits and explicit removals (volume space). An edit removes only what it
+    // touches (see Removal::hits), also from cells generated later.
+    struct Removal
+    {
+        Bounds bounds;
+        std::shared_ptr<const ModifySettings> edit; // null: everything in `bounds`
+        float reach = 0.0f;
+        bool hits(const Transform3D &feature) const;
+    };
+    std::vector<Removal> _removed;
+    void apply_removal(const Removal &removal);
     std::vector<Ref<JarTerrainFeature>> _features;
     std::vector<int> _featureBiomes; // per feature: biome index, -1 = everywhere
     std::vector<Template> _templates; // per feature

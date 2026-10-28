@@ -90,30 +90,66 @@ Bounds FeatureManager::cell_bounds(const glm::ivec3 &key) const
     return Bounds(lo, lo + glm::vec3(_cellSize));
 }
 
+bool FeatureManager::Removal::hits(const Transform3D &feature) const
+{
+    const glm::vec3 base(feature.origin.x, feature.origin.y, feature.origin.z);
+    if (!bounds.contains_point(base))
+        return false;
+    if (!edit)
+        return true;
+    // The base, and a meter up the feature (material added over its foot).
+    const Vector3 upward = feature.basis.get_column(1).normalized();
+    for (const glm::vec3 &p : {base, base + glm::vec3(upward.x, upward.y, upward.z)})
+    {
+        const float d = edit->sample(p);
+        switch (edit->operation)
+        {
+        case SDF::SDF_OPERATION_INTERSECTION:
+        case SDF::SDF_OPERATION_SMOOTH_INTERSECTION:
+            if (d > -reach) // the edit keeps only its inside
+                return true;
+            break;
+        default: // union / subtraction: the shape itself changes the ground
+            if (d < reach)
+                return true;
+            break;
+        }
+    }
+    return false;
+}
+
 bool FeatureManager::is_removed(const glm::vec3 &position) const
 {
-    for (const Bounds &b : _removed)
-        if (b.contains_point(position))
+    const Transform3D at(Basis(), Vector3(position.x, position.y, position.z));
+    for (const Removal &r : _removed)
+        if (r.hits(at))
             return true;
     return false;
 }
 
 void FeatureManager::remove_in(const Bounds &bounds)
 {
-    _removed.push_back(bounds);
+    apply_removal({bounds, nullptr, 0.0f});
+}
+
+void FeatureManager::remove_edited(const ModifySettings &edit, float reach)
+{
+    apply_removal({edit.bounds.expanded(reach + 1.0f), std::make_shared<ModifySettings>(edit), reach});
+}
+
+void FeatureManager::apply_removal(const Removal &removal)
+{
+    _removed.push_back(removal);
     for (auto &[key, cell] : _cells)
     {
-        if (!cell.ready || !cell_bounds(key).expanded(_cellSize).intersects(bounds))
+        if (!cell.ready || !cell_bounds(key).expanded(_cellSize).intersects(removal.bounds))
             continue;
         bool changed = false;
         for (auto &transforms : cell.perFeature)
         {
             const size_t before = transforms.size();
             transforms.erase(std::remove_if(transforms.begin(), transforms.end(),
-                                            [&](const Placed &p) {
-                                                const Vector3 o = p.transform.origin;
-                                                return bounds.contains_point(glm::vec3(o.x, o.y, o.z));
-                                            }),
+                                            [&](const Placed &p) { return removal.hits(p.transform); }),
                              transforms.end());
             changed = changed || transforms.size() != before;
         }
@@ -244,17 +280,17 @@ void FeatureManager::apply_results()
         Cell &cell = it->second;
         cell.perFeature.assign(_features.size(), {});
         // Removals recorded after (or while) the job ran apply here too.
-        std::vector<Bounds> removals;
+        std::vector<const Removal *> removals;
         const Bounds bounds = cell_bounds(key).expanded(_cellSize);
-        for (const Bounds &b : _removed)
-            if (b.intersects(bounds))
-                removals.push_back(b);
+        for (const Removal &r : _removed)
+            if (r.bounds.intersects(bounds))
+                removals.push_back(&r);
         for (const Instance &instance : instances)
         {
             const glm::vec3 p(instance.transform.origin.x, instance.transform.origin.y, instance.transform.origin.z);
             bool removed = false;
-            for (const Bounds &b : removals)
-                removed = removed || b.contains_point(p);
+            for (const Removal *r : removals)
+                removed = removed || r->hits(instance.transform);
             if (!removed)
                 cell.perFeature[instance.feature].push_back({instance.transform, instance.ground});
         }

@@ -3,12 +3,12 @@
 [ext_resource type="PackedScene" uid="uid://c7kqgl1k10x14" path="res://addons/jar_voxel_terrain/src/chunk.tscn" id="1_chunk"]
 [ext_resource type="JarTerrainSdf" uid="uid://dqn1tb1t75fft" path="res://demo/planet/planet_terrain.tres" id="2_terrain"]
 [ext_resource type="Material" path="res://demo/planet/planet_material.tres" id="3_material"]
-[ext_resource type="JarTerrainFeature" path="res://demo/planet/rock.tres" id="6_rock"]
-[ext_resource type="JarTerrainDetail" path="res://demo/planet/grass.tres" id="6_grass"]
+[ext_resource type="JarTerrainDetail" uid="uid://b07o6puiiv3ht" path="res://demo/planet/grass.tres" id="6_grass"]
+[ext_resource type="JarTerrainFeature" uid="uid://2dvalovk54ou" path="res://demo/planet/rock.tres" id="6_rock"]
 [ext_resource type="Script" uid="uid://557h1ey0uo8c" path="res://addons/jar_voxel_terrain/nodes/water/planet_water.gd" id="9_water"]
 [ext_resource type="Script" uid="uid://bdr052q72xws1" path="res://addons/jar_voxel_terrain/nodes/atmosphere/atmosphere.gd" id="10_atmosphere"]
 [ext_resource type="Script" uid="uid://ca8q8yfyo8l3h" path="res://demo/orbit.gd" id="11_orbit"]
-[ext_resource type="JarCraterSdf" path="res://demo/planet/moon_craters.tres" id="12_moon"]
+[ext_resource type="JarCraterSdf" uid="uid://p0ja4axgdl71" path="res://demo/planet/moon_craters.tres" id="12_moon"]
 [ext_resource type="Material" path="res://demo/planet/moon_material.tres" id="13_moon_material"]
 [ext_resource type="PackedScene" uid="uid://cupyeuv1xe20s" path="res://demo/player/player.tscn" id="14_player"]
 [ext_resource type="Material" uid="uid://55tbedv6qxva" path="res://demo/assets/space/space_sky.tres" id="15_sky"]
@@ -109,13 +109,15 @@ extent = 10000.0
 chunk_scene = ExtResource("1_chunk")
 materials = Array[JarTerrainMaterial]([SubResource("Grass"), SubResource("Rock"), SubResource("Sand"), SubResource("Seabed"), SubResource("Snow"), SubResource("Dirt"), SubResource("DarkStone"), SubResource("Clay"), SubResource("Tundra"), SubResource("DryGrass")])
 material = ExtResource("3_material")
+edit_material = 5
 sdf = ExtResource("2_terrain")
 meshing_algorithm = 1
 manifold = true
 lod_automatic_update_distance = 16.0
+editor_preview_min_lod = 5
 population_terrain_features = Array[JarTerrainFeature]([ExtResource("6_rock")])
-population_terrain_details = Array[JarTerrainDetail]([ExtResource("6_grass")])
 population_biome_map = ExtResource("17_biomes")
+population_terrain_details = Array[JarTerrainDetail]([ExtResource("6_grass")])
 
 [node name="Water" type="Node3D" parent="Planet" unique_id=1585027726]
 script = ExtResource("9_water")
@@ -152,6 +154,7 @@ extent = 1024.0
 chunk_scene = ExtResource("1_chunk")
 materials = Array[JarTerrainMaterial]([SubResource("Regolith"), SubResource("MoonRock")])
 material = ExtResource("13_moon_material")
+edit_material = 1
 sdf = ExtResource("12_moon")
 meshing_algorithm = 1
 manifold = true

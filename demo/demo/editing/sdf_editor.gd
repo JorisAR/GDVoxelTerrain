@@ -12,8 +12,9 @@ extends Node3D
 ## Uniform scale applied to the SDF (a unit sphere SDF with scale 2 has radius 2 m).
 @export var scale_factor := 1.0
 ## Material painted when adding or painting (an index into the volume's
-## materials), or -1 to keep existing materials. Digging never paints.
-@export_range(-1, 7) var material := 0
+## materials), or -1 for the volume's edit_material (bare dirt or stone, where
+## details do not grow). Dug ground always gets the volume's edit_material.
+@export_range(-1, 7) var material := -1
 ## Left click paints instead of removing; right click still adds.
 @export var paint_mode := false
 ## Blend radius in meters; 0 gives hard edits, > 0 uses the smooth operations.
@@ -75,15 +76,15 @@ func _physics_process(delta: float) -> void:
 	_cooldown = edit_interval
 	var volume := volume_from_hit(hit)
 	if volume and paint_mode and remove:
-		volume.paint(sdf, target, maxi(material, 0))
+		volume.paint(sdf, target, material if material >= 0 else maxi(volume.edit_material, 0))
 	elif volume:
-		# Digging keeps the existing materials (the exposed ground follows the
-		# ground rules); adding paints the selected material.
+		# -1: the volume's edit_material, also for the ground digging exposes;
+		# adding paints the selected material, if any.
 		volume.edit(sdf, _operation(add), target, material if add else -1, smoothness)
 
 ## Describes the current settings, for HUDs.
 func describe() -> String:
-	return "%s  x%.2f  mat %d%s%s" % [sdf.get_class() if sdf else "no SDF", scale_factor, material,
+	return "%s  x%.2f  mat %s%s%s" % [sdf.get_class() if sdf else "no SDF", scale_factor, _material_name(),
 		"  smooth" if smoothness > 0.0 else "", "  PAINT" if paint_mode else ""]
 
 ## The volume owning a physics hit: collider -> chunk -> volume.
@@ -127,3 +128,7 @@ static func _find_body(node: Node) -> CollisionObject3D:
 			return node
 		node = node.get_parent()
 	return null
+
+## The selected material for HUDs: its index, or "auto" (the volume's edit_material).
+func _material_name() -> String:
+	return str(material) if material >= 0 else "auto"

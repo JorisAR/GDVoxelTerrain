@@ -254,4 +254,3 @@ func _test_craters() -> void:
 	volume.sdf = craters
 	_check("craters keep the child's up field", volume.get_up_field_info().mode == JarVoxelVolume.UP_MODE_RADIAL)
 	volume.free()
-

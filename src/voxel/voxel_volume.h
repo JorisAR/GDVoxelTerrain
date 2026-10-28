@@ -35,6 +35,8 @@ using namespace godot;
 
 class JarVoxelChunk;
 
+class DetailScheduler;
+
 class JarVoxelVolume : public Node3D
 {
     GDCLASS(JarVoxelVolume, Node3D);
@@ -68,6 +70,7 @@ class JarVoxelVolume : public Node3D
     Ref<Material> _runtimeMaterial;   // what chunks use: a per-volume copy with the material palette
     std::shared_ptr<const GroundPalette> _groundPalette; // replaced whole (atomically) with the materials
     TypedArray<JarTerrainMaterial> _terrainMaterials;
+    int _editMaterial = -1; // material of ground edits make without one of their own; -1 keeps it
     std::atomic<int> _materialMode{0}; // MaterialMode; read by mesh threads
     bool _materialsDirty = true;
     void apply_rendering_to_chunks();
@@ -105,7 +108,6 @@ class JarVoxelVolume : public Node3D
     std::vector<JarVoxelChunk *> _freeChunks;     // main-thread pool of reusable chunks
     std::vector<JarVoxelChunk *> _releasedChunks; // worker pushes here; main drains
     std::mutex _poolMutex;                        // guards _releasedChunks
-    void process_pool();                          // main thread: released -> deactivate -> free pool
 
     // PERFORMANCE
     int _updatedCollidersPerSecond = 0; // 0 = uncapped (time budget only)
@@ -139,6 +141,7 @@ class JarVoxelVolume : public Node3D
     Ref<JarBiomeMap> _biomeMap;
     float _featureCellSize = 64.0f;
     std::unique_ptr<FeatureManager> _featureManager;
+    std::unique_ptr<DetailScheduler> _detailScheduler;
     UpField _upField; // manual settings (UP_MODE_AXIS / UP_MODE_RADIAL)
     int _upMode = UP_MODE_AUTO;
 
@@ -173,6 +176,8 @@ class JarVoxelVolume : public Node3D
     // release() is thread-safe (called from the build worker).
     JarVoxelChunk *pool_acquire();
     void pool_release(JarVoxelChunk *chunk);
+    // Main thread: hide (and pool) the chunks released so far, now.
+    void process_pool();
 
     // Script-facing operations (GDScript sees them as JarVoxelVolume.Operation).
     enum Operation
@@ -204,6 +209,8 @@ class JarVoxelVolume : public Node3D
     // properties
     bool is_building() const;
     bool is_meshing() const;
+    // Details (made separately, near viewers) are still being generated.
+    bool is_generating_details() const;
     // MeshComputeScheduler *get_mesh_scheduler() const;
 
     enum UpMode
@@ -270,6 +277,8 @@ class JarVoxelVolume : public Node3D
     // next frame. Call after changing materials from code.
     void update_materials();
     MaterialMode get_material_mode() const { return static_cast<MaterialMode>(_materialMode.load()); }
+    int get_edit_material() const { return _editMaterial; }
+    void set_edit_material(int index) { _editMaterial = std::clamp(index, -1, 254); }
     void set_material_mode(MaterialMode mode);
     TypedArray<JarTerrainMaterial> get_terrain_materials() const { return _terrainMaterials; }
     void set_terrain_materials(const TypedArray<JarTerrainMaterial> &materials);
@@ -330,6 +339,9 @@ class JarVoxelVolume : public Node3D
 
     // LOD
     float distance_to_nearest_viewer(const glm::vec3 &position) const;
+    // Full-detail chunks with new mesh data / none any more (main thread).
+    void track_details(JarVoxelChunk *chunk);
+    void untrack_details(JarVoxelChunk *chunk);
     int desired_lod(const VoxelOctreeNode &node);
     int lod_at(const glm::vec3 &position) const;
 

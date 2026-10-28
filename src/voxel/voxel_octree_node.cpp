@@ -166,42 +166,52 @@ bool VoxelOctreeNode::is_enqueued() const
 }
 
 // Called when a queued mesh task is dropped (node stopped being a chunk). A node
-// left flagged as enqueued blocks delete_chunk() on its parent and children
-// forever, leaving stale chunks (and their details) in the scene.
+// left flagged as enqueued blocks delete_chunk() on the chunks it would replace
+// forever, leaving stale chunks (and their details) in the scene; those get
+// another chance to go now.
 void VoxelOctreeNode::cancel_enqueue()
 {
     _isEnqueued = false;
+    finished_meshing_notify_related();
 }
 
-void VoxelOctreeNode::finished_meshing_notify_parent_and_children() const
+// A chunk may go once the chunks replacing it are on screen: those are its
+// descendants (finer LOD) or an ancestor (coarser), any number of levels away
+// when the viewer moved fast. Retry deleting every chunk that this node's new
+// mesh may have been the last missing piece for.
+void VoxelOctreeNode::finished_meshing_notify_related() const
 {
-    if (_parent != nullptr)
+    for (VoxelOctreeNode *ancestor = _parent; ancestor != nullptr; ancestor = ancestor->_parent)
+        ancestor->delete_chunk();
+    delete_chunks_below();
+}
+
+void VoxelOctreeNode::delete_chunks_below() const
+{
+    if (is_leaf() || _size <= JarVoxelVolume::ChunkSizeLog2)
+        return; // nothing below can be a chunk
+    for (auto &child : *_children)
     {
-        _parent->delete_chunk();
-    }
-    if (!is_leaf())
-    {
-        for (auto &child : *_children)
-        {
-            child.delete_chunk();
-        }
+        child.delete_chunk();
+        child.delete_chunks_below();
     }
 }
 
-bool VoxelOctreeNode::is_parent_enqueued() const
+bool VoxelOctreeNode::is_any_ancestor_enqueued() const
 {
-    return _parent == nullptr ? false : _parent->is_enqueued();
+    for (const VoxelOctreeNode *ancestor = _parent; ancestor != nullptr; ancestor = ancestor->_parent)
+        if (ancestor->_isEnqueued)
+            return true;
+    return false;
 }
 
-bool VoxelOctreeNode::is_any_children_enqueued() const
+bool VoxelOctreeNode::is_any_descendant_enqueued() const
 {
-    if (is_leaf())
+    if (is_leaf() || _size <= JarVoxelVolume::ChunkSizeLog2)
         return false;
     for (const auto &child : *_children)
-    {
-        if (child.is_enqueued())
+        if (child._isEnqueued || child.is_any_descendant_enqueued())
             return true;
-    }
     return false;
 }
 
@@ -305,9 +315,10 @@ bool VoxelOctreeNode::has_surface(const JarVoxelVolume &terrain, const float val
     // The extra leaf and a half (at this node's LOD) matters for the last
     // subdivision: the mesher needs the finest leaves up to a cell beyond the
     // surface, so a node twice the leaf size must be kept up to ~2.6 leaves
-    // from it, and SDFs that are not exact distances (eroded terrain
-    // overestimates up to ~2x on pinched slopes) otherwise lose leaves there:
-    // holes in the mesh.
+    // from it, and SDFs that are not exact distances otherwise lose leaves
+    // there: holes in the mesh. 1.75 covers the eroded terrain, whose distances
+    // can be ~1.5x too large off the surface by cliffs (holes reappear below
+    // about 1.4).
     const float voxel = terrain.get_voxel_size();
     return std::abs(value) < (1 << _size) * voxel * 1.44224957f * 1.75f + 1.5f * (1 << std::max<int>(LoD, 0)) * voxel;
 }
@@ -407,7 +418,7 @@ void VoxelOctreeNode::modify_sdf_in_bounds(JarVoxelVolume &terrain, const Modify
 void VoxelOctreeNode::update_chunk(JarVoxelVolume &terrain, ChunkMeshData *chunkMeshData)
 {
     _isEnqueued = false;
-    finished_meshing_notify_parent_and_children();
+    finished_meshing_notify_related();
     _meshedEmpty = chunkMeshData == nullptr && is_chunk(terrain);
     if (_meshedEmpty)
         _meshedEmptyBoundaries = compute_boundaries(terrain);
@@ -478,7 +489,8 @@ void VoxelOctreeNode::queue_update(JarVoxelVolume &terrain)
 
 void VoxelOctreeNode::delete_chunk()
 {
-    if (is_any_children_enqueued() || is_parent_enqueued())
+    // Keep it on screen until whatever replaces it has been meshed.
+    if (_chunk == nullptr || is_any_descendant_enqueued() || is_any_ancestor_enqueued())
         return;
 
     if (_chunk != nullptr)

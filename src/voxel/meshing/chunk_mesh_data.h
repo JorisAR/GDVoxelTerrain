@@ -1,6 +1,7 @@
 #ifndef JAR_CHUNK_MESH_DATA_H
 #define JAR_CHUNK_MESH_DATA_H
 
+#include <godot_cpp/classes/array_mesh.hpp>
 #include <godot_cpp/classes/mesh.hpp>
 #include <godot_cpp/variant/array.hpp>
 #include <godot_cpp/variant/packed_float32_array.hpp>
@@ -20,15 +21,25 @@ class ChunkMeshData
     static const int MaxCollisionLod = 2;
 
     Array mesh_array;
+    // mesh_array uploaded to the GPU ahead of showing it (see
+    // MeshComputeScheduler::process): showing it is then just a swap.
+    Ref<ArrayMesh> uploaded;
+
+    // Uploads mesh_array into `uploaded` (main thread).
+    void upload()
+    {
+        uploaded.instantiate();
+        // CUSTOM0 and CUSTOM1 hold 4 bytes per vertex (materials, biome weights).
+        uploaded->add_surface_from_arrays(Mesh::PRIMITIVE_TRIANGLES, mesh_array, Array(), Dictionary(),
+                                          (Mesh::ARRAY_CUSTOM_RGBA8_UNORM << Mesh::ARRAY_FORMAT_CUSTOM0_SHIFT) |
+                                              (Mesh::ARRAY_CUSTOM_RGBA8_UNORM << Mesh::ARRAY_FORMAT_CUSTOM1_SHIFT));
+    }
     PackedVector3Array collision_mesh;
     int lod;
     uint16_t boundaries;
     int mesh_version = 0;
     bool edge_chunk;
     Bounds bounds;
-    // One MultiMesh buffer (TRANSFORM_3D layout, 12 floats per instance) per
-    // terrain detail, filled on the mesh thread. Empty when the chunk shows none.
-    std::vector<PackedFloat32Array> detail_buffers;
     // Painted amount per vertex (0 = ground): details avoid painted ground.
     PackedFloat32Array painted;
     // ChunkDetailData chunk_detail_data;

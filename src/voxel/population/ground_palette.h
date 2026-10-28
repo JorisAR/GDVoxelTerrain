@@ -30,6 +30,8 @@ class GroundPalette
                                                       const Ref<Material> &terrainMaterial);
     // Linear color of the ground at a volume-space position.
     glm::vec3 color_at(const glm::vec3 &position, const UpField &up) const;
+    // The same, from biome weights already evaluated there.
+    glm::vec3 color_for(const BiomeWeights &weights) const;
 };
 
 #endif // JAR_GROUND_PALETTE_H

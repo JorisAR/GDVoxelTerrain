@@ -1,4 +1,5 @@
 #include "voxel_volume.h"
+#include "detail_scheduler.h"
 #include "terrain_material_palette.h"
 #include <godot_cpp/classes/resource_loader.hpp>
 #include <godot_cpp/classes/shader_material.hpp>
@@ -45,6 +46,10 @@ void JarVoxelVolume::_bind_methods()
     ADD_PROPERTY(PropertyInfo(Variant::OBJECT, "material", PROPERTY_HINT_RESOURCE_TYPE,
                               "ShaderMaterial,StandardMaterial3D,ORMMaterial3D"),
                  "set_material", "get_material");
+    ClassDB::bind_method(D_METHOD("get_edit_material"), &JarVoxelVolume::get_edit_material);
+    ClassDB::bind_method(D_METHOD("set_edit_material", "index"), &JarVoxelVolume::set_edit_material);
+    ADD_PROPERTY(PropertyInfo(Variant::INT, "edit_material", PROPERTY_HINT_RANGE, "-1,254,1"), "set_edit_material",
+                 "get_edit_material");
     ClassDB::bind_method(D_METHOD("get_runtime_material"), &JarVoxelVolume::get_runtime_material);
     ClassDB::bind_method(D_METHOD("update_materials"), &JarVoxelVolume::update_materials);
     ADD_GROUP("", "");
@@ -226,6 +231,7 @@ void JarVoxelVolume::_bind_methods()
     ClassDB::bind_method(D_METHOD("force_update_lod"), &JarVoxelVolume::force_update_lod);
     ClassDB::bind_method(D_METHOD("is_building"), &JarVoxelVolume::is_building);
     ClassDB::bind_method(D_METHOD("is_meshing"), &JarVoxelVolume::is_meshing);
+    ClassDB::bind_method(D_METHOD("is_generating_details"), &JarVoxelVolume::is_generating_details);
 }
 
 JarVoxelVolume::JarVoxelVolume() = default;
@@ -236,6 +242,7 @@ JarVoxelVolume::~JarVoxelVolume()
     // Members are destroyed in reverse declaration order, which would free the
     // octree first. In-flight mesh tasks read the octree, so wait for them (by
     // destroying the scheduler) first.
+    _detailScheduler.reset();
     _featureManager.reset();
     _meshComputeScheduler.reset();
     _voxelRoot.reset();
@@ -362,6 +369,7 @@ void JarVoxelVolume::process_pool()
     }
     for (JarVoxelChunk *c : released)
     {
+        untrack_details(c);
         c->deactivate();
         _freeChunks.push_back(c);
     }
@@ -389,7 +397,9 @@ void JarVoxelVolume::queue_edit(const Ref<JarSignedDistanceField> &sdf, SDF::Ope
     settings.distanceScale = std::max(float(std::min(scale.x, std::min(scale.y, scale.z))), 1e-4f);
     settings.operation = operation;
     settings.smoothness = smoothness;
-    settings.material = material;
+    // Ground an edit makes (dug or added) without a material of its own gets the
+    // volume's edit material: it shows as such, and details do not grow on it.
+    settings.material = material < 0 && !paintOnly ? _editMaterial : material;
     settings.paintOnly = paintOnly;
 
     // Region the edit can change: the SDF's solid part (plus room for smooth
@@ -408,9 +418,9 @@ void JarVoxelVolume::queue_edit(const Ref<JarSignedDistanceField> &sdf, SDF::Ope
         return;
     }
     settings.bounds = region;
-    // Features standing where the shape changes go away, for good.
+    // Features standing where the shape changes the ground go away, for good.
     if (!paintOnly && _featureManager)
-        _featureManager->remove_in(region);
+        _featureManager->remove_edited(settings, _voxelSize + std::max(0.0f, smoothness));
 
     // Queued rather than applied immediately: the octree may only be mutated
     // when no build or meshing task is reading it (see process()).
@@ -475,6 +485,11 @@ void JarVoxelVolume::enqueue_chunk_update(VoxelOctreeNode &node)
 bool JarVoxelVolume::is_building() const
 {
     return _isBuilding;
+}
+
+bool JarVoxelVolume::is_generating_details() const
+{
+    return _detailScheduler && _detailScheduler->busy();
 }
 
 bool JarVoxelVolume::is_meshing() const
@@ -683,6 +698,7 @@ void JarVoxelVolume::teardown()
     if (_featureManager)
         _featureManager->reset(); // frees its nodes
     _featureManager.reset();      // waits for its jobs
+    _detailScheduler.reset();     // waits for its thread
     _meshComputeScheduler.reset(); // waits for mesh tasks
     _voxelRoot.reset();
     // Everything the volume made: chunks (shown or pooled) and population nodes.
@@ -723,11 +739,8 @@ void JarVoxelVolume::set_preview_details(bool value)
     _previewDetails = value;
     if (!is_previewing())
         return;
-    if (!value)
-        for (int i = 0; i < get_child_count(); ++i)
-            if (JarVoxelChunk *chunk = Object::cast_to<JarVoxelChunk>(get_child(i)))
-                chunk->clear_details();
-    remesh_all();
+    if (_detailScheduler)
+        _detailScheduler->reset();
 }
 
 void JarVoxelVolume::set_preview_colliders(bool value)
@@ -761,20 +774,14 @@ void JarVoxelVolume::set_features_enabled(bool value)
 }
 
 // Off: details disappear at once and are no longer generated. On: they come
-// back as the chunks are remeshed.
+// back near the viewers.
 void JarVoxelVolume::set_details_enabled(bool value)
 {
     if (_detailsEnabled == value)
         return;
     _detailsEnabled = value;
-    if (!value)
-    {
-        for (int i = 0; i < get_child_count(); ++i)
-            if (JarVoxelChunk *chunk = Object::cast_to<JarVoxelChunk>(get_child(i)))
-                chunk->clear_details();
-    }
-    else
-        remesh_all();
+    if (_detailScheduler)
+        _detailScheduler->reset();
 }
 
 void JarVoxelVolume::_notification(int p_what)
@@ -830,6 +837,7 @@ void JarVoxelVolume::initialize()
     _meshComputeScheduler = std::make_unique<MeshComputeScheduler>();
     _voxelRoot = std::make_unique<VoxelOctreeNode>(_depth);
     _featureManager = std::make_unique<FeatureManager>(*this);
+    _detailScheduler = std::make_unique<DetailScheduler>(*this);
     rebuild_materials();
     //_populationRoot = memnew(PopulationOctreeNode(_size));
     if (!_buildThread.joinable())
@@ -850,6 +858,8 @@ void JarVoxelVolume::process()
         rebuild_materials();
     if (_featureManager)
         _featureManager->process(); // independent of the octree: runs during builds too
+    if (_detailScheduler)
+        _detailScheduler->process(); // likewise (only touches chunks)
     if (_isBuilding || !_meshComputeScheduler)
         return; // building, or initialize() failed (missing chunk scene / sdf)
     process_pool(); // reclaim chunks the last build released, ready for reuse
@@ -1388,7 +1398,8 @@ void JarVoxelVolume::regenerate_population()
 {
     if (_featureManager)
         _featureManager->reset();
-    remesh_all(); // details are made with the chunk meshes
+    if (_detailScheduler)
+        _detailScheduler->reset();
 }
 
 void JarVoxelVolume::remove_features(const Vector3 &global_position, float radius)
@@ -1420,6 +1431,22 @@ TypedArray<Dictionary> JarVoxelVolume::get_features_near(const Vector3 &global_p
 void JarVoxelVolume::set_terrain_details(const TypedArray<JarTerrainDetail> &details)
 {
     _terrainDetails = details;
+    if (_detailScheduler)
+        _detailScheduler->reset();
+}
+
+void JarVoxelVolume::track_details(JarVoxelChunk *chunk)
+{
+    if (_detailScheduler)
+        _detailScheduler->track(chunk);
+}
+
+void JarVoxelVolume::untrack_details(JarVoxelChunk *chunk)
+{
+    if (_detailScheduler)
+        _detailScheduler->untrack(chunk);
+    else
+        chunk->clear_details();
 }
 
 TypedArray<JarTerrainDetail> JarVoxelVolume::get_terrain_details() const

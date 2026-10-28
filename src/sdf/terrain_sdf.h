@@ -1,6 +1,7 @@
 #ifndef TERRAIN_SDF_H
 #define TERRAIN_SDF_H
 
+#include <atomic>
 #include "signed_distance_field.h"
 #include <godot_cpp/classes/fast_noise_lite.hpp>
 
@@ -53,14 +54,21 @@ class JarTerrainSdf : public JarSignedDistanceField
     float _detail = 1.5f;      // how far smaller gullies reach onto flatter ground
     float _gullyWeight = 0.5f; // < 1 keeps peaks pointy (strength is compensated)
     float _assumedSlope = 0.6f;
+    float _creaseSoftness = 2.0f; // meters over which gully floors and ridge lines round off
 
+    static constexpr int MaxOctaves = 10;
     struct Sample
     {
         float height;       // eroded height above the base surface
         glm::vec3 gradient; // tangent gradient of the height (see evaluate)
         float layered;      // height before erosion
         glm::vec3 broad;    // low-passed tangent gradient of the layers (see evaluate)
+        // Each erosion octave's part of `gradient` (see normalization()).
+        glm::vec3 octaveSlopes[MaxOctaves];
+        int octaveCount = 0;
     };
+    // sqrt(1 + slope^2) for a point `gap` meters off the surface (vertically).
+    float normalization(const Sample &sample, float gap) const;
 
     void frame(const glm::vec3 &pos, glm::vec3 &surface, glm::vec3 &up, float &above) const;
     float layered_height(const glm::vec3 &surface) const; // base noise + mountains
@@ -68,11 +76,15 @@ class JarTerrainSdf : public JarSignedDistanceField
     glm::vec3 height_gradient(const glm::vec3 &surface, const glm::vec3 &up, float h, float step) const;
     glm::vec3 broad_gradient(const glm::vec3 &surface, const glm::vec3 &up, float step) const;
     float max_deviation() const;
+    glm::mat3 broad_jacobian(const glm::vec3 &surface, float step) const;
+    glm::mat3 lattice_jacobian(const glm::ivec3 &point, float spacing, float step) const;
+    std::atomic<uint64_t> _generation{0}; // new on every change: invalidates the per-thread caches
     // Without `localGradient` the gradient only holds the erosion's part (the
     // layers' local slope costs two more noise samples); `broad` then has the
     // layers' slope low-passed over the erosion scale, which comes for free.
     Sample evaluate(const glm::vec3 &surface, const glm::vec3 &up, bool localGradient = true) const;
-    Sample erode(const glm::vec3 &surface, const glm::vec3 &up, const glm::vec3 &broadGradient, Sample result) const;
+    Sample erode(const glm::vec3 &surface, const glm::vec3 &up, const glm::vec3 &broadGradient,
+                 const glm::mat3 &broadJacobian, Sample result) const;
 
     template <typename T> void set_shape_property(T &field, const T &value)
     {
@@ -84,6 +96,9 @@ class JarTerrainSdf : public JarSignedDistanceField
     float distance(const glm::vec3 &pos) const override;
     Bounds bounds() const override;
     bool natural_up(UpField &out) const override;
+    void prepare() override;
+    void settings_changed() override;
+    JarTerrainSdf();
 
     // Terrain height (above the base plane / sphere) at a position, for scripts.
     float sample_height(const Vector3 &position) const;
@@ -128,6 +143,8 @@ class JarTerrainSdf : public JarSignedDistanceField
     void set_gully_weight(float v) { set_and_notify(_gullyWeight, std::clamp(v, 0.01f, 1.0f)); }
     float get_assumed_slope() const { return _assumedSlope; }
     void set_assumed_slope(float v) { set_and_notify(_assumedSlope, std::max(0.01f, v)); }
+    float get_crease_softness() const { return _creaseSoftness; }
+    void set_crease_softness(float v) { set_and_notify(_creaseSoftness, std::max(0.0f, v)); }
 
   protected:
     static void _bind_methods();

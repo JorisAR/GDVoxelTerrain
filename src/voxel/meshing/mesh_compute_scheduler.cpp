@@ -3,7 +3,6 @@
 #include "voxel_volume.h"
 #include "stitched_surface_nets/stitched_surface_nets.h"
 #include "voxel_octree_node.h"
-#include "chunk_detail_generator.h"
 #include <chrono>
 
 MeshComputeScheduler::MeshComputeScheduler() : _totalTris(0), _prevTris(0)
@@ -18,6 +17,8 @@ MeshComputeScheduler::~MeshComputeScheduler()
     std::pair<VoxelOctreeNode *, ChunkMeshData *> tuple;
     while (ChunksToProcess.try_pop(tuple))
         delete tuple.second;
+    for (auto &entry : _uploaded)
+        delete entry.second;
 }
 
 void MeshComputeScheduler::enqueue(VoxelOctreeNode &node)
@@ -32,17 +33,27 @@ void MeshComputeScheduler::process(JarVoxelVolume &terrain)
     {
         process_queue(terrain);
     }
-    // Applying a mesh (ArrayMesh upload, chunk acquire, details) runs on the main
-    // thread. Spread it over frames: applying thousands at once after a build
-    // stalled a frame for 200+ ms.
+    // Uploading a mesh to the GPU runs on the main thread. Spread it over
+    // frames: uploading thousands at once after a build stalled a frame for
+    // 200+ ms.
     const auto deadline = std::chrono::steady_clock::now() + std::chrono::microseconds(ApplyBudgetMicroseconds);
     std::pair<VoxelOctreeNode *, ChunkMeshData *> tuple;
-    while (ChunksToProcess.try_pop(tuple))
+    while (std::chrono::steady_clock::now() < deadline && ChunksToProcess.try_pop(tuple))
     {
-        auto [node, chunkMeshData] = tuple;
-        node->update_chunk(terrain, chunkMeshData);
-        if (std::chrono::steady_clock::now() >= deadline)
-            break;
+        if (tuple.second != nullptr)
+            tuple.second->upload();
+        _uploaded.push_back(tuple);
+    }
+    // Show them all at once when the last one is in: a chunk that changes LOD
+    // changes its neighbors' seams, and shown one by one, chunks next to a
+    // neighbor still meshed for its old LOD left cracks (while moving fast).
+    // Each swap is cheap (the mesh is uploaded already).
+    if (!_uploaded.empty() && _activeTasks == 0 && ChunksToAdd.empty() && ChunksToProcess.empty())
+    {
+        for (auto &[node, chunkMeshData] : _uploaded)
+            node->update_chunk(terrain, chunkMeshData);
+        _uploaded.clear();
+        terrain.process_pool(); // the replaced chunks go in the same frame
     }
 }
 
@@ -72,20 +83,6 @@ void MeshComputeScheduler::run_task(const JarVoxelVolume &terrain, VoxelOctreeNo
         if (chunkMeshData != nullptr && chunkMeshData->lod <= ChunkMeshData::MaxCollisionLod &&
             terrain.colliders_enabled())
             chunkMeshData->build_collision_mesh();
-        if (chunkMeshData != nullptr && chunkMeshData->lod <= 0)
-        {
-            ChunkDetailGenerator generator(terrain.get_up_field());
-            std::vector<Ref<JarTerrainDetail>> details;
-            std::vector<int> biomes;
-            for (const auto &entry : terrain.population_details())
-            {
-                details.push_back(entry.item);
-                biomes.push_back(entry.biome);
-            }
-            chunkMeshData->detail_buffers =
-                generator.generate_detail_buffers(details, biomes, terrain.get_biome_map(),
-                                                  terrain.get_ground_palette(), *chunkMeshData);
-        }
         ChunksToProcess.push(std::make_pair(&(chunk), chunkMeshData));
         _activeTasks--; // after the push, so is_meshing() never sees a gap
     });

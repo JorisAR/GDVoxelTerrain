@@ -81,9 +81,10 @@ class VoxelOctreeNode : public OctreeNode<VoxelOctreeNode>
     bool is_above_min_chunk(const JarVoxelVolume &terrain) const;
     bool is_enqueued() const;
     void cancel_enqueue();
-    void finished_meshing_notify_parent_and_children() const;
-    bool is_parent_enqueued() const;
-    bool is_any_children_enqueued() const;
+    void finished_meshing_notify_related() const;
+    void delete_chunks_below() const;
+    bool is_any_ancestor_enqueued() const;
+    bool is_any_descendant_enqueued() const;
 
     // Parallel build: nodes of size forkSize hand their children to `subtrees`
     // instead of recursing; each subtree is then built on its own thread. The

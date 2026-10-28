@@ -35,6 +35,9 @@ class MeshComputeScheduler
     ConcurrentPriorityQueue<std::pair<VoxelOctreeNode*, ChunkMeshData*>> ChunksToProcess;
 
     std::atomic<int> _activeTasks{0};
+    // Results uploaded but not shown yet: a build's meshes are all shown in the
+    // same frame, once the last one is ready (see process()).
+    std::vector<std::pair<VoxelOctreeNode *, ChunkMeshData *>> _uploaded;
 
     // Debug variables
     int _totalTris;
@@ -57,7 +60,7 @@ class MeshComputeScheduler
 
     bool is_meshing()
     {
-        return _activeTasks > 0 || !ChunksToAdd.empty() || !ChunksToProcess.empty();
+        return _activeTasks > 0 || !ChunksToAdd.empty() || !ChunksToProcess.empty() || !_uploaded.empty();
     }
 };
 

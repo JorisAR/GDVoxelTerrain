@@ -15,8 +15,112 @@ func _ready() -> void:
 	]:
 		await _test(config)
 	await _test_round_trip()
+	await _test_fast_flight()
 	print("LOD tests: %s" % ("ALL PASSED" if _failures == 0 else "%d FAILED" % _failures))
 	get_tree().quit(1 if _failures > 0 else 0)
+
+## Flying fast over the demo planet: the LOD changes by several levels between
+## builds, and a chunk must stay until the chunks replacing it (any number of
+## levels finer or coarser) are on screen, or the terrain flashes holes.
+## Afterwards no replaced chunk may linger on top of its replacement.
+func _test_fast_flight() -> void:
+	var holder := Node.new()
+	add_child(holder)
+	var sdf: JarSignedDistanceField = load("res://demo/planet/planet_terrain.tres")
+	var volume := JarVoxelVolume.new()
+	volume.chunk_scene = TestWorld.CHUNK_SCENE
+	volume.extent = 10000.0
+	volume.sdf = sdf
+	volume.lod_automatic_update_distance = 16.0
+	holder.add_child(volume)
+	var viewer := JarVoxelViewer.new()
+	var start := Vector3(0.45, 0.55, 0.7).normalized()
+	viewer.position = start * 4300.0
+	holder.add_child(viewer)
+	await _settle(volume)
+	var axis := start.cross(Vector3.UP).normalized()
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 1
+	var holes := 0
+	var worst := 0
+	var mismatched_frames := 0
+	for f in 400:
+		await get_tree().process_frame
+		var dir := start.rotated(axis, 250.0 * (f + 1) / 60.0 / 4300.0) # 250 m/s
+		viewer.position = dir * 4260.0
+		var boxes := _chunk_boxes(volume, true)
+		var missing := 0
+		for i in 40:
+			# A surface point within 300 m; coarse chunks may place their surface
+			# up to a voxel (of their LOD) off the true one.
+			var q := (dir * 4000.0 + Vector3(rng.randf_range(-1, 1), rng.randf_range(-1, 1), rng.randf_range(-1, 1)) * 300.0).normalized()
+			var lo := 3700.0
+			var hi := 4600.0
+			for k in 30:
+				var m := (lo + hi) * 0.5
+				if sdf.sample(q * m) < 0.0: lo = m
+				else: hi = m
+			if not boxes.any(func(b): return (b[0] as AABB).has_point(q * lo)):
+				missing += 1
+		holes += 1 if missing > 0 else 0
+		worst = maxi(worst, missing)
+		if f % 8 == 7:
+			mismatched_frames += 1 if _seam_mismatches(volume) > 0 else 0
+	_check("fast flight no holes", holes == 0, "%d of 400 frames, up to %d of 40 points uncovered" % [holes, worst])
+	_check("fast flight seams match their neighbors", mismatched_frames == 0,
+		"%d of 50 checks with chunks meshed for another neighbor LOD than the one shown" % mismatched_frames)
+	await _settle(volume)
+	var visible := _chunk_boxes(volume, false)
+	var nested := 0
+	for a in visible:
+		for b in visible:
+			if a[1] > b[1] and (a[0] as AABB).grow(-0.01).has_point((b[0] as AABB).get_center()):
+				nested += 1
+	_check("fast flight leaves no replaced chunks", nested == 0, "%d chunks inside coarser ones" % nested)
+	holder.queue_free()
+	await get_tree().process_frame
+
+## Faces of shown chunks whose seam was meshed for another LOD than that of the
+## chunk shown across it: a crack. Chunks that change LOD change their
+## neighbors' seams, so a build's meshes must all be shown together.
+func _seam_mismatches(volume: JarVoxelVolume) -> int:
+	const FACES := [Vector3(1, 0, 0), Vector3(-1, 0, 0), Vector3(0, 1, 0), Vector3(0, -1, 0), Vector3(0, 0, 1), Vector3(0, 0, -1)]
+	var shown := {}
+	var chunks := []
+	for c in volume.get_children():
+		if c is JarVoxelChunk and c.visible and c.get_mesh_instance().mesh and c.get_mesh_instance().mesh.get_surface_count() > 0:
+			var size: float = 16.0 * volume.voxel_size * pow(2.0, c.get_lod())
+			shown[_chunk_key(c.position, c.get_lod(), size)] = true
+			chunks.append(c)
+	var bad := 0
+	for c: JarVoxelChunk in chunks:
+		var lod := c.get_lod()
+		var size: float = 16.0 * volume.voxel_size * pow(2.0, lod)
+		var bits := c.get_boundaries()
+		for i in 6:
+			var p: Vector3 = c.position + FACES[i] * (size * 0.5 + 0.25 * volume.voxel_size)
+			var other := -1
+			for l in 9:
+				if shown.has(_chunk_key(p, l, 16.0 * volume.voxel_size * pow(2.0, l))):
+					other = l
+					break
+			if other >= 0 and ((other > lod) != bool(bits & (1 << i)) or (other < lod) != bool(bits & (1 << (i + 8)))):
+				bad += 1
+	return bad
+
+func _chunk_key(p: Vector3, lod: int, size: float) -> String:
+	return "%d:%d:%d:%d" % [lod, floori(p.x / size), floori(p.y / size), floori(p.z / size)]
+
+## [box, LOD] of each visible chunk with a mesh; `tolerant` grows each by one
+## of its voxels.
+func _chunk_boxes(volume: JarVoxelVolume, tolerant: bool) -> Array:
+	var boxes := []
+	for c in volume.get_children():
+		if c is JarVoxelChunk and c.visible and c.get_mesh_instance().mesh and c.get_mesh_instance().mesh.get_surface_count() > 0:
+			var voxel: float = volume.voxel_size * pow(2.0, c.get_lod())
+			var box := AABB(c.position - Vector3.ONE * 8.0 * voxel, Vector3.ONE * 16.0 * voxel)
+			boxes.append([box.grow(voxel) if tolerant else box, c.get_lod()])
+	return boxes
 
 func _check(name: String, ok: bool, detail := "") -> void:
 	if not ok:
@@ -70,7 +174,9 @@ func _test(config: Dictionary) -> void:
 	while x <= reach:
 		var z := -reach
 		while z <= reach:
-			var from := viewer.position + Vector3(x, 200, z)
+			# Off the voxel grid: a ray exactly through a mesh vertex can slip
+			# between triangles in Jolt (no gap in the mesh).
+			var from := viewer.position + Vector3(x + 0.0137, 200, z + 0.0073)
 			var hit := space.intersect_ray(PhysicsRayQueryParameters3D.create(from, from + Vector3.DOWN * 400))
 			rays += 1
 			misses += 0 if hit else 1

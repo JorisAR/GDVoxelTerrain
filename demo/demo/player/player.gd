@@ -206,5 +206,5 @@ func _update_hud() -> void:
 	var volumes := _volumes()
 	var mesher: String = ["surface nets", "dual contouring"][volumes[0].meshing_algorithm] if volumes else ""
 	var brush: String = editor.describe() if editor and editor.has_method("describe") else ""
-	hud.text = "%d fps   %s   |   %s   |   %s (M)\nLMB dig  RMB add  Q brush  scroll size  E smooth  1-8 material  P paint  R preview  Tab fly  G trees  H grass" % [
+	hud.text = "%d fps   %s   |   %s   |   %s (M)\nLMB dig  RMB add  Q brush  scroll size  E smooth  1-8 material (0 auto)  P paint  R preview  Tab fly  G trees  H grass" % [
 		Engine.get_frames_per_second(), mode, brush, mesher]

@@ -10,6 +10,8 @@ func _ready() -> void:
 	await _test_details()
 	await _test_biomes()
 	await _test_toggles()
+	await _test_detail_resolution()
+	await _test_detail_sphere()
 	await _test_planet_orientation()
 	print("Population tests: %s" % ("ALL PASSED" if _failures == 0 else "%d FAILED" % _failures))
 	get_tree().quit(1 if _failures > 0 else 0)
@@ -74,6 +76,23 @@ func _test_features() -> void:
 	volume.regenerate_population()
 	await _settle(volume)
 	_check("removal persists", volume.get_features_near(target, 0.5).is_empty())
+
+	# Edits nearby that leave a feature's ground alone keep it: a hole beside
+	# it, a blob of earth above it (their bounding boxes do contain it).
+	var kept: Array[Vector3] = []
+	for f in volume.get_features_near(center + Vector3(-40, 0, 0), 30.0):
+		var o: Vector3 = f.transform.origin
+		if kept.all(func(k): return k.distance_to(o) > 15.0) and o.distance_to(target) > 15.0:
+			kept.append(o)
+		if kept.size() == 2:
+			break
+	volume.sphere_edit(kept[0] + Vector3(5, 0, 0), 2.0, false)
+	volume.sphere_edit(kept[1] + Vector3(0, 6, 0), 2.0, true)
+	await _settle(volume)
+	_check("nearby edits keep features", kept.all(func(k): return not volume.get_features_near(k, 0.5).is_empty()))
+	volume.regenerate_population()
+	await _settle(volume)
+	_check("nearby edits keep features after regenerating", kept.all(func(k): return not volume.get_features_near(k, 0.5).is_empty()))
 
 	# remove_features() for gameplay (e.g. chopping a tree).
 	var other: Vector3 = volume.get_features_near(center + Vector3(40, 0, 0), 60.0)[0].transform.origin
@@ -221,6 +240,126 @@ func _test_toggles() -> void:
 	world.viewer.queue_free()
 	await get_tree().process_frame
 
+## Details are placed from a lattice in volume space, not from the mesh's
+## triangles: the same ground gets the same details at another voxel size
+## (only their height follows the mesh, and on steep ground their position a
+## little), at the same density.
+func _test_detail_resolution() -> void:
+	var detail := JarTerrainDetail.new()
+	detail.mesh = BoxMesh.new()
+	detail.density = 2.0
+	detail.maximum_slope = 90.0
+	detail.draw_distance = 20.0
+	var center := Vector3(3, 0, 5)
+	var sets := []
+	for voxel in [1.0, 0.5]:
+		var world := TestWorld.flat(self, center + Vector3(0, 12, 0), func(v: JarVoxelVolume):
+			v.voxel_size = voxel
+			v.population_terrain_details = [detail])
+		var volume: JarVoxelVolume = world.volume
+		await _settle(volume)
+		var points := []
+		for chunk in volume.get_children():
+			if not (chunk is JarVoxelChunk and chunk.visible):
+				continue
+			for n in chunk.get_children():
+				if n is MultiMeshInstance3D and n.visible and n.multimesh:
+					# Read from the buffer: headless rendering keeps no transforms.
+					# Per instance: 3 rows of (basis x, y, z, origin), then custom data.
+					var buffer: PackedFloat32Array = n.multimesh.buffer
+					for i in n.multimesh.instance_count:
+						var k: int = i * 16
+						var p: Vector3 = chunk.position + Vector3(buffer[k + 3], buffer[k + 7], buffer[k + 11])
+						if Vector2(p.x - center.x, p.z - center.z).length() < 10.0:
+							points.append(p)
+					break # the far mesh's multimesh holds the same instances
+		sets.append(points)
+		world.volume.queue_free()
+		world.viewer.queue_free()
+		await get_tree().process_frame
+	# The meshes differ a little (up to a few tenths of a meter), and so do the
+	# heights of the details on them; on steep ground also their sideways place.
+	var matched := 0
+	for p: Vector3 in sets[0]:
+		for q: Vector3 in sets[1]:
+			if p.distance_to(q) < 0.3:
+				matched += 1
+				break
+	_check("details independent of voxel size", sets[0].size() > 100 and matched > 0.9 * sets[0].size()
+		and absf(sets[1].size() - sets[0].size()) < 0.1 * sets[0].size(),
+		"%d and %d instances, %d at the same place" % [sets[0].size(), sets[1].size(), matched])
+
+## Details on a smooth sphere: each triangle takes candidates from the axis
+## plane it faces most, so the sphere is covered by six such regions. The
+## density must be the same at a region's center, on a seam between two and at
+## a corner of three; the spacing (mean distance to the nearest neighbor, 1.0
+## for a perfectly random scatter of that density) shows how even it is.
+func _test_detail_sphere() -> void:
+	var sdf := JarTerrainSdf.new()
+	sdf.shape = JarTerrainSdf.SHAPE_SPHERE
+	sdf.radius = 400.0
+	sdf.erosion = false
+	var detail := JarTerrainDetail.new()
+	detail.mesh = BoxMesh.new()
+	detail.density = 2.0
+	detail.maximum_slope = 90.0
+	detail.draw_distance = 24.0
+	var holder := Node3D.new()
+	add_child(holder)
+	var volume := JarVoxelVolume.new()
+	volume.chunk_scene = TestWorld.CHUNK_SCENE
+	volume.extent = 1024.0
+	volume.sdf = sdf
+	volume.population_terrain_details = [detail]
+	holder.add_child(volume)
+	var spots := {center = Vector3(0, 1, 0), seam = Vector3(1, 1, 0).normalized(), corner = Vector3(1, 1, 1).normalized()}
+	for name in spots:
+		var viewer := JarVoxelViewer.new()
+		viewer.position = spots[name] * 404.0
+		holder.add_child(viewer)
+	await _settle(volume)
+	var points: Array[Vector3] = []
+	for chunk in volume.get_children():
+		if not (chunk is JarVoxelChunk and chunk.visible):
+			continue
+		for n in chunk.get_children():
+			if n is MultiMeshInstance3D and n.visible and n.multimesh:
+				var buffer: PackedFloat32Array = n.multimesh.buffer
+				for i in n.multimesh.instance_count:
+					var k: int = i * 16
+					points.append(chunk.position + Vector3(buffer[k + 3], buffer[k + 7], buffer[k + 11]))
+				break
+	var radius := 8.0
+	var densities := {}
+	for name in spots:
+		var at: Vector3 = spots[name] * 400.0
+		var near: Array[Vector3] = []
+		for p in points:
+			if p.distance_to(at) < radius + 2.0:
+				near.append(p)
+		var inside := 0
+		var spacing := 0.0
+		for p in near:
+			if p.distance_to(at) >= radius:
+				continue
+			inside += 1
+			var best := INF
+			for q in near:
+				if q != p:
+					best = minf(best, p.distance_squared_to(q))
+			spacing += sqrt(best)
+		var density := inside / (PI * radius * radius)
+		densities[name] = density
+		# A random scatter of density d has mean nearest-neighbor distance 0.5 / sqrt(d).
+		print("INFO sphere details %s: %.2f per square meter, spacing %.2f of random" % [name, density,
+			(spacing / maxi(inside, 1)) / (0.5 / sqrt(maxf(density, 1e-6)))])
+	var low: float = densities.values().min()
+	var high: float = densities.values().max()
+	_check("sphere details same density everywhere", low > 0.0 and high < low * 1.15 and absf(low - detail.density) < 0.2 * detail.density,
+		"%.2f to %.2f per square meter (density %.1f)" % [low, high, detail.density])
+	holder.queue_free()
+	await get_tree().process_frame
+
 ## On a planet, features stand along the local up (or the surface normal with
 ## align_with_normal). Flat ground hides a transposed basis (rotations about
 ## up look the same), so this needs a sphere.
@@ -288,7 +427,7 @@ func _settle(volume: JarVoxelVolume) -> void:
 	var start := Time.get_ticks_msec()
 	while idle < 60 and Time.get_ticks_msec() - start < 60000:
 		await get_tree().process_frame
-		idle = idle + 1 if not volume.is_building() and not volume.is_meshing() else 0
+		idle = idle + 1 if not volume.is_building() and not volume.is_meshing() and not volume.is_generating_details() else 0
 
 ## Two biomes (cold / warm), each with its own feature: weights sum to 1, and
 ## each feature only grows where its biome is.

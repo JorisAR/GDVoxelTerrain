@@ -127,7 +127,14 @@ class JarSignedDistanceField : public Resource
     template <typename T> void set_and_notify(T &field, const T &value)
     {
         field = value;
+        settings_changed();
         emit_changed();
+    }
+
+    // Called by set_and_notify before dependents hear of a change (e.g. to drop
+    // cached values).
+    virtual void settings_changed()
+    {
     }
 };
 

@@ -95,6 +95,10 @@ terrain_update_lod={
 3d_physics/layer_1="terrain"
 3d_physics/layer_2="characters"
 
+[physics]
+
+3d/physics_engine="Jolt Physics"
+
 [shader_globals]
 
 wind_noise_texture={

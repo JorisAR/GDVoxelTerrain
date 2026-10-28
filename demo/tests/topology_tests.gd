@@ -32,6 +32,7 @@ func _ready() -> void:
 			holder.queue_free()
 			await get_tree().process_frame
 	await _eroded_mountain()
+	await _reported_spots()
 	print("Topology tests: %s" % ("ALL PASSED" if _failures == 0 else "%d FAILED" % _failures))
 	get_tree().quit(1 if _failures > 0 else 0)
 
@@ -62,6 +63,36 @@ func _eroded_mountain() -> void:
 		"%d of %d shared vertices differ" % [seams.mismatched, seams.shared])
 	holder.queue_free()
 	await get_tree().process_frame
+
+## Spots of the demo planet reported from play (tests/report): a steep cliff
+## whose distance field overestimated (the octree dropped surface: see-through
+## holes), and a ridge whose crest was a crease sharper than a voxel (jagged
+## teeth: vertices far off the true surface).
+func _reported_spots() -> void:
+	for spot: Dictionary in [
+		{name = "cliff", viewer = Vector3(2083.2, 3118.1, 2019.6), at = Vector3(2066.2, 3115.9, 2033.8)},
+		{name = "ridge", viewer = Vector3(776.9, 4068.7, -657.5), at = Vector3(769.2, 4065.8, -662.9)},
+	]:
+		var holder := Node.new()
+		add_child(holder)
+		var volume := JarVoxelVolume.new()
+		volume.chunk_scene = TestWorld.CHUNK_SCENE
+		volume.extent = 10000.0
+		volume.sdf = load("res://demo/planet/planet_terrain.tres")
+		volume.meshing_algorithm = JarVoxelVolume.MESHING_DUAL_CONTOURING
+		volume.manifold = true
+		holder.add_child(volume)
+		var viewer := JarVoxelViewer.new()
+		viewer.position = spot.viewer
+		holder.add_child(viewer)
+		await _settle(volume)
+		var r := Topology.analyze(volume, spot.at, 30.0)
+		var q := Topology.quality(volume, spot.at, 30.0, true)
+		_check("reported %s no holes" % spot.name, r.open == 0, "%d open edges" % r.open)
+		_check("reported %s on the surface" % spot.name, q.off_surface == 0 and q.flipped * 1000 < q.triangles,
+			"%d vertices off the surface, %d of %d faces folded" % [q.off_surface, q.flipped, q.triangles])
+		holder.queue_free()
+		await get_tree().process_frame
 
 func _check(name: String, ok: bool, detail := "") -> void:
 	if not ok:

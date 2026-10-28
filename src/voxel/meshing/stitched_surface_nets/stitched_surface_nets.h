@@ -62,13 +62,19 @@ class StitchedSurfaceNets
     std::vector<float> _distanceScale; // 1 / |gradient|: turns sample values into true distances
     std::vector<bool> _hasGradient;
     glm::vec3 gradient_at(int node_id);
+    glm::vec3 project_to_volume_sdf(glm::vec3 point, glm::vec3 &normal) const;
     // Returns NaN if no dual contouring position fits the cell. `normal` gets the
     // average surface normal of the cell's samples (exact, for shading).
     glm::vec3 place_dual_contouring_vertex(const int node_id, const std::vector<int> &neighbours, glm::vec3 &normal,
                                            uint16_t edgeMask = 0x0FFF);
-    // Dual contouring: splits quads along the diagonal that best matches the
-    // vertex normals, and gives sharp creases their own normals.
-    void add_quad(int n0, int n1, int n2, int n3, bool flip);
+    // Quad dual to the grid edge from sample `a` to sample `b`. Dual
+    // contouring splits it along the diagonal that best matches the vertex
+    // normals. A quad whose triangles would both face against the edge (folded:
+    // placed vertices crossed over, the jagged teeth along sharp ridges) is fanned
+    // around the edge's surface crossing instead; its outline stays, so the
+    // neighbouring quads (and chunks) are unaffected.
+    void add_quad(int n0, int n1, int n2, int n3, bool flip, int a, int b);
+    int add_crossing_vertex(int a, int b);
     // Per vertex: placed on a sharp edge or corner (only those get crease
     // normals; smooth curvature keeps smooth shading). Set by
     // place_dual_contouring_vertex for the vertex being created.

@@ -3,6 +3,7 @@
 
 #include "bounds.h"
 #include "chunk_mesh_data.h"
+#include "chunk_detail_generator.h"
 #include <godot_cpp/classes/array_mesh.hpp>
 #include <godot_cpp/classes/collision_shape3d.hpp>
 #include <godot_cpp/classes/concave_polygon_shape3d.hpp>
@@ -52,8 +53,25 @@ class JarVoxelChunk : public Node3D
 
     void _update_multi_mesh_instances(int n);
 
+    static void hide_multi_mesh_instance(MultiMeshInstance3D *instance);
+    bool _has_details = false;
+
   public:
-    void clear_details() { _update_multi_mesh_instances(0); }
+    // Details (see DetailScheduler): what they grow on, which generation of
+    // that they belong to, and whether they are shown or being made.
+    enum DetailState
+    {
+        DETAILS_NONE,
+        DETAILS_QUEUED,
+        DETAILS_SHOWN,
+    };
+    DetailInputs detail_inputs;
+    uint64_t detail_token = 0;
+    DetailState detail_state = DETAILS_NONE;
+    bool has_details() const { return _has_details; }
+    void apply_details(const JarVoxelVolume &terrain, const std::vector<Ref<JarTerrainDetail>> &details,
+                       const std::vector<PackedFloat32Array> &buffers);
+    void clear_details();
 
   private:
 

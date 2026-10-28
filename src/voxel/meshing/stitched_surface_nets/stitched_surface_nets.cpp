@@ -54,6 +54,25 @@ glm::vec3 StitchedSurfaceNets::gradient_at(int node_id)
     return _gradients[node_id];
 }
 
+// The volume SDF's surface point nearest `point` (a few Newton steps from it),
+// and the surface normal there (`normal` in and out).
+glm::vec3 StitchedSurfaceNets::project_to_volume_sdf(glm::vec3 point, glm::vec3 &normal) const
+{
+    for (int step = 0; step < 3; ++step)
+    {
+        const glm::vec3 g = _sdf->gradient(point);
+        const float len2 = glm::dot(g, g);
+        if (len2 < 1e-8f)
+            break;
+        const float value = _sdf->distance(point);
+        point -= value * g / len2;
+        normal = g / std::sqrt(len2);
+        if (std::abs(value) < 1e-3f)
+            break;
+    }
+    return point;
+}
+
 glm::vec3 StitchedSurfaceNets::place_dual_contouring_vertex(const int node_id, const std::vector<int> &neighbours,
                                                              glm::vec3 &averageNormal, uint16_t edgeMask)
 {
@@ -77,8 +96,19 @@ glm::vec3 StitchedSurfaceNets::place_dual_contouring_vertex(const int node_id, c
         cellMax = glm::max(cellMax, n->_center);
     }
     const float cellSize = cellMax.x - cellMin.x;
+    // Where an edit meets untouched ground (edited corners carry exact normals
+    // and distances, the others only the volume SDF's estimate), project the
+    // untouched corners' planes onto the real surface: the estimate can be off
+    // by tens of centimeters on rough terrain, and at the edit's rim that
+    // flipped vertices between the edge and its two sides (jagged teeth).
+    bool anyEdited = false, anyUntouched = false;
+    for (int i = 0; i < 8; ++i)
+        if ((cornerMask >> i) & 1)
+            (_meshChunk.nodes[neighbours[i]]->has_normal() ? anyEdited : anyUntouched) = true;
+    const bool editedCell = anyEdited && anyUntouched;
     _lastVertexSharp = false;
     SharpPlanes planes;
+    Qef clusterQefs[4]; // the samples of each normal cluster (one surface each)
     glm::vec3 firstNormal(0.0f);
     float minAgreement = 1.0f; // lowest cosine between the samples' normals
     for (int i = 0; i < 8; ++i)
@@ -86,14 +116,17 @@ glm::vec3 StitchedSurfaceNets::place_dual_contouring_vertex(const int node_id, c
         if (((cornerMask >> i) & 1) == 0)
             continue;
         VoxelOctreeNode *n = _meshChunk.nodes[neighbours[i]];
-        const glm::vec3 normal = gradient_at(neighbours[i]);
+        glm::vec3 normal = gradient_at(neighbours[i]);
         const float d = n->get_value() * _distanceScale[neighbours[i]];
         if (std::abs(d) > 1.5f * cellSize)
             continue; // too far for its closest feature to be in this cell
+        glm::vec3 point = n->_center - d * normal;
+        if (editedCell && !n->has_normal())
+            point = project_to_volume_sdf(point, normal);
         if (qef.count() == 0)
             firstNormal = normal;
         minAgreement = std::min(minAgreement, glm::dot(firstNormal, normal));
-        qef.add(n->_center - d * normal, normal);
+        qef.add(point, normal);
         averageNormal += normal;
         // Cluster the sample normals (within ~25 degrees), in corner order.
         int cluster = -1;
@@ -103,7 +136,10 @@ glm::vec3 StitchedSurfaceNets::place_dual_contouring_vertex(const int node_id, c
         if (cluster < 0 && planes.count < 4)
             planes.normals[cluster = planes.count++] = glm::vec3(0.0f);
         if (cluster >= 0)
+        {
             planes.normals[cluster] += normal;
+            clusterQefs[cluster].add(point, normal);
+        }
     }
     const float normalLength = glm::length(averageNormal);
     averageNormal = normalLength > 1e-6f ? averageNormal / normalLength : glm::vec3(0.0f);
@@ -135,6 +171,30 @@ glm::vec3 StitchedSurfaceNets::place_dual_contouring_vertex(const int node_id, c
     const glm::vec3 tolerance(cellSize * 0.01f);
     for (int rank = qef.rank(_featureThreshold); rank >= 1; --rank)
     {
+        if (rank == 1 && planes.count >= 2)
+        {
+            // Two surfaces meet near this cell, but not inside it (no edge or
+            // corner solution fits). One plane averaged from both runs through
+            // the solid between them: a vertex there juts out of the mesh as a
+            // tooth along the edge. The cell holds one of the surfaces: put the
+            // vertex on the one that fits closest to where the surface crosses.
+            float best = std::numeric_limits<float>::max();
+            glm::vec3 bestPoint(0.0f);
+            for (int c = 0; c < planes.count; ++c)
+            {
+                Qef::Solution candidate = clusterQefs[c].solve_rank(1, _featureThreshold);
+                if (!Qef::fit_into(candidate, target, cellMin - tolerance, cellMax + tolerance))
+                    continue;
+                const float distance = glm::distance(candidate.point, target);
+                if (distance < best)
+                {
+                    best = distance;
+                    bestPoint = candidate.point;
+                }
+            }
+            if (best < std::numeric_limits<float>::max())
+                return glm::clamp(bestPoint, cellMin, cellMax);
+        }
         Qef::Solution solution = qef.solve_rank(rank, _featureThreshold);
         if (Qef::fit_into(solution, target, cellMin - tolerance, cellMax + tolerance))
         {
@@ -298,6 +358,8 @@ ChunkMeshData *StitchedSurfaceNets::generate_mesh_data(const JarVoxelVolume &ter
     // UtilityFunctions::print("Ring Nodes: " + ringNodes);
     // UtilityFunctions::print("Inner Nodes: " + innerNodes);
 
+    std::vector<int> corners;
+    corners.reserve(8);
     for (size_t node_id = 0; node_id < _meshChunk.innerNodeCount; node_id++)
     {
         if (_meshChunk.vertexIndices[node_id] <= -1)
@@ -330,7 +392,14 @@ ChunkMeshData *StitchedSurfaceNets::generate_mesh_data(const JarVoxelVolume &ter
                     }
                 }
                 if (ok)
-                    add_quad(n[0], n[1], n[2], n[3], flipFace == -1);
+                {
+                    // The grid edge the quad is dual to: corner 7 of this cell
+                    // and the corner across face i.
+                    static const int Across[3] = {6, 5, 3};
+                    corners.clear();
+                    if (_meshChunk.get_neighbours(pos, corners))
+                        add_quad(n[0], n[1], n[2], n[3], flipFace == -1, corners[7], corners[Across[i]]);
+                }
             }
         }
     }
@@ -698,8 +767,34 @@ void StitchedSurfaceNets::register_edge_node(const int node_id, const std::vecto
 }
 
 // Quad n0 n1 / n2 n3 (n0-n3 and n1-n2 are the diagonals).
-void StitchedSurfaceNets::add_quad(int n0, int n1, int n2, int n3, bool flip)
+void StitchedSurfaceNets::add_quad(int n0, int n1, int n2, int n3, bool flip, int a, int b)
 {
+    // Outward: from the solid sample to the empty one.
+    VoxelOctreeNode *na = _meshChunk.nodes[a];
+    VoxelOctreeNode *nb = _meshChunk.nodes[b];
+    const glm::vec3 edge = na->get_value() < nb->get_value() ? nb->_center - na->_center : na->_center - nb->_center;
+    const Vector3 outward = Vector3(edge.x, edge.y, edge.z).normalized();
+    // How well triangle (i, j, k), as add_tri emits it, faces outward (cosine).
+    auto facing = [&](int i, int j, int k) {
+        if (flip)
+            std::swap(i, j);
+        // Godot's front faces are wound clockwise.
+        const Vector3 n = (_verts[k] - _verts[i]).cross(_verts[j] - _verts[i]);
+        const real_t len = n.length();
+        return len <= 1e-12f ? real_t(0) : n.dot(outward) / len;
+    };
+    const real_t facing03 = std::min(facing(n0, n1, n3), facing(n0, n3, n2));
+    const real_t facing12 = std::min(facing(n1, n3, n2), facing(n1, n2, n0));
+    constexpr real_t Folded = 0.05f;
+    if (facing03 <= Folded && facing12 <= Folded)
+    {
+        const int c = add_crossing_vertex(a, b);
+        add_tri(n0, n1, c, flip);
+        add_tri(n1, n3, c, flip);
+        add_tri(n3, n2, c, flip);
+        add_tri(n2, n0, c, flip);
+        return;
+    }
     bool splitAlong03 = _verts[n0].distance_squared_to(_verts[n3]) < _verts[n1].distance_squared_to(_verts[n2]);
     if (_dualContouring)
     {
@@ -717,6 +812,11 @@ void StitchedSurfaceNets::add_quad(int n0, int n1, int n2, int n3, bool flip)
         const real_t along12 = std::min(agreement(n1, n3, n2), agreement(n1, n2, n0));
         splitAlong03 = along03 >= along12;
     }
+    // Never a folded split when the other one is not.
+    if (facing03 <= Folded)
+        splitAlong03 = false;
+    else if (facing12 <= Folded)
+        splitAlong03 = true;
     if (splitAlong03)
     {
         add_tri(n0, n1, n3, flip);
@@ -727,6 +827,31 @@ void StitchedSurfaceNets::add_quad(int n0, int n1, int n2, int n3, bool flip)
         add_tri(n1, n3, n2, flip);
         add_tri(n1, n2, n0, flip);
     }
+}
+
+// A vertex where the surface crosses the edge between samples `a` and `b`
+// (depends only on the two samples, so chunks sharing the edge agree).
+int StitchedSurfaceNets::add_crossing_vertex(int a, int b)
+{
+    VoxelOctreeNode *na = _meshChunk.nodes[a];
+    VoxelOctreeNode *nb = _meshChunk.nodes[b];
+    const float va = na->get_value(), vb = nb->get_value();
+    const float t = std::abs(va) / std::max(std::abs(va) + std::abs(vb), 1e-12f);
+    const glm::vec3 position = glm::mix(na->_center, nb->_center, t) - _chunk->_center;
+    glm::vec3 normal = (vb - va) * (nb->_center - na->_center);
+    if (_dualContouring)
+        normal = glm::mix(gradient_at(a), gradient_at(b), t);
+    normal = glm::length(normal) > 0.0f ? glm::normalize(normal) : glm::vec3(0.0f, 1.0f, 0.0f);
+    MaterialAccumulator materials;
+    materials.add(na->get_materials(), 1.0f - t);
+    materials.add(nb->get_materials(), t);
+    const int index = int(_verts.size());
+    _sharp.push_back(0);
+    _sharpPlanes.push_back(SharpPlanes());
+    _verts.push_back({position.x, position.y, position.z});
+    _normals.push_back({normal.x, normal.y, normal.z});
+    _vertexMaterials.push_back(VertexMaterials::from(materials));
+    return index;
 }
 
 // Smooth normals within a surface, but not across sharp creases: each triangle

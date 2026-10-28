@@ -81,6 +81,12 @@
 				Returns [code]true[/code] while the background worker is rebuilding the octree or applying edits. Edits requested meanwhile are queued and applied afterwards.
 			</description>
 		</method>
+		<method name="is_generating_details" qualifiers="const">
+			<return type="bool" />
+			<description>
+				Returns [code]true[/code] while details ([member population_terrain_details] and the biomes' details) are still being generated for full-detail chunks near a viewer. Details are made on their own background thread, after the chunks are meshed, and only within their [member JarTerrainDetail.draw_distance].
+			</description>
+		</method>
 		<method name="is_meshing" qualifiers="const">
 			<return type="bool" />
 			<description>
@@ -180,6 +186,9 @@
 		</member>
 		<member name="dual_contouring_feature_threshold" type="float" setter="set_dual_contouring_feature_threshold" getter="get_dual_contouring_feature_threshold" default="0.1">
 			How eagerly dual contouring snaps vertices to sharp features, as a fraction of the strongest surface direction in a cell. Lower values sharpen subtler creases but can add noise on curved surfaces; higher values behave more like surface nets.
+		</member>
+		<member name="edit_material" type="int" setter="set_edit_material" getter="get_edit_material" default="-1">
+			Index into [member materials] painted onto ground that edits dig out or add, when the edit itself names no material (material -1, as [method sphere_edit] and digging brushes use). Painted ground shows that material instead of the ground rules, and details do not grow on it, so dug pits and added mounds show bare dirt or stone. -1 leaves the existing materials (the ground rules then decide).
 		</member>
 		<member name="editor_preview_colliders" type="bool" setter="set_preview_colliders" getter="get_preview_colliders" default="false">
 			If [code]true[/code], the editor preview builds chunk and feature colliders too (needed only for physics in the editor).
