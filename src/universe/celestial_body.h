@@ -53,6 +53,7 @@ class JarCelestialBody : public Node3D
     float _gravityReach = 0.0f;    // no gravity beyond (0: unlimited)
     float _spinPeriod = 0.0f;      // seconds per turn (0: no spin)
     Vector3 _spinAxis{0, 1, 0};
+    float _rotatingFrameHeight = 0.0f; // 0: automatic
     JarVoxelVolume *_volume = nullptr; // explicit; else the first child volume
     bool _registered = false;
     // Where the body hangs in the universe (set by JarVoxelUniverse when it
@@ -102,6 +103,20 @@ class JarCelestialBody : public Node3D
     void set_spin_period(float value) { _spinPeriod = value; }
     Vector3 get_spin_axis() const { return _spinAxis; }
     void set_spin_axis(const Vector3 &value) { _spinAxis = value; }
+    float get_rotating_frame_height() const { return _rotatingFrameHeight; }
+    void set_rotating_frame_height(float value) { _rotatingFrameHeight = std::max(0.0f, value); }
+    // Below this height above sea level the scene turns with the body when it
+    // is the anchor (and things near it move along with it): the setting, else
+    // the top of its atmosphere, else half its radius. Flat bodies: always.
+    float get_effective_rotating_frame_height() const;
+    // Height above sea level (radial: from the center; flat: along the axis).
+    float get_altitude(const Vector3 &position) const;
+    // Mass in units of surface gravity times radius squared (G left out).
+    double get_mass() const;
+    // On an orbit around another body: the distance from its center within
+    // which it is the better frame of reference, orbit radius * (m / M)^0.4.
+    // Not on an orbit: infinite.
+    float get_sphere_of_influence() const;
     JarVoxelVolume *get_volume() const { return _volume; }
     void set_volume(JarVoxelVolume *value) { _volume = value; }
 };

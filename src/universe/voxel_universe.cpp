@@ -4,8 +4,11 @@
 #include "voxel_viewer.h"
 #include <algorithm>
 #include <climits>
+#include <cmath>
 #include <godot_cpp/classes/camera3d.hpp>
 #include <godot_cpp/classes/character_body3d.hpp>
+#include <godot_cpp/classes/directional_light3d.hpp>
+#include <godot_cpp/classes/environment.hpp>
 #include <godot_cpp/classes/engine.hpp>
 #include <godot_cpp/classes/physics_server3d.hpp>
 #include <godot_cpp/classes/project_settings.hpp>
@@ -85,15 +88,16 @@ void JarVoxelUniverse::_bind_methods()
     ClassDB::bind_method(D_METHOD("set_ticks", "ticks"), &JarVoxelUniverse::set_ticks);
     ClassDB::bind_method(D_METHOD("has_bodies"), &JarVoxelUniverse::has_bodies);
     ClassDB::bind_method(D_METHOD("get_bodies"), &JarVoxelUniverse::get_bodies);
-    ClassDB::bind_method(D_METHOD("get_gravity", "global_position", "relative_to"), &JarVoxelUniverse::get_gravity,
-                         DEFVAL(Variant()));
-    ClassDB::bind_method(D_METHOD("get_up", "global_position", "fallback", "relative_to"), &JarVoxelUniverse::get_up,
-                         DEFVAL(Vector3(0, 1, 0)), DEFVAL(Variant()));
+    ClassDB::bind_method(D_METHOD("get_gravity", "global_position", "relative_to", "frame_relative"),
+                         &JarVoxelUniverse::get_gravity, DEFVAL(Variant()), DEFVAL(true));
+    ClassDB::bind_method(D_METHOD("get_up", "global_position", "fallback", "relative_to", "frame_relative"),
+                         &JarVoxelUniverse::get_up, DEFVAL(Vector3(0, 1, 0)), DEFVAL(Variant()), DEFVAL(true));
     ClassDB::bind_method(D_METHOD("get_dominant_body", "global_position"), &JarVoxelUniverse::get_dominant_body);
     ClassDB::bind_method(D_METHOD("get_anchor"), &JarVoxelUniverse::get_anchor);
     ClassDB::bind_method(D_METHOD("set_anchor_override", "body"), &JarVoxelUniverse::set_anchor_override);
     ClassDB::bind_method(D_METHOD("get_anchor_override"), &JarVoxelUniverse::get_anchor_override);
     ClassDB::bind_method(D_METHOD("get_frame_anchor"), &JarVoxelUniverse::get_frame_anchor);
+    ClassDB::bind_method(D_METHOD("is_frame_rotating"), &JarVoxelUniverse::is_frame_rotating);
     ClassDB::bind_method(D_METHOD("get_body_velocity_at", "body", "global_position"),
                          &JarVoxelUniverse::get_body_velocity_at);
     ClassDB::bind_method(D_METHOD("get_body_angular_velocity", "body"), &JarVoxelUniverse::get_body_angular_velocity);
@@ -153,10 +157,13 @@ void JarVoxelUniverse::unregister_body(JarCelestialBody *body)
         if (auto *updater = Object::cast_to<Node>(ObjectDB::get_instance(_updater)))
         {
             restore_space_gravity(updater);
+            place_sky(updater, DTransform(), true);
             updater->queue_free();
             _updater = 0;
         }
         _lastView = DTransform(); // the next bodies start from the scene as placed
+        _skyRest.clear();
+        _skyFound = false;
     }
 }
 
@@ -210,8 +217,15 @@ void JarVoxelUniverse::step(Node *context)
     _anchor = anchor ? anchor->get_instance_id() : 0;
     if (!bool(setting(FrameSwitching, true)))
         _frameAnchor = 0;
-    else if (anchor && anchor->get_instance_id() != _frameAnchor)
-        switch_frame(context, anchor, time);
+    else if (anchor)
+    {
+        const bool rotating = choose_rotating(anchor);
+        if (anchor->get_instance_id() != _frameAnchor || rotating != _frameRotating)
+            switch_frame(context, anchor, rotating, time);
+    }
+    if (!_skyFound)
+        find_sky(context);
+    place_sky(context, _lastView);
     if (bool(setting(SpaceGravity, true)))
         apply_space_gravity(context, anchor);
 }
@@ -250,10 +264,17 @@ JarCelestialBody *JarVoxelUniverse::get_frame_anchor() const
     return Object::cast_to<JarCelestialBody>(ObjectDB::get_instance(_frameAnchor));
 }
 
+DTransform JarVoxelUniverse::frame_transform(const JarCelestialBody *anchor, bool rotating, double time) const
+{
+    const DTransform pose = universe_transform(anchor, time);
+    // Not rotating: only the center (where the body's local origin is).
+    return rotating ? pose : DTransform::translation(pose.origin);
+}
+
 DTransform JarVoxelUniverse::view_at(double time) const
 {
     if (const JarCelestialBody *anchor = get_frame_anchor())
-        return _frameAnchorPose * universe_transform(anchor, time).inverse();
+        return _frameAnchorPose * frame_transform(anchor, _frameRotating, time).inverse();
     return _lastView;
 }
 
@@ -261,16 +282,16 @@ void JarVoxelUniverse::place(double time)
 {
     const DTransform view = view_at(time);
     _lastView = view;
-    JarCelestialBody *anchor = get_frame_anchor();
+    // A turning frame's anchor stands still: exactly at its pose (no rounding).
+    JarCelestialBody *still = _frameRotating ? get_frame_anchor() : nullptr;
     // Parents first (orbits are top level, so only their bodies' order matters).
-    // An orbit carrying the anchor stays where it is: its bodies are placed
+    // An orbit carrying a still anchor stays where it is: its bodies are placed
     // in the scene directly, and a moving parent would move all their chunks.
     for (JarBodyOrbit *orbit : _orbits)
-        if (anchor == nullptr || !orbit->is_ancestor_of(anchor))
+        if (still == nullptr || !orbit->is_ancestor_of(still))
             place_node(orbit, (view * orbit_transform(orbit, time)).to());
-    // The frame anchor exactly at its pose (no rounding: it never moves).
     for (JarCelestialBody *body : _bodies)
-        place_node(body, body == anchor ? _frameAnchorPose.to() : (view * universe_transform(body, time)).to());
+        place_node(body, body == still ? _frameAnchorPose.to() : (view * universe_transform(body, time)).to());
 }
 
 void JarVoxelUniverse::place_node(Node3D *node, const Transform3D &transform)
@@ -282,17 +303,19 @@ void JarVoxelUniverse::place_node(Node3D *node, const Transform3D &transform)
     node->set_global_transform(transform);
 }
 
-void JarVoxelUniverse::switch_frame(Node *context, JarCelestialBody *anchor, double time)
+void JarVoxelUniverse::switch_frame(Node *context, JarCelestialBody *anchor, bool rotating, double time)
 {
     JarCelestialBody *previous = get_frame_anchor();
     const DTransform oldView = view_at(time);
-    // The new anchor stops where the old view shows it now: nothing jumps.
-    const DTransform now = oldView * universe_transform(anchor, time);
-    const DTransform before = view_at(time - tick_time()) * universe_transform(anchor, time - tick_time());
+    // The new frame stops where the old view shows it now: nothing jumps.
+    const DTransform now = oldView * frame_transform(anchor, rotating, time);
+    const DTransform before = view_at(time - tick_time()) * frame_transform(anchor, rotating, time - tick_time());
     _frameAnchor = anchor->get_instance_id();
+    _frameRotating = rotating;
     _frameAnchorPose = now;
+    _skyFound = false; // pick up lights added since
     // Free physics bodies keep moving as they did, now seen from a frame that
-    // moved and turned with the new anchor (not at the very first anchor: the
+    // moved (and turned) with the new one (not at the very first anchor: the
     // scene was placed at rest).
     if (previous != nullptr && context->is_inside_tree())
     {
@@ -322,7 +345,62 @@ void JarVoxelUniverse::switch_frame(Node *context, JarCelestialBody *anchor, dou
             }
         }
     }
-    emit_signal("anchor_changed", previous, anchor);
+    if (previous != anchor)
+        emit_signal("anchor_changed", previous, anchor);
+}
+
+void JarVoxelUniverse::find_sky(Node *context)
+{
+    if (!context->is_inside_tree())
+        return;
+    _skyFound = true;
+    const Basis toUniverse = _lastView.inverse().to().basis;
+    const Ref<World3D> world = context->get_viewport()->find_world_3d();
+    if (world.is_valid() && world->get_environment().is_valid())
+    {
+        const Ref<Environment> environment = world->get_environment();
+        _skyRest.try_emplace(environment->get_instance_id(),
+                             toUniverse * Basis::from_euler(environment->get_sky_rotation()));
+    }
+    // Lights not on a body: the sun and other sky lights.
+    TypedArray<Node> lights = context->get_tree()->get_root()->find_children("*", "DirectionalLight3D", true, false);
+    for (int64_t i = 0; i < lights.size(); ++i)
+    {
+        auto *light = Object::cast_to<DirectionalLight3D>(lights[i]);
+        bool onBody = false;
+        for (Node *n = light ? light->get_parent() : nullptr; n != nullptr && !onBody; n = n->get_parent())
+            onBody = Object::cast_to<JarCelestialBody>(n) != nullptr;
+        if (light && !onBody)
+            _skyRest.try_emplace(light->get_instance_id(), toUniverse * light->get_global_basis());
+    }
+}
+
+void JarVoxelUniverse::place_sky(Node *context, const DTransform &view, bool restore)
+{
+    // The view's rotation only (bases are orthonormal; no scale in a view).
+    const Basis turn = view.to().basis.orthonormalized();
+    for (auto it = _skyRest.begin(); it != _skyRest.end();)
+    {
+        Object *object = ObjectDB::get_instance(it->first);
+        if (object == nullptr)
+        {
+            it = _skyRest.erase(it);
+            continue;
+        }
+        const Basis basis = restore ? it->second : turn * it->second;
+        if (auto *environment = Object::cast_to<Environment>(object))
+        {
+            const Vector3 euler = basis.get_euler();
+            if (environment->get_sky_rotation() != euler)
+                environment->set_sky_rotation(euler);
+        }
+        else if (auto *light = Object::cast_to<DirectionalLight3D>(object); light && light->is_inside_tree())
+        {
+            if (light->get_global_basis() != basis)
+                light->set_global_basis(basis);
+        }
+        ++it;
+    }
 }
 
 Vector3 JarVoxelUniverse::point_velocity(const DTransform &now, const DTransform &before, const Vector3 &position) const
@@ -369,32 +447,73 @@ JarCelestialBody *JarVoxelUniverse::choose_anchor() const
 {
     if (auto *body = Object::cast_to<JarCelestialBody>(ObjectDB::get_instance(_anchorOverride)))
         return body;
-    // Where the first viewer is (else the camera).
     Vector3 at;
-    bool found = false;
+    const bool found = viewer_position(at);
+    auto *current = Object::cast_to<JarCelestialBody>(ObjectDB::get_instance(_anchor));
+    if (found)
+    {
+        // The smallest sphere of influence the viewer is in (a moon's inside
+        // its planet's): well before its surface, where its gravity is still
+        // weaker than the planet's. A little hysteresis on leaving it.
+        JarCelestialBody *best = nullptr;
+        float bestReach = INFINITY;
+        for (JarCelestialBody *body : _bodies)
+        {
+            const float sphere = body->get_sphere_of_influence();
+            const float reach = body == current ? 1.1f * sphere : sphere;
+            if (std::isfinite(sphere) && reach < bestReach && (at - body->get_center()).length() < reach)
+            {
+                best = body;
+                bestReach = reach;
+            }
+        }
+        if (best)
+            return best;
+    }
+    // Else among the bodies on no orbit: the strongest pull.
+    JarCelestialBody *dominant = nullptr;
+    real_t strength = -1.0f;
+    for (JarCelestialBody *body : _bodies)
+        if (!std::isfinite(body->get_sphere_of_influence()) && body->gravity_at(at).length() > strength)
+        {
+            dominant = body;
+            strength = body->gravity_at(at).length();
+        }
+    if (!found || dominant == nullptr || current == nullptr || dominant == current ||
+        std::isfinite(current->get_sphere_of_influence()))
+        return dominant ? dominant : current;
+    // A little hysteresis: no flipping back and forth at the balance point.
+    return strength > 1.25f * current->gravity_at(at).length() ? dominant : current;
+}
+
+bool JarVoxelUniverse::viewer_position(Vector3 &at) const
+{
     for (const JarVoxelViewer *viewer : JarVoxelViewer::get_viewers())
         if (viewer->is_enabled() && viewer->is_inside_tree())
         {
             at = viewer->get_global_position();
-            found = true;
-            break;
+            return true;
         }
-    if (!found)
+    auto *updater = Object::cast_to<Node>(ObjectDB::get_instance(_updater));
+    Viewport *viewport = updater && updater->is_inside_tree() ? updater->get_viewport() : nullptr;
+    if (Camera3D *camera = viewport ? viewport->get_camera_3d() : nullptr)
     {
-        auto *updater = Object::cast_to<Node>(ObjectDB::get_instance(_updater));
-        Viewport *viewport = updater && updater->is_inside_tree() ? updater->get_viewport() : nullptr;
-        if (Camera3D *camera = viewport ? viewport->get_camera_3d() : nullptr)
-        {
-            at = camera->get_global_position();
-            found = true;
-        }
+        at = camera->get_global_position();
+        return true;
     }
-    JarCelestialBody *dominant = get_dominant_body(at);
-    auto *current = Object::cast_to<JarCelestialBody>(ObjectDB::get_instance(_anchor));
-    if (!found || dominant == nullptr || current == nullptr || dominant == current)
-        return dominant ? dominant : current;
-    // A little hysteresis: no flipping back and forth at the balance point.
-    return dominant->gravity_at(at).length() > 1.25f * current->gravity_at(at).length() ? dominant : current;
+    return false;
+}
+
+bool JarVoxelUniverse::choose_rotating(const JarCelestialBody *anchor) const
+{
+    Vector3 at;
+    if (!viewer_position(at))
+        return true;
+    // Near the surface the ground stands still (and the sky turns); higher up
+    // the sky stands still (and the body turns below). A little hysteresis.
+    const float height = anchor->get_effective_rotating_frame_height();
+    const bool staying = anchor->get_instance_id() == _frameAnchor && _frameRotating;
+    return anchor->get_altitude(at) < (staying ? 1.2f * height : height);
 }
 
 void JarVoxelUniverse::apply_space_gravity(Node *context, JarCelestialBody *anchor)
@@ -449,7 +568,8 @@ TypedArray<JarCelestialBody> JarVoxelUniverse::get_bodies() const
     return result;
 }
 
-Vector3 JarVoxelUniverse::get_gravity(const Vector3 &position, JarCelestialBody *relative_to) const
+Vector3 JarVoxelUniverse::get_gravity(const Vector3 &position, JarCelestialBody *relative_to,
+                                      bool frame_relative) const
 {
     if (_bodies.empty())
     {
@@ -466,7 +586,7 @@ Vector3 JarVoxelUniverse::get_gravity(const Vector3 &position, JarCelestialBody 
     Vector3 sum;
     for (const JarCelestialBody *body : _bodies)
         sum += body->gravity_at(position);
-    if (const JarCelestialBody *anchor = relative_to ? relative_to : get_anchor())
+    if (const JarCelestialBody *anchor = !frame_relative ? nullptr : relative_to ? relative_to : get_anchor())
     {
         const Vector3 center = anchor->get_center();
         for (const JarCelestialBody *body : _bodies)
@@ -476,13 +596,14 @@ Vector3 JarVoxelUniverse::get_gravity(const Vector3 &position, JarCelestialBody 
     return sum;
 }
 
-Vector3 JarVoxelUniverse::get_up(const Vector3 &position, const Vector3 &fallback, JarCelestialBody *relative_to) const
+Vector3 JarVoxelUniverse::get_up(const Vector3 &position, const Vector3 &fallback, JarCelestialBody *relative_to,
+                                 bool frame_relative) const
 {
     const double sharpness = double(setting(UpSharpness, 4.0));
     // The same pulls as get_gravity(): in the anchor's frame, other bodies
     // only add their tides (a planet does not tilt the ground of its moon).
     const JarCelestialBody *anchor =
-        bool(setting(PhysicalStrength, true)) ? (relative_to ? relative_to : get_anchor()) : nullptr;
+        bool(setting(PhysicalStrength, true)) && frame_relative ? (relative_to ? relative_to : get_anchor()) : nullptr;
     const Vector3 anchorCenter = anchor ? anchor->get_center() : Vector3();
     Vector3 pull;
     for (const JarCelestialBody *body : _bodies)

@@ -1,12 +1,14 @@
 shader_type spatial;
-// Water surface for JarPlanetWater. Vertices are projected onto the exact sea
+// Water surface for JarBodyWater. Vertices are projected onto the exact sea
 // level (a sphere for planets, a plane for flat worlds), so a coarse mesh still
 // meets the coast precisely. Color comes from the water depth behind each
 // pixel (absorption), with procedural waves, shore foam and fresnel.
 render_mode blend_mix, depth_draw_always, cull_back, world_vertex_coords;
 
-// Set by JarPlanetWater (world space).
+// Set by JarBodyWater (world space).
 uniform vec3 water_center = vec3(0.0);
+// The body's rotation (world to body): waves move with the body as it turns.
+uniform mat3 world_to_body = mat3(1.0);
 uniform vec3 water_axis = vec3(0.0, 1.0, 0.0);
 uniform float water_level = 0.0; // radius (radial) or height along the axis
 uniform bool water_radial = true;
@@ -38,6 +40,7 @@ instance uniform vec3 hole_center = vec3(0.0);
 instance uniform float hole_radius = 0.0;
 
 varying vec3 world_position;
+varying vec3 body_position; // relative to the center, in the body's space
 varying vec3 surface_up;
 
 void vertex() {
@@ -53,6 +56,7 @@ void vertex() {
 	VERTEX = p;
 	NORMAL = surface_up;
 	world_position = p;
+	body_position = world_to_body * (p - water_center);
 }
 
 float hash(vec3 p) {
@@ -79,13 +83,14 @@ void fragment() {
 		discard;
 	vec3 up = normalize(surface_up);
 	float t = TIME * wave_speed / wave_size;
-	// Normal from the wave height gradient along the surface.
+	// Normal from the wave height gradient along the surface (waves sampled
+	// in the body's space, tangents built in world space).
 	vec3 t1 = normalize(cross(up, abs(up.y) < 0.9 ? vec3(0, 1, 0) : vec3(1, 0, 0)));
 	vec3 t2 = cross(up, t1);
 	float e = wave_size * 0.05;
-	float h = waves(world_position, t);
-	float hx = waves(world_position + t1 * e, t);
-	float hz = waves(world_position + t2 * e, t);
+	float h = waves(body_position, t);
+	float hx = waves(body_position + world_to_body * t1 * e, t);
+	float hz = waves(body_position + world_to_body * t2 * e, t);
 	float view_distance = length(VERTEX);
 	float strength = wave_strength * (1.0 - smoothstep(wave_size * 20.0, wave_size * 120.0, view_distance));
 	vec3 n = normalize(up - (t1 * (hx - h) + t2 * (hz - h)) / e * strength * wave_size * 0.2);
@@ -100,7 +105,7 @@ void fragment() {
 	float deep = 1.0 - exp(-water / depth_range);
 	vec3 color = mix(shallow_color.rgb, deep_color.rgb, deep);
 	float opacity = 1.0 - exp(-water / clarity);
-	float foam = (1.0 - smoothstep(0.0, foam_width, water)) * smoothstep(0.35, 0.65, noise(world_position * 0.7 + vec3(TIME * 0.3)) + 0.3);
+	float foam = (1.0 - smoothstep(0.0, foam_width, water)) * smoothstep(0.35, 0.65, noise(body_position * 0.7 + vec3(TIME * 0.3)) + 0.3);
 	foam *= 1.0 - smoothstep(foam_width * 60.0, foam_width * 200.0, view_distance); // only a line from afar
 
 	ALBEDO = mix(color, foam_color.rgb, foam);

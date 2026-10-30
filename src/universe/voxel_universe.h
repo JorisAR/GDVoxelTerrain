@@ -44,16 +44,27 @@ class JarVoxelUniverse : public Object
     // Frame switching: the scene is view(t) * U(body, t), where view(t) keeps
     // the frame anchor at the scene pose it had when it became the anchor.
     uint64_t _frameAnchor = 0;   // instance id
+    bool _frameRotating = true;  // turns with the anchor (near it), else only follows its center
     DTransform _frameAnchorPose; // its pose in the scene
     DTransform _lastView;        // view(t) of the last step (kept without an anchor)
     // What each body / orbit was last placed at (instance id): unchanged
     // placements are not applied again (moving a body notifies all its chunks).
     std::unordered_map<uint64_t, Transform3D> _placed;
+    // The sky and the lights outside bodies (the sun) turn with the view, as
+    // the rest of the universe does; their poses in the universe (instance id).
+    std::unordered_map<uint64_t, Basis> _skyRest;
+    bool _skyFound = false;
 
     void ensure_updater(Node *context);
     JarCelestialBody *choose_anchor() const;
+    // Where the anchor is chosen from: the first viewer, else the camera.
+    bool viewer_position(Vector3 &at) const;
+    bool choose_rotating(const JarCelestialBody *anchor) const;
+    DTransform frame_transform(const JarCelestialBody *anchor, bool rotating, double time) const;
+    void find_sky(Node *context);
+    void place_sky(Node *context, const DTransform &view, bool restore = false);
     void apply_space_gravity(Node *context, JarCelestialBody *anchor);
-    void switch_frame(Node *context, JarCelestialBody *anchor, double time);
+    void switch_frame(Node *context, JarCelestialBody *anchor, bool rotating, double time);
     void place(double time);
     void place_node(Node3D *node, const Transform3D &transform);
     // Velocity and spin (per real second) of something whose scene pose went
@@ -102,12 +113,16 @@ class JarVoxelUniverse : public Object
     // dominant body's (Project Settings). Without bodies: the default gravity.
     // `relative_to`: for something moving along with that body instead (riding
     // a body that is not the anchor): relative to its free fall.
-    Vector3 get_gravity(const Vector3 &position, JarCelestialBody *relative_to = nullptr) const;
+    // `frame_relative` false: the bodies' pulls as they are, with no frame
+    // correction: smooth everywhere and the same across frame switches (for
+    // orientation in free flight, not for motion).
+    Vector3 get_gravity(const Vector3 &position, JarCelestialBody *relative_to = nullptr,
+                        bool frame_relative = true) const;
     // "Up" at a global position: against the bodies' pull, weighted towards
     // the strongest (Project Settings, up sharpness), so a nearby moon does not
     // tilt it; smooth in between. `fallback` where there is no pull at all.
     Vector3 get_up(const Vector3 &position, const Vector3 &fallback = Vector3(0, 1, 0),
-                   JarCelestialBody *relative_to = nullptr) const;
+                   JarCelestialBody *relative_to = nullptr, bool frame_relative = true) const;
     // The body pulling hardest at a global position (null without bodies).
     JarCelestialBody *get_dominant_body(const Vector3 &position) const;
     // The body physics is relative to: the explicit anchor if set, else the
@@ -125,8 +140,10 @@ class JarVoxelUniverse : public Object
     // spin, seen from the anchor), and the body's angular velocity in the scene.
     Vector3 get_body_velocity_at(JarCelestialBody *body, const Vector3 &position) const;
     Vector3 get_body_angular_velocity(JarCelestialBody *body) const;
-    // The body the scene is currently relative to (it stands still).
+    // The body the scene is currently relative to: its center stands still,
+    // and near it (its rotating frame height) it does not turn either.
     JarCelestialBody *get_frame_anchor() const;
+    bool is_frame_rotating() const { return _frameRotating; }
 };
 
 // Internal: drives JarVoxelUniverse::step() at the end of each physics frame.

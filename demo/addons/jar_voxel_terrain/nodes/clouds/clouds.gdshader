@@ -1,12 +1,14 @@
 shader_type spatial;
-// Basic cloud layer for JarClouds: a shell at a fixed altitude with coverage
+// Basic cloud layer for JarBodyClouds: a shell at a fixed altitude with coverage
 // from drifting 3D noise. Lit by the sun with cheap self-shadowing (density
 // sampled towards the sun) and dark on the night side. Drawn after water and
 // before the atmosphere, which hazes it like everything else.
 render_mode unshaded, cull_disabled, depth_draw_never, blend_mix, shadows_disabled, world_vertex_coords;
 
-// Set by JarClouds (world space).
+// Set by JarBodyClouds (world space).
 uniform vec3 planet_center = vec3(0.0);
+// The body's rotation (world to body): clouds move with the body as it turns.
+uniform mat3 world_to_body = mat3(1.0);
 uniform vec3 up_axis = vec3(0.0, 1.0, 0.0);
 uniform bool radial = true;
 uniform vec3 sun_direction = vec3(0.0, 1.0, 0.0);
@@ -72,14 +74,14 @@ float density(vec3 p) {
 }
 
 void fragment() {
-	vec3 p = world_position - planet_center - wind * TIME;
+	vec3 p = world_to_body * (world_position - planet_center) - wind * TIME;
 	float d = density(p);
 	if (d < 0.01)
 		discard;
 	vec3 up = radial ? normalize(world_position - planet_center) : up_axis;
 	vec3 sun = normalize(sun_direction);
 	// Self-shadowing: denser cloud towards the sun = darker here.
-	float towards_sun = density(p + sun * cloud_size * 0.35);
+	float towards_sun = density(p + world_to_body * sun * cloud_size * 0.35);
 	float lit = exp(-towards_sun * 2.0) * 0.8 + 0.2;
 	// Day and night: sunlight reaches the layer only where the sun is up.
 	float day = smoothstep(-0.15, 0.2, dot(up, sun));

@@ -1,12 +1,12 @@
 shader_type spatial;
-// Physically based atmosphere for JarAtmosphere: single scattering by air
+// Physically based atmosphere for JarBodyAtmosphere: single scattering by air
 // (Rayleigh: blue sky, red sunsets) and haze (Mie: glow around the sun, aerial
 // perspective), integrated along each view ray up to the scene depth. The same
 // physics applies to the sky and to the ground (no separate tweaks): what keeps
 // a small planet from drowning in haze is the density profile, set relative to
 // the atmosphere's height.
 //
-// Light reaching each sample is attenuated with Schüler's analytic
+// Light reaching each sample is attenuated with Schueler's analytic
 // approximation of the Chapman function (optical depth of an exponential
 // atmosphere towards the sun), so the cost is one loop of `view_steps`.
 //
@@ -16,7 +16,7 @@ shader_type spatial;
 // atmospheres (planets) blend over each other.
 render_mode unshaded, cull_front, depth_test_disabled, depth_draw_never, blend_premul_alpha, shadows_disabled, fog_disabled;
 
-// Set by JarAtmosphere (world space).
+// Set by JarBodyAtmosphere (world space).
 uniform vec3 planet_center = vec3(0.0);
 uniform float planet_radius = 1000.0;
 uniform float atmosphere_radius = 1250.0;
@@ -59,7 +59,7 @@ vec2 sphere_hits(vec3 origin, vec3 dir, float radius) {
 	return vec2(-b - h, -b + h);
 }
 
-// Chapman function approximation (Schüler, "An Approximation to the Chapman
+// Chapman function approximation (Schueler, "An Approximation to the Chapman
 // Grazing-Incidence Function for Atmospheric Scattering", GPU Pro 3): relative
 // optical depth from altitude h (in scale heights) towards a direction with
 // zenith cosine cos_z, on a planet of radius X scale heights.

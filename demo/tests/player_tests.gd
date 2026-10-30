@@ -11,6 +11,7 @@ func _ready() -> void:
 	await _test_scene("planet", "res://demo/planet.tscn", "Planet/JarVoxelVolume")
 	await _test_moon(true)
 	await _test_moon(false)
+	await _test_flight_to_moon()
 	print("Player tests: %s" % ("ALL PASSED" if _failures == 0 else "%d FAILED" % _failures))
 	get_tree().quit(1 if _failures > 0 else 0)
 
@@ -149,6 +150,57 @@ func _test_moon(planet_anchor: bool) -> void:
 		_check("%s stands still" % label, stays and moon.global_position == moon_start
 			and planet.global_position.distance_to(planet_start) > 50.0, detail)
 	JarVoxelUniverse.set_anchor_override(null)
+	scene.queue_free()
+	await get_tree().process_frame
+
+## Flies from the planet to the moon: the anchor switches on the way, and the
+## player must neither jerk around (its orientation turns smoothly) nor jump
+## in speed relative to the moon.
+func _test_flight_to_moon() -> void:
+	var scene: Node = load("res://demo/planet.tscn").instantiate()
+	var planet: JarCelestialBody = scene.get_node("Planet")
+	var moon: JarCelestialBody = scene.get_node("Planet/MoonOrbit/Moon")
+	var player: DemoPlayer = scene.get_node("Player")
+	player.start_flying = true
+	player.fly_speed = 300.0
+	add_child(scene)
+	await get_tree().physics_frame
+	var toward := (moon.get_center() - planet.get_center()).normalized()
+	player.global_position = planet.get_center() + toward * (planet.get_effective_sea_level() + 1500.0)
+	await _frames(5)
+	var switches := [] # lambdas capture locals by value
+	var on_switch := func(_a, b): switches.append(b)
+	JarVoxelUniverse.anchor_changed.connect(on_switch)
+	Input.action_press("move_forward")
+	var last_basis := player.global_basis
+	var last_rel := player.global_position - moon.get_center()
+	var last_rel_velocity := Vector3.ZERO
+	var max_turn := 0.0
+	var max_jump := 0.0
+	var frames := 0
+	while player.global_position.distance_to(moon.get_center()) > 700.0 and frames < 3000:
+		# Steer at the moon (the head is the view; forward is its -z).
+		player.head.look_at(moon.get_center(), player.global_basis.y)
+		await get_tree().physics_frame
+		frames += 1
+		var turn := rad_to_deg(Quaternion(last_basis.orthonormalized()).angle_to(Quaternion(player.global_basis.orthonormalized())))
+		var rel := player.global_position - moon.get_center()
+		var rel_velocity := (rel - last_rel) * 60.0
+		if frames > 60: # once up to speed
+			max_turn = maxf(max_turn, turn)
+			max_jump = maxf(max_jump, rel_velocity.distance_to(last_rel_velocity))
+		last_basis = player.global_basis
+		last_rel = rel
+		last_rel_velocity = rel_velocity
+	Input.action_release("move_forward")
+	JarVoxelUniverse.anchor_changed.disconnect(on_switch)
+	_check("flight reaches the moon", frames < 3000, "%d frames" % frames)
+	_check("flight switches the anchor to the moon", moon in switches and JarVoxelUniverse.get_frame_anchor() == moon
+		and not JarVoxelUniverse.is_frame_rotating())
+	_check("flight turns smoothly", max_turn < 1.5, "max %.2f deg per frame" % max_turn)
+	# Flying eases towards fly_speed relative to the current frame, so after
+	# the switch it accelerates smoothly (8 / s) to that speed relative to the moon.
+	_check("flight speed relative to the moon is smooth", max_jump < 15.0, "max change %.1f m/s per frame" % max_jump)
 	scene.queue_free()
 	await get_tree().process_frame
 

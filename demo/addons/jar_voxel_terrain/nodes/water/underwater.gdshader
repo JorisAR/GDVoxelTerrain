@@ -1,12 +1,12 @@
 shader_type spatial;
-// Underwater fog for JarPlanetWater. Drawn on a small sphere around the camera
+// Underwater fog for JarBodyWater. Drawn on a small sphere around the camera
 // (inside faces, no depth test, so it covers the screen) and only does anything
 // when the camera is below the sea level: everything is fogged by the length of
 // its path through the water (up to the scene depth, or to the surface when
 // looking up), and light fades with depth below the surface.
 render_mode unshaded, cull_front, depth_test_disabled, depth_draw_never, blend_premul_alpha, shadows_disabled, fog_disabled;
 
-// Set by JarPlanetWater (world space).
+// Set by JarBodyWater (world space).
 uniform vec3 water_center = vec3(0.0);
 uniform vec3 water_axis = vec3(0.0, 1.0, 0.0);
 uniform float water_level = 0.0;

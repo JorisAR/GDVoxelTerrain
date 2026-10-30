@@ -239,6 +239,8 @@ void JarBodyWater::update(const JarCelestialBody &body)
         material->set_shader_parameter("water_axis", frame.axis);
         material->set_shader_parameter("water_level", level);
         material->set_shader_parameter("water_radial", frame.radial);
+        // Waves and foam move with the body when it turns in the scene.
+        material->set_shader_parameter("world_to_body", body.get_global_basis().orthonormalized().transposed());
     }
     const Vector3 at = eye(frame);
     _fog->set_global_position(at);
@@ -409,5 +411,7 @@ void JarBodyClouds::update(const JarCelestialBody &body)
     material->set_shader_parameter("planet_center", frame.center);
     material->set_shader_parameter("up_axis", frame.axis);
     material->set_shader_parameter("radial", frame.radial);
+    // Clouds and wind move with the body when it turns in the scene.
+    material->set_shader_parameter("world_to_body", body.get_global_basis().orthonormalized().transposed());
     apply_sun(material);
 }

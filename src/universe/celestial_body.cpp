@@ -1,4 +1,6 @@
 #include "celestial_body.h"
+#include "body_layer.h"
+#include "body_orbit.h"
 #include "voxel_universe.h"
 #include "voxel_volume.h"
 #include <cmath>
@@ -23,6 +25,8 @@ void JarCelestialBody::_bind_methods()
     ADD_GROUP("Spin", "spin_");
     BIND_BODY(spin_period, Variant::FLOAT, PROPERTY_HINT_NONE, "suffix:s");
     BIND_BODY(spin_axis, Variant::VECTOR3, PROPERTY_HINT_NONE, "");
+    ADD_GROUP("Frame", "");
+    BIND_BODY(rotating_frame_height, Variant::FLOAT, PROPERTY_HINT_RANGE, "0,100000,1,or_greater,suffix:m");
 #undef BIND_BODY
     ClassDB::bind_method(D_METHOD("get_terrain"), &JarCelestialBody::get_terrain);
     ClassDB::bind_method(D_METHOD("get_center"), &JarCelestialBody::get_center);
@@ -30,6 +34,10 @@ void JarCelestialBody::_bind_methods()
     ClassDB::bind_method(D_METHOD("get_gravity_at", "global_position"), &JarCelestialBody::gravity_at);
     ClassDB::bind_method(D_METHOD("get_effective_radius"), &JarCelestialBody::get_effective_radius);
     ClassDB::bind_method(D_METHOD("get_effective_sea_level"), &JarCelestialBody::get_effective_sea_level);
+    ClassDB::bind_method(D_METHOD("get_effective_rotating_frame_height"),
+                         &JarCelestialBody::get_effective_rotating_frame_height);
+    ClassDB::bind_method(D_METHOD("get_altitude", "global_position"), &JarCelestialBody::get_altitude);
+    ClassDB::bind_method(D_METHOD("get_sphere_of_influence"), &JarCelestialBody::get_sphere_of_influence);
 }
 
 void JarCelestialBody::_notification(int what)
@@ -86,6 +94,43 @@ JarCelestialBody::Frame JarCelestialBody::get_frame() const
         frame.seaLevel = frame.radial ? _radius + _seaLevel : _seaLevel;
     }
     return frame;
+}
+
+float JarCelestialBody::get_effective_rotating_frame_height() const
+{
+    if (_rotatingFrameHeight > 0.0f)
+        return _rotatingFrameHeight;
+    const Frame frame = get_frame();
+    if (!frame.radial)
+        return INFINITY;
+    for (int i = 0; i < get_child_count(); ++i)
+        if (const auto *atmosphere = Object::cast_to<JarBodyAtmosphere>(get_child(i)))
+            return atmosphere->get_thickness() * frame.seaLevel;
+    return 0.5f * frame.radius;
+}
+
+float JarCelestialBody::get_altitude(const Vector3 &position) const
+{
+    const Frame frame = get_frame();
+    if (!frame.radial)
+        return (position - frame.center).dot(frame.axis) - frame.seaLevel;
+    return (position - frame.center).length() - frame.seaLevel;
+}
+
+double JarCelestialBody::get_mass() const
+{
+    const Frame frame = get_frame();
+    return frame.radial ? double(_surfaceGravity) * double(frame.radius) * double(frame.radius) : INFINITY;
+}
+
+float JarCelestialBody::get_sphere_of_influence() const
+{
+    const auto *orbit = Object::cast_to<JarBodyOrbit>(_carrier);
+    const JarCelestialBody *parent = orbit ? orbit->get_parent_body() : nullptr;
+    if (parent == nullptr)
+        return INFINITY;
+    const double ratio = get_mass() / parent->get_mass();
+    return float(double(orbit->get_radius()) * std::pow(std::min(ratio, 1.0), 0.4));
 }
 
 Vector3 JarCelestialBody::get_local_center() const

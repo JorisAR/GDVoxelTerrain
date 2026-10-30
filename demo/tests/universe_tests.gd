@@ -14,6 +14,7 @@ func _ready() -> void:
 	await _test_orbit_and_spin()
 	await _test_frame_switching()
 	await _test_frame_switching_off()
+	await _test_rotating_frame()
 	await _test_rigid_body_falls()
 	await _test_flat_body()
 	await _test_volume_body()
@@ -297,6 +298,87 @@ func _test_frame_switching_off() -> void:
 	ProjectSettings.set_setting("jar_voxel_terrain/universe/frame_switching", true)
 	JarVoxelUniverse.set_anchor_override(null)
 	JarVoxelUniverse.set_ticks(0)
+	root.queue_free()
+	await _frames(2)
+
+## Near the anchor's surface the scene turns with it (the ground stands still,
+## the sky and sun turn); higher up only its center stands still (the sky
+## stands still, the body turns below). Switching between them keeps things
+## moving as they did.
+func _test_rotating_frame() -> void:
+	var root := Node3D.new()
+	add_child(root)
+	var env := WorldEnvironment.new()
+	env.environment = Environment.new()
+	env.environment.sky_rotation = Vector3(0.1, 0.2, 0.0)
+	root.add_child(env)
+	var sun := DirectionalLight3D.new()
+	sun.rotation = Vector3(-0.5, 0.3, 0.0)
+	root.add_child(sun)
+	var sun_basis := sun.global_basis
+	var planet := _body(root, Vector3.ZERO, 1000.0, 10.0)
+	planet.spin_period = 100.0
+	var clouds := JarBodyClouds.new()
+	planet.add_child(clouds)
+	var viewer := JarVoxelViewer.new()
+	viewer.position = Vector3(0, 1100, 0) # 100 m up; auto height: half the radius
+	root.add_child(viewer)
+	await _frames(2)
+	_check("auto rotating frame height", is_equal_approx(planet.get_effective_rotating_frame_height(), 500.0))
+	_check("rotating near the surface", JarVoxelUniverse.get_frame_anchor() == planet and JarVoxelUniverse.is_frame_rotating())
+	var ground := planet.global_transform
+	var sky := env.environment.sky_rotation
+	var light := sun.global_basis
+	await _frames(30)
+	_check("rotating: ground stands still", planet.global_transform == ground)
+	_check("rotating: sky turns", not env.environment.sky_rotation.is_equal_approx(sky))
+	_check("rotating: sun turns", not sun.global_basis.is_equal_approx(light))
+	# A body resting on the ground (at rest in the rotating frame).
+	var probe := RigidBody3D.new()
+	probe.gravity_scale = 0.0
+	var shape := CollisionShape3D.new()
+	shape.shape = SphereShape3D.new()
+	probe.add_child(shape)
+	probe.position = Vector3(1100, 0, 0)
+	root.add_child(probe)
+	await _frames(1)
+
+	viewer.position = Vector3(0, 3000, 0)
+	await _frames(1)
+	_check("not rotating high up", JarVoxelUniverse.get_frame_anchor() == planet and not JarVoxelUniverse.is_frame_rotating())
+	# The ground moves at 2 pi r / period now (r = 1100 m).
+	var surface_speed := TAU * 1100.0 / 100.0
+	_check("resting body takes the ground's speed", absf(probe.linear_velocity.length() - surface_speed) < 0.5,
+		"%.2f m/s (expect %.2f)" % [probe.linear_velocity.length(), surface_speed])
+	var center := planet.global_position
+	ground = planet.global_transform
+	sky = env.environment.sky_rotation
+	light = sun.global_basis
+	await _frames(30)
+	_check("not rotating: center stands still", planet.global_position.is_equal_approx(center))
+	_check("not rotating: body turns", not planet.global_basis.is_equal_approx(ground.basis))
+	_check("not rotating: sky stands still", env.environment.sky_rotation.is_equal_approx(sky))
+	_check("not rotating: sun stands still", sun.global_basis.is_equal_approx(light))
+	var material: ShaderMaterial = clouds.get_active_material()
+	var to_body: Basis = material.get_shader_parameter("world_to_body")
+	_check("clouds turn with the body", to_body.is_equal_approx(planet.global_basis.orthonormalized().transposed()))
+
+	viewer.position = Vector3(0, 1550, 0) # 550 m: above the height, below 1.2x
+	await _frames(2)
+	_check("hysteresis: stays not rotating", not JarVoxelUniverse.is_frame_rotating())
+	viewer.position = Vector3(0, 1400, 0)
+	await _frames(2)
+	_check("rotating again below the height", JarVoxelUniverse.is_frame_rotating())
+	viewer.position = Vector3(0, 1550, 0)
+	await _frames(2)
+	_check("hysteresis: stays rotating", JarVoxelUniverse.is_frame_rotating())
+
+	var environment := env.environment
+	root.remove_child(planet)
+	planet.queue_free()
+	await _frames(2)
+	_check("sky restored without bodies", environment.sky_rotation.is_equal_approx(Vector3(0.1, 0.2, 0.0)), str(environment.sky_rotation))
+	_check("sun restored without bodies", sun.global_basis.is_equal_approx(sun_basis))
 	root.queue_free()
 	await _frames(2)
 

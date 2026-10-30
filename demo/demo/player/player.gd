@@ -28,16 +28,13 @@ extends CharacterBody3D
 var flying := false
 var _spawned := false
 var _moved_to_surface := false
-var _frame: Node3D # node whose motion the player currently follows
+var _frame: JarCelestialBody # body whose motion the player currently follows
 var _frame_transform: Transform3D
 
 func _ready() -> void:
 	flying = start_flying
 	floor_snap_length = 0.5
 	floor_max_angle = deg_to_rad(50.0)
-	# Its velocity is relative to the body it follows, so anchor switches
-	# must not convert it (see _follow_frame).
-	add_to_group("jar_frame_exempt")
 	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 	_add_population_buttons()
 
@@ -100,14 +97,19 @@ func _unhandled_input(event: InputEvent) -> void:
 func _physics_process(delta: float) -> void:
 	_follow_frame()
 	var gravity := get_gravity()
+	var pull := gravity
 	if JarVoxelUniverse.has_bodies():
-		# Felt in the frame of the body it moves along with (see _follow_frame).
+		# Near a body: felt in the frame of the body it moves along with (see
+		# _follow_frame). In free flight it moves in the scene's frame, but turns
+		# by the pulls as they are, which stay smooth when the frame switches.
+		var riding := _frame != null
 		gravity = JarVoxelUniverse.get_gravity(global_position, _frame)
-		up_direction = JarVoxelUniverse.get_up(global_position, up_direction, _frame)
+		pull = gravity if riding else JarVoxelUniverse.get_gravity(global_position, null, false)
+		up_direction = JarVoxelUniverse.get_up(global_position, up_direction, _frame, riding)
 	elif gravity.length_squared() > 1e-6:
 		up_direction = -gravity.normalized()
 	# Turn slowly where gravity is weak (between bodies), not at all without it.
-	_align_to(up_direction, delta * clampf(gravity.length() / 2.0, 0.0, 1.0))
+	_align_to(up_direction, delta * clampf(pull.length() / 2.0, 0.0, 1.0))
 
 	if not _spawned:
 		_spawned = _try_spawn()
@@ -151,14 +153,27 @@ func _try_spawn() -> bool:
 	velocity = Vector3.ZERO
 	return true
 
-## Moves and turns the player with the body it stands on (or flies near): the
-## celestial body whose gravity dominates at the player.
+## Moves and turns the player with the body it stands on (or flies low over):
+## the celestial body whose gravity dominates at the player, below that body's
+## rotating frame height. Higher up the player flies freely.
 func _follow_frame() -> void:
-	var frame: Node3D = JarVoxelUniverse.get_dominant_body(global_position)
+	var frame: JarCelestialBody = JarVoxelUniverse.get_dominant_body(global_position)
+	if frame:
+		# Only near the surface (the body's rotating frame height, a little
+		# more once following): in flight the player is free.
+		var height := frame.get_effective_rotating_frame_height() * (1.2 if frame == _frame else 1.0)
+		if frame.get_altitude(global_position) > height:
+			frame = null
 	if frame != _frame:
 		# Keep moving as before: the velocity becomes relative to the new body.
 		velocity += _body_velocity(_frame) - _body_velocity(frame)
 		_frame = frame
+		# While following, its velocity is relative to the body, so the
+		# universe must not convert it on frame switches.
+		if frame:
+			add_to_group("jar_frame_exempt")
+		else:
+			remove_from_group("jar_frame_exempt")
 	elif frame:
 		# Apply how the frame moved since the last physics frame.
 		var motion := frame.global_transform * _frame_transform.affine_inverse()

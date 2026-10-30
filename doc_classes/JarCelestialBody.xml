@@ -10,6 +10,13 @@
 	<tutorials>
 	</tutorials>
 	<methods>
+		<method name="get_altitude" qualifiers="const">
+			<return type="float" />
+			<param index="0" name="global_position" type="Vector3" />
+			<description>
+				Height of [param global_position] above the sea level (from the center on round bodies, along the up axis on flat ones).
+			</description>
+		</method>
 		<method name="get_center" qualifiers="const">
 			<return type="Vector3" />
 			<description>
@@ -28,11 +35,23 @@
 				The sea level (a radius on round bodies, a height on flat ones).
 			</description>
 		</method>
+		<method name="get_effective_rotating_frame_height" qualifiers="const">
+			<return type="float" />
+			<description>
+				[member rotating_frame_height], or when 0: the top of the body's [JarBodyAtmosphere], else half its radius. Infinite on flat bodies.
+			</description>
+		</method>
 		<method name="get_gravity_at" qualifiers="const">
 			<return type="Vector3" />
 			<param index="0" name="global_position" type="Vector3" />
 			<description>
 				This body's own pull at [param global_position].
+			</description>
+		</method>
+		<method name="get_sphere_of_influence" qualifiers="const">
+			<return type="float" />
+			<description>
+				For a body on a [JarBodyOrbit]: the distance from its center within which it is the better frame of reference than the body it orbits, [code]orbit radius * (m / M)^0.4[/code], with masses from surface gravity and radius. [JarVoxelUniverse] makes it the anchor there, well before its gravity is stronger than the planet's. Infinite for bodies on no orbit.
 			</description>
 		</method>
 		<method name="get_terrain" qualifiers="const">
@@ -58,6 +77,9 @@
 		</member>
 		<member name="sea_level" type="float" setter="set_sea_level" getter="get_sea_level" default="0.0">
 			Without a volume: the sea level above [member radius] (round) or the sea height (flat).
+		</member>
+		<member name="rotating_frame_height" type="float" setter="set_rotating_frame_height" getter="get_rotating_frame_height" default="0.0">
+			Below this height above sea level, while this body is the anchor, the scene turns with it: the ground stands still and the sky turns (see [JarVoxelUniverse]). Things moving along with the body (the demo player) do so below it as well. 0: the top of its atmosphere, else half its radius.
 		</member>
 		<member name="shape" type="int" setter="set_shape" getter="get_shape" enum="JarCelestialBody.Shape" default="0">
 			Without a volume: round or flat.
