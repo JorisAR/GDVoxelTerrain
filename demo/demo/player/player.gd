@@ -35,6 +35,9 @@ func _ready() -> void:
 	flying = start_flying
 	floor_snap_length = 0.5
 	floor_max_angle = deg_to_rad(50.0)
+	# Its velocity is relative to the body it follows, so anchor switches
+	# must not convert it (see _follow_frame).
+	add_to_group("jar_frame_exempt")
 	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 	_add_population_buttons()
 
@@ -98,8 +101,9 @@ func _physics_process(delta: float) -> void:
 	_follow_frame()
 	var gravity := get_gravity()
 	if JarVoxelUniverse.has_bodies():
-		gravity = JarVoxelUniverse.get_gravity(global_position)
-		up_direction = JarVoxelUniverse.get_up(global_position, up_direction)
+		# Felt in the frame of the body it moves along with (see _follow_frame).
+		gravity = JarVoxelUniverse.get_gravity(global_position, _frame)
+		up_direction = JarVoxelUniverse.get_up(global_position, up_direction, _frame)
 	elif gravity.length_squared() > 1e-6:
 		up_direction = -gravity.normalized()
 	# Turn slowly where gravity is weak (between bodies), not at all without it.
@@ -152,6 +156,8 @@ func _try_spawn() -> bool:
 func _follow_frame() -> void:
 	var frame: Node3D = JarVoxelUniverse.get_dominant_body(global_position)
 	if frame != _frame:
+		# Keep moving as before: the velocity becomes relative to the new body.
+		velocity += _body_velocity(_frame) - _body_velocity(frame)
 		_frame = frame
 	elif frame:
 		# Apply how the frame moved since the last physics frame.
@@ -160,6 +166,10 @@ func _follow_frame() -> void:
 		velocity = motion.basis * velocity
 	if frame:
 		_frame_transform = frame.global_transform
+
+## How a point at the player moves along with `body` (its orbit and spin).
+func _body_velocity(body: Node3D) -> Vector3:
+	return JarVoxelUniverse.get_body_velocity_at(body, global_position) if body else Vector3.ZERO
 
 var _debris: Array[Node] = []
 var _debris_searched := false

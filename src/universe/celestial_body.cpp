@@ -38,7 +38,6 @@ void JarCelestialBody::_notification(int what)
         return;
     if (what == NOTIFICATION_ENTER_TREE)
     {
-        _restBasis = get_basis();
         if (JarVoxelUniverse *universe = JarVoxelUniverse::get_singleton())
         {
             universe->register_body(this);
@@ -89,6 +88,19 @@ JarCelestialBody::Frame JarCelestialBody::get_frame() const
     return frame;
 }
 
+Vector3 JarCelestialBody::get_local_center() const
+{
+    const JarVoxelVolume *volume = get_terrain();
+    if (volume == nullptr || !volume->is_inside_tree())
+        return Vector3();
+    const UpField field = volume->get_up_field();
+    Vector3 p(field.center.x, field.center.y, field.center.z);
+    for (const Node *n = volume; n != nullptr && n != this; n = n->get_parent())
+        if (const Node3D *n3 = Object::cast_to<Node3D>(n))
+            p = n3->get_transform().xform(p);
+    return p;
+}
+
 Vector3 JarCelestialBody::gravity_at(const Vector3 &position) const
 {
     if (_surfaceGravity <= 0.0f)
@@ -113,12 +125,11 @@ Vector3 JarCelestialBody::gravity_at(const Vector3 &position) const
     return -offset / r * strength;
 }
 
-void JarCelestialBody::apply_spin(double time)
+glm::dmat3 JarCelestialBody::spin_at(double time) const
 {
     if (_spinPeriod == 0.0f || _spinAxis.length_squared() < 1e-12f)
-        return;
-    // In doubles: the angle stays exact however long the game runs.
+        return glm::dmat3(1.0);
+    // Wrapped in doubles: the angle stays exact however long the game runs.
     const double turns = std::fmod(time / double(_spinPeriod), 1.0);
-    const real_t angle = real_t(turns * 2.0 * Math_PI);
-    set_basis(Basis(_spinAxis.normalized(), angle) * _restBasis);
+    return DTransform::rotation(glm::normalize(DTransform::from(_spinAxis)), turns * 2.0 * Math_PI);
 }

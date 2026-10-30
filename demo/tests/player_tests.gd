@@ -9,7 +9,8 @@ var _watching := false
 func _ready() -> void:
 	await _test_scene("flat", "res://demo/flat.tscn", "Ground/JarVoxelVolume")
 	await _test_scene("planet", "res://demo/planet.tscn", "Planet/JarVoxelVolume")
-	await _test_moon()
+	await _test_moon(true)
+	await _test_moon(false)
 	print("Player tests: %s" % ("ALL PASSED" if _failures == 0 else "%d FAILED" % _failures))
 	get_tree().quit(1 if _failures > 0 else 0)
 
@@ -104,25 +105,35 @@ func _ground_distance(player: DemoPlayer, from: Vector3) -> float:
 	var hit := player.get_world_3d().direct_space_state.intersect_ray(query)
 	return (from - hit.position).length() if hit else INF
 
-## Stands on the orbiting, spinning moon: the player must stay on its surface
-## (moving with it) instead of being left behind.
-func _test_moon() -> void:
+## Stands on the orbiting, spinning moon. With the planet forced as the
+## anchor, the moon moves and must carry the player along; otherwise the moon
+## becomes the anchor (frame switching) and stands still while the planet
+## moves around it. Either way the player stays on the moon's surface.
+func _test_moon(planet_anchor: bool) -> void:
+	var label := "moon (planet anchor)" if planet_anchor else "moon (moon anchor)"
 	var scene: Node = load("res://demo/planet.tscn").instantiate()
-	var moon: Node3D = scene.get_node("Planet/MoonOrbit/Moon")
+	var planet: JarCelestialBody = scene.get_node("Planet")
+	var moon: JarCelestialBody = scene.get_node("Planet/MoonOrbit/Moon")
 	var player: DemoPlayer = scene.get_node("Player")
 	# Speed the moon up so a few seconds cover a lot of motion (the player
 	# follows the moon's frame, so the orbit's speed does not throw it off).
 	scene.get_node("Planet/MoonOrbit").period = 600.0
 	moon.spin_period = 36.0 # fast, but slow enough not to bounce off crater rims
 	add_child(scene)
+	if planet_anchor:
+		JarVoxelUniverse.set_anchor_override(planet)
 	await get_tree().physics_frame
-	player.global_position = moon.global_position + Vector3.UP * 360.0
+	# A fixed spot on the moon (it spins, so not a fixed world direction).
+	player.global_position = moon.get_center() + moon.global_basis.y * 360.0
 	await _wait_until(func(): return player._spawned and player.is_on_floor(), 20000)
-	_check("moon spawns on moon", player.is_on_floor() and player.global_position.distance_to(moon.global_position) < 345.0,
+	_check("%s spawns on moon" % label, player.is_on_floor() and player.global_position.distance_to(moon.global_position) < 345.0,
 		"distance to moon center %.1f" % player.global_position.distance_to(moon.global_position))
+	_check("%s anchor" % label, JarVoxelUniverse.get_frame_anchor() == (planet if planet_anchor else moon))
 	var radius := player.global_position.distance_to(moon.global_position)
 	var moved := 0.0
 	var last := player.global_position
+	var moon_start := moon.global_position
+	var planet_start := planet.global_position
 	var floor_frames := 0
 	for i in 300:
 		await get_tree().physics_frame
@@ -130,8 +141,14 @@ func _test_moon() -> void:
 		last = player.global_position
 		floor_frames += 1 if player.is_on_floor() else 0
 	var drift := absf(player.global_position.distance_to(moon.global_position) - radius)
-	_check("moon carries player", moved > 50.0 and drift < 3.0 and floor_frames > 280,
-		"moved %.0f m, radius drift %.2f m, on floor %d/300 frames" % [moved, drift, floor_frames])
+	var stays := drift < 3.0 and floor_frames > 280
+	var detail := "moved %.0f m, radius drift %.2f m, on floor %d/300 frames" % [moved, drift, floor_frames]
+	if planet_anchor:
+		_check("%s carries player" % label, stays and moved > 50.0, detail)
+	else:
+		_check("%s stands still" % label, stays and moon.global_position == moon_start
+			and planet.global_position.distance_to(planet_start) > 50.0, detail)
+	JarVoxelUniverse.set_anchor_override(null)
 	scene.queue_free()
 	await get_tree().process_frame
 

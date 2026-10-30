@@ -4,7 +4,7 @@
 		Carries its children on a circular orbit around the parent body.
 	</brief_description>
 	<description>
-		Put it under a [JarCelestialBody] and the moon (another [JarCelestialBody]) under it. Its position is a function of [JarVoxelUniverse] time, so it never drifts. It is top level: the parent's spin does not turn the orbit. In the editor it shows the position at time 0.
+		Put it under a [JarCelestialBody] and the moon (another [JarCelestialBody]) under it. Its position is a function of [JarVoxelUniverse] time, so it never drifts. It is top level: the parent's spin does not turn the orbit. In the editor it shows the position at time 0. While a body on it is the anchor (see [JarVoxelUniverse]), the orbit node itself stays where it is and its bodies are placed directly.
 	</description>
 	<tutorials>
 	</tutorials>

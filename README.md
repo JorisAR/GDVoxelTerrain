@@ -164,8 +164,9 @@ Planet (JarCelestialBody)
 ```
 
 - **Gravity**: `surface_gravity` at the radius, inverse square outside, linear to zero at the center, optionally cut off at `gravity_reach`. The `JarVoxelUniverse` singleton sums all bodies: `JarVoxelUniverse.get_gravity(position)` for strength and `get_up(position)` for up (a sharpened blend, so a nearby moon does not tilt the ground you stand on). Physics runs in the frame of the *anchor* (the dominant body at the first `JarVoxelViewer`, or `set_anchor_override()`): the physics space's default gravity points at it, so plain `RigidBody3D`s and `CharacterBody3D.get_gravity()` work with no `Area3D` at all.
+- **Frame switching**: the scene is shown relative to the anchor, which stands still (its colliders never move); everything else orbits and spins around it. Flying from the planet to the moon makes the moon the anchor: it stops where it is, nothing jumps, and free physics bodies keep their motion (velocities converted into the moon's frame; put controllers that handle this themselves in the `jar_frame_exempt` group). Poses are computed from time in doubles every tick, so switching back and forth never drifts. `universe/frame_switching` turns it off.
 - **Time**: orbits and spin are functions of universe time (integer physics ticks times `time_scale`), so they never drift and are identical on every machine. `JarBodyOrbit` carries its children on a circle around its parent body (`radius`, `period`, `axis`, `phase`); `spin_period` and `spin_axis` turn a body.
-- **Settings** (Project Settings, `jar_voxel_terrain/`): `universe/time_scale`, `universe/start_time`, `gravity/physical_strength` (off: only the dominant body pulls), `gravity/up_sharpness`, `gravity/drive_space_gravity`.
+- **Settings** (Project Settings, `jar_voxel_terrain/`): `universe/time_scale`, `universe/start_time`, `universe/frame_switching`, `gravity/physical_strength` (off: only the dominant body pulls), `gravity/up_sharpness`, `gravity/drive_space_gravity`.
 
 ### Water, atmosphere and clouds
 

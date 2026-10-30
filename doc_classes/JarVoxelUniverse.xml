@@ -4,9 +4,10 @@
 		Engine singleton: the shared clock, the celestial bodies and their gravity.
 	</brief_description>
 	<description>
-		Keeps universe time, moves every [JarBodyOrbit] and spins every [JarCelestialBody] to it at the end of each physics frame (after all other nodes, so moved colliders are in place for the next frame), and answers gravity queries. Use it as [code]JarVoxelUniverse[/code] from scripts.
+		Keeps universe time, places every [JarBodyOrbit] and [JarCelestialBody] for it at the end of each physics frame (after all other nodes, so moved colliders are in place for the next frame), and answers gravity queries. Use it as [code]JarVoxelUniverse[/code] from scripts.
 		Time is an integer count of physics ticks times [code]jar_voxel_terrain/universe/time_scale[/code], plus [code]universe/start_time[/code]: orbits and spin are functions of it, so they never drift and are the same on every machine with the same tick.
 		Physics runs in the frame of the [i]anchor[/i]: the body whose gravity dominates at the first [JarVoxelViewer] (else the camera), or [method set_anchor_override]. With [code]gravity/drive_space_gravity[/code] on, the physics space's default gravity points at the anchor (inverse square from its center), so plain [RigidBody3D]s and [method CharacterBody3D.get_gravity] need no [Area3D]. Without bodies the project's gravity is restored.
+		[b]Frame switching[/b] ([code]universe/frame_switching[/code], on by default): bodies are placed from time in double precision, never stepped, and the scene shows them relative to the anchor. The anchor stands still in the scene (also when it spins or orbits) and everything else moves around it, so physics near the viewer happens on a body that does not move, and colliders on it are never moved. When the anchor changes (flying from a planet to its moon), the new anchor stops exactly where it is: nothing jumps. Free [RigidBody3D]s and [CharacterBody3D]s keep moving as they did, their velocities converted into the new anchor's frame; bodies in the group [code]"jar_frame_exempt"[/code] are left alone (for controllers that already move along with a body, using [method get_body_velocity_at]). Relative poses are always recomputed from the universe, so switching back and forth never drifts. Off: bodies move in the scene as placed in the universe (the anchor spins and orbits too).
 		All of this runs only in the game, not in the editor.
 	</description>
 	<tutorials>
@@ -24,6 +25,21 @@
 				The anchor set with [method set_anchor_override], or [code]null[/code].
 			</description>
 		</method>
+		<method name="get_body_angular_velocity" qualifiers="const">
+			<return type="Vector3" />
+			<param index="0" name="body" type="JarCelestialBody" />
+			<description>
+				How fast [param body] turns in the scene (axis times radians per second), over the last physics tick. Zero for the frame anchor.
+			</description>
+		</method>
+		<method name="get_body_velocity_at" qualifiers="const">
+			<return type="Vector3" />
+			<param index="0" name="body" type="JarCelestialBody" />
+			<param index="1" name="global_position" type="Vector3" />
+			<description>
+				The scene velocity of a point at [param global_position] carried along by [param body] (its orbit and spin, as seen in the scene), over the last physics tick. For example, to keep a ship's velocity when it starts following a body: [code]velocity += get_body_velocity_at(old, position) - get_body_velocity_at(new, position)[/code].
+			</description>
+		</method>
 		<method name="get_bodies" qualifiers="const">
 			<return type="JarCelestialBody[]" />
 			<description>
@@ -37,11 +53,19 @@
 				The body pulling hardest at [param global_position], or [code]null[/code] without bodies.
 			</description>
 		</method>
+		<method name="get_frame_anchor" qualifiers="const">
+			<return type="JarCelestialBody" />
+			<description>
+				The body the scene is currently relative to: it stands still. [code]null[/code] with frame switching off.
+			</description>
+		</method>
 		<method name="get_gravity" qualifiers="const">
 			<return type="Vector3" />
 			<param index="0" name="global_position" type="Vector3" />
+			<param index="1" name="relative_to" type="JarCelestialBody" default="null" />
 			<description>
 				Gravity at [param global_position]. With [code]gravity/physical_strength[/code] on: the sum of all bodies' pull, minus the pull the anchor itself falls with (so far bodies only add their tides). Off: only the dominant body's pull. Without bodies: the project's gravity.
+				For something that moves along with another body than the anchor (a character standing on a moving moon, following it), pass that body as [param relative_to]: the gravity is then relative to its free fall instead.
 			</description>
 		</method>
 		<method name="get_ticks" qualifiers="const">
@@ -60,8 +84,9 @@
 			<return type="Vector3" />
 			<param index="0" name="global_position" type="Vector3" />
 			<param index="1" name="fallback" type="Vector3" default="Vector3(0, 1, 0)" />
+			<param index="2" name="relative_to" type="JarCelestialBody" default="null" />
 			<description>
-				Up at [param global_position]: away from the same pulls as [method get_gravity] (in the anchor's frame other bodies only add their tides), each weighted by its strength to the power [code]gravity/up_sharpness[/code], so the dominant body decides and a nearby moon does not tilt the ground. [param fallback] where there is no pull.
+				Up at [param global_position]: away from the same pulls as [method get_gravity] (in the anchor's frame, or [param relative_to]'s, other bodies only add their tides), each weighted by its strength to the power [code]gravity/up_sharpness[/code], so the dominant body decides and a nearby moon does not tilt the ground. [param fallback] where there is no pull.
 			</description>
 		</method>
 		<method name="has_bodies" qualifiers="const">
@@ -85,4 +110,13 @@
 			</description>
 		</method>
 	</methods>
+	<signals>
+		<signal name="anchor_changed">
+			<param index="0" name="previous" type="JarCelestialBody" />
+			<param index="1" name="current" type="JarCelestialBody" />
+			<description>
+				The scene became relative to [param current] (frame switching). [param previous] is [code]null[/code] for the first anchor.
+			</description>
+		</signal>
+	</signals>
 </class>

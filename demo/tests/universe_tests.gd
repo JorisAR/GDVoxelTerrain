@@ -1,8 +1,9 @@
 extends Node
 ## Headless checks for JarVoxelUniverse: gravity from celestial bodies (sum,
 ## anchor correction, sharpened up), scripted orbits and spin as functions of
-## time, the physics space's default gravity, and bodies with and without
-## volumes. Run:
+## time, frame switching (the anchor stands still, exact round trips, free
+## bodies keep moving), the physics space's default gravity, and bodies with
+## and without volumes. Run:
 ##   godot --headless --path demo res://tests/universe_tests.tscn
 
 var _failures := 0
@@ -11,6 +12,8 @@ func _ready() -> void:
 	await _test_single_body()
 	await _test_two_bodies()
 	await _test_orbit_and_spin()
+	await _test_frame_switching()
+	await _test_frame_switching_off()
 	await _test_rigid_body_falls()
 	await _test_flat_body()
 	await _test_volume_body()
@@ -147,6 +150,152 @@ func _test_orbit_and_spin() -> void:
 	await _frames(1)
 	var late := JarVoxelUniverse.get_time()
 	_check("orbit exact after years", _near(moon.global_position, planet.get_center() + orbit.offset_at(late)))
+	JarVoxelUniverse.set_ticks(0)
+	root.queue_free()
+	await _frames(2)
+
+## Same pose, to float precision at these distances (km).
+func _same_pose(a: Transform3D, b: Transform3D, tolerance := 0.01) -> bool:
+	return a.origin.distance_to(b.origin) < tolerance and a.basis.is_equal_approx(b.basis)
+
+## A spinning planet with a spinning moon on an orbit, for frame switching.
+func _system(root: Node3D) -> Dictionary:
+	var planet := _body(root, Vector3(100, -50, 20), 1000.0, 10.0)
+	planet.spin_period = 100.0
+	planet.spin_axis = Vector3(0.1, 1, 0)
+	var orbit := JarBodyOrbit.new()
+	orbit.radius = 3000.0
+	orbit.period = 200.0
+	orbit.axis = Vector3(0, 1, 0.3)
+	planet.add_child(orbit)
+	var moon := JarCelestialBody.new()
+	moon.radius = 100.0
+	moon.surface_gravity = 3.0
+	moon.spin_period = 50.0
+	moon.spin_axis = Vector3(0.3, 1, 0)
+	orbit.add_child(moon)
+	return {planet = planet, orbit = orbit, moon = moon}
+
+## The anchor stands still and the rest moves around it; switching anchors
+## moves nothing at that moment, round trips are exact, and free physics
+## bodies keep moving as they did, now relative to the new anchor.
+func _test_frame_switching() -> void:
+	var root := Node3D.new()
+	add_child(root)
+	var s := _system(root)
+	var planet: JarCelestialBody = s.planet
+	var moon: JarCelestialBody = s.moon
+	var switches := []
+	var on_switch := func(previous, current): switches.append([previous, current])
+	JarVoxelUniverse.anchor_changed.connect(on_switch)
+	JarVoxelUniverse.set_anchor_override(planet)
+	await _frames(2)
+	_check("frame anchor follows the anchor", JarVoxelUniverse.get_frame_anchor() == planet)
+	var planet_pose := planet.global_transform
+	var moon_start := moon.global_position
+	await _frames(30)
+	_check("anchor stands still although it spins", planet.global_transform == planet_pose)
+	# Where it was placed (turned only by its spin until it became the anchor).
+	_check("planet at its authored place", planet_pose.origin.is_equal_approx(Vector3(100, -50, 20)))
+	_check("moon orbits the anchor", moon.global_position.distance_to(moon_start) > 10.0
+		and is_equal_approx(moon.global_position.distance_to(planet.get_center()), 3000.0))
+	# A free body moving with the moon (no gravity), and characters.
+	var probe_at := moon.get_center() + Vector3(0, 100, 0)
+	var probe := RigidBody3D.new()
+	probe.gravity_scale = 0.0
+	probe.linear_damp_mode = RigidBody3D.DAMP_MODE_REPLACE
+	probe.angular_damp_mode = RigidBody3D.DAMP_MODE_REPLACE
+	var shape := CollisionShape3D.new()
+	shape.shape = SphereShape3D.new()
+	probe.add_child(shape)
+	probe.position = probe_at
+	root.add_child(probe)
+	var walker := CharacterBody3D.new()
+	var exempt := CharacterBody3D.new()
+	exempt.add_to_group("jar_frame_exempt")
+	walker.position = probe_at # carried as the probe is
+	root.add_child(walker)
+	root.add_child(exempt)
+	await _frames(1)
+	var carried := JarVoxelUniverse.get_body_velocity_at(moon, probe.global_position)
+	probe.linear_velocity = carried
+	probe.angular_velocity = JarVoxelUniverse.get_body_angular_velocity(moon)
+	walker.velocity = carried + Vector3(1, 0, 0)
+	exempt.velocity = Vector3(2, 0, 0)
+	_check("moon carries points at orbit speed", carried.length() > 50.0, "%.1f m/s" % carried.length())
+	await _frames(1)
+
+	# Switch to the moon at a known tick, after recording where the moon
+	# would be at the next tick with the planet still the anchor.
+	var tick: int = JarVoxelUniverse.get_ticks()
+	JarVoxelUniverse.set_ticks(tick)
+	await _frames(1)
+	var moon_next := moon.global_transform
+	var relative := planet.global_transform.affine_inverse() * moon.global_transform
+	JarVoxelUniverse.set_ticks(tick)
+	JarVoxelUniverse.set_anchor_override(moon)
+	await _frames(1)
+	_check("switch signal", switches.size() == 2 and switches[0][0] == null and switches[0][1] == planet
+		and switches[1][0] == planet and switches[1][1] == moon, str(switches))
+	_check("new anchor stops where it was", _same_pose(moon.global_transform, moon_next),
+		"%.4f m" % moon.global_position.distance_to(moon_next.origin))
+	var relative_after := planet.global_transform.affine_inverse() * moon.global_transform
+	_check("bodies keep their relative pose", _same_pose(relative_after, relative))
+	_check("free body now at rest", probe.linear_velocity.length() < 0.02 * carried.length()
+		and probe.angular_velocity.length() < 1e-3, "%.3f m/s, %.5f rad/s" % [probe.linear_velocity.length(), probe.angular_velocity.length()])
+	_check("character converted", walker.velocity.distance_to(Vector3(1, 0, 0)) < 0.02 * carried.length(), str(walker.velocity))
+	_check("exempt character untouched", exempt.velocity == Vector3(2, 0, 0))
+	var moon_pose := moon.global_transform
+	var probe_local := moon.global_transform.affine_inverse() * probe.global_position
+	await _frames(30)
+	_check("new anchor stands still", moon.global_transform == moon_pose, "%s vs %s" % [moon.global_transform, moon_pose])
+	_check("planet moves now", planet.global_transform != planet_pose)
+	_check("free body stays with the moon", (moon.global_transform.affine_inverse() * probe.global_position).distance_to(probe_local) < 0.5)
+
+	# And back at the same tick: the planet returns exactly to its pose.
+	JarVoxelUniverse.set_ticks(tick)
+	JarVoxelUniverse.set_anchor_override(planet)
+	await _frames(1)
+	_check("round trip is exact", _same_pose(planet.global_transform, planet_pose, 1e-3),
+		"%.6f m" % planet.global_position.distance_to(planet_pose.origin))
+	_check("round trip moon", _same_pose(moon.global_transform, moon_next, 1e-2))
+
+	# Many switches back and forth over a long time stay consistent with
+	# the universe (relative poses are recomputed, not accumulated).
+	var drift := 0.0
+	for i in 20:
+		JarVoxelUniverse.set_ticks(tick + i * 100003)
+		JarVoxelUniverse.set_anchor_override(moon if i % 2 == 0 else planet)
+		await _frames(1)
+		var rel := planet.global_transform.affine_inverse() * moon.global_transform
+		JarVoxelUniverse.set_ticks(tick + i * 100003)
+		JarVoxelUniverse.set_anchor_override(planet if i % 2 == 0 else moon)
+		await _frames(1)
+		var rel2 := planet.global_transform.affine_inverse() * moon.global_transform
+		drift = maxf(drift, rel.origin.distance_to(rel2.origin))
+	_check("no drift across switches", drift < 0.01, "%.5f m" % drift)
+
+	JarVoxelUniverse.anchor_changed.disconnect(on_switch)
+	JarVoxelUniverse.set_anchor_override(null)
+	JarVoxelUniverse.set_ticks(0)
+	root.queue_free()
+	await _frames(2)
+
+## With frame switching off, the anchor body moves (spins) in the scene.
+func _test_frame_switching_off() -> void:
+	ProjectSettings.set_setting("jar_voxel_terrain/universe/frame_switching", false)
+	var root := Node3D.new()
+	add_child(root)
+	var s := _system(root)
+	var planet: JarCelestialBody = s.planet
+	JarVoxelUniverse.set_anchor_override(planet)
+	await _frames(2)
+	var basis := planet.global_basis
+	await _frames(30)
+	_check("frame switching off: anchor spins", not planet.global_basis.is_equal_approx(basis))
+	_check("frame switching off: no frame anchor", JarVoxelUniverse.get_frame_anchor() == null)
+	ProjectSettings.set_setting("jar_voxel_terrain/universe/frame_switching", true)
+	JarVoxelUniverse.set_anchor_override(null)
 	JarVoxelUniverse.set_ticks(0)
 	root.queue_free()
 	await _frames(2)

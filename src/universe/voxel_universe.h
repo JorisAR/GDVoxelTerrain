@@ -1,8 +1,11 @@
 #ifndef JAR_VOXEL_UNIVERSE_H
 #define JAR_VOXEL_UNIVERSE_H
 
+#include "universe_math.h"
 #include <cstdint>
+#include <unordered_map>
 #include <godot_cpp/classes/node.hpp>
+#include <godot_cpp/classes/node3d.hpp>
 #include <godot_cpp/classes/object.hpp>
 #include <godot_cpp/variant/typed_array.hpp>
 #include <vector>
@@ -17,6 +20,14 @@ class JarBodyOrbit;
 // the anchor body (where the first viewer is) whose gravity the physics space
 // uses by default, so plain RigidBody3D / CharacterBody3D fall towards it with
 // no setup. An engine singleton; idle (no node in the tree) without bodies.
+//
+// Bodies are placed from universe time in double precision, never stepped, so
+// nothing drifts: U(body, t) through their orbits and spins. The scene shows
+// that universe from the anchor (frame switching): the anchor stands still and
+// everything else moves around it, so physics near the viewer happens on a
+// body that does not move. When the anchor changes, the new one stops where it
+// is (nothing jumps) and free physics bodies get their velocities converted
+// into its frame.
 class JarVoxelUniverse : public Object
 {
     GDCLASS(JarVoxelUniverse, Object);
@@ -30,10 +41,26 @@ class JarVoxelUniverse : public Object
     uint64_t _anchorOverride = 0; // instance id, 0: automatic
     uint64_t _updater = 0;        // instance id of the internal node driving step()
     bool _spaceGravitySet = false;
+    // Frame switching: the scene is view(t) * U(body, t), where view(t) keeps
+    // the frame anchor at the scene pose it had when it became the anchor.
+    uint64_t _frameAnchor = 0;   // instance id
+    DTransform _frameAnchorPose; // its pose in the scene
+    DTransform _lastView;        // view(t) of the last step (kept without an anchor)
+    // What each body / orbit was last placed at (instance id): unchanged
+    // placements are not applied again (moving a body notifies all its chunks).
+    std::unordered_map<uint64_t, Transform3D> _placed;
 
     void ensure_updater(Node *context);
     JarCelestialBody *choose_anchor() const;
     void apply_space_gravity(Node *context, JarCelestialBody *anchor);
+    void switch_frame(Node *context, JarCelestialBody *anchor, double time);
+    void place(double time);
+    void place_node(Node3D *node, const Transform3D &transform);
+    // Velocity and spin (per real second) of something whose scene pose went
+    // from `before` to `now` over the last tick.
+    Vector3 point_velocity(const DTransform &now, const DTransform &before, const Vector3 &position) const;
+    Vector3 angular_velocity(const DTransform &now, const DTransform &before) const;
+    double tick_time() const; // universe seconds per physics tick
 
   protected:
     static void _bind_methods();
@@ -45,14 +72,20 @@ class JarVoxelUniverse : public Object
     // Project Settings under jar_voxel_terrain/ (registered when the extension loads).
     static void register_settings();
 
+    // Physics bodies in this group are left alone by anchor switches (they
+    // convert their velocities themselves, e.g. the demo player, which moves
+    // along with the body it stands on).
+    static constexpr const char *FrameExemptGroup = "jar_frame_exempt";
+
     // Bodies and orbits register themselves while in the tree (not in the editor).
     void register_body(JarCelestialBody *body);
     void unregister_body(JarCelestialBody *body);
     void register_orbit(JarBodyOrbit *orbit);
     void unregister_orbit(JarBodyOrbit *orbit);
 
-    // Physics frame start (the internal node): advances the clock, moves the
-    // orbits and spins, picks the anchor and sets the space's gravity.
+    // End of each physics frame (the internal node): advances the clock, picks
+    // the anchor (switching frames), places the bodies and sets the space's
+    // gravity, so colliders are in place for the next physics step.
     void step(Node *context);
     // Back to Godot's own default gravity (no bodies left).
     void restore_space_gravity(Node *context);
@@ -67,11 +100,14 @@ class JarVoxelUniverse : public Object
     // Gravity at a global position: summed over all bodies, relative to the
     // anchor's free fall (so far bodies only add tides there), or only the
     // dominant body's (Project Settings). Without bodies: the default gravity.
-    Vector3 get_gravity(const Vector3 &position) const;
+    // `relative_to`: for something moving along with that body instead (riding
+    // a body that is not the anchor): relative to its free fall.
+    Vector3 get_gravity(const Vector3 &position, JarCelestialBody *relative_to = nullptr) const;
     // "Up" at a global position: against the bodies' pull, weighted towards
     // the strongest (Project Settings, up sharpness), so a nearby moon does not
     // tilt it; smooth in between. `fallback` where there is no pull at all.
-    Vector3 get_up(const Vector3 &position, const Vector3 &fallback = Vector3(0, 1, 0)) const;
+    Vector3 get_up(const Vector3 &position, const Vector3 &fallback = Vector3(0, 1, 0),
+                   JarCelestialBody *relative_to = nullptr) const;
     // The body pulling hardest at a global position (null without bodies).
     JarCelestialBody *get_dominant_body(const Vector3 &position) const;
     // The body physics is relative to: the explicit anchor if set, else the
@@ -79,9 +115,21 @@ class JarVoxelUniverse : public Object
     JarCelestialBody *get_anchor() const;
     void set_anchor_override(JarCelestialBody *body);
     JarCelestialBody *get_anchor_override() const;
+
+    // Universe pose of a body / an orbit at `time` (doubles; not scene space).
+    DTransform universe_transform(const JarCelestialBody *body, double time) const;
+    DTransform orbit_transform(const JarBodyOrbit *orbit, double time) const;
+    // Scene = view(time) * universe.
+    DTransform view_at(double time) const;
+    // Scene velocity of a point at `position` carried by `body` (its orbit and
+    // spin, seen from the anchor), and the body's angular velocity in the scene.
+    Vector3 get_body_velocity_at(JarCelestialBody *body, const Vector3 &position) const;
+    Vector3 get_body_angular_velocity(JarCelestialBody *body) const;
+    // The body the scene is currently relative to (it stands still).
+    JarCelestialBody *get_frame_anchor() const;
 };
 
-// Internal: drives JarVoxelUniverse::step() at the start of each physics frame.
+// Internal: drives JarVoxelUniverse::step() at the end of each physics frame.
 class JarVoxelUniverseUpdater : public Node
 {
     GDCLASS(JarVoxelUniverseUpdater, Node);

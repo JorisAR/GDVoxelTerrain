@@ -1,12 +1,14 @@
 #ifndef JAR_CELESTIAL_BODY_H
 #define JAR_CELESTIAL_BODY_H
 
+#include "universe_math.h"
 #include <algorithm>
 #include <godot_cpp/classes/node3d.hpp>
 
 using namespace godot;
 
 class JarVoxelVolume;
+class JarBodyOrbit;
 
 // A planet, moon or star: the frame (center, up, radius, sea level) and the
 // gravity everything attached to it shares. Put its JarVoxelVolume (if it has
@@ -52,8 +54,12 @@ class JarCelestialBody : public Node3D
     float _spinPeriod = 0.0f;      // seconds per turn (0: no spin)
     Vector3 _spinAxis{0, 1, 0};
     JarVoxelVolume *_volume = nullptr; // explicit; else the first child volume
-    Basis _restBasis;                  // orientation at universe time 0 (spin)
     bool _registered = false;
+    // Where the body hangs in the universe (set by JarVoxelUniverse when it
+    // registers): its carrier (an orbit or a parent body, else nothing) and its
+    // pose relative to the carrier (or in the universe) at time 0.
+    Node3D *_carrier = nullptr;
+    DTransform _rest;
 
   protected:
     static void _bind_methods();
@@ -64,10 +70,20 @@ class JarCelestialBody : public Node3D
     JarVoxelVolume *get_terrain() const;
     // This body's own pull at a global position.
     Vector3 gravity_at(const Vector3 &position) const;
-    // Spins the body to universe time `time` (JarVoxelUniverse).
-    void apply_spin(double time);
+    // The spin at universe time `time`: a rotation about the spin axis.
+    glm::dmat3 spin_at(double time) const;
+    Node3D *get_carrier() const { return _carrier; }
+    const DTransform &get_rest() const { return _rest; }
+    void set_placement(Node3D *carrier, const DTransform &rest)
+    {
+        _carrier = carrier;
+        _rest = rest;
+    }
 
     Vector3 get_center() const { return get_frame().center; }
+    // The center in the body's own space (its volume's center, else its
+    // origin), from local transforms only.
+    Vector3 get_local_center() const;
     Vector3 get_up_at(const Vector3 &position) const { return get_frame().up(position); }
     float get_effective_radius() const { return get_frame().radius; }
     float get_effective_sea_level() const { return get_frame().seaLevel; }

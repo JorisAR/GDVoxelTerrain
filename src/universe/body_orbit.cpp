@@ -32,7 +32,6 @@ void JarBodyOrbit::_notification(int what)
         {
             universe->register_orbit(this);
             _registered = true;
-            apply(universe->get_time());
         }
         break;
     case NOTIFICATION_EXIT_TREE:
@@ -57,19 +56,18 @@ JarCelestialBody *JarBodyOrbit::get_parent_body() const
     return nullptr;
 }
 
-Vector3 JarBodyOrbit::offset_at(double time) const
+glm::dvec3 JarBodyOrbit::offset(double time) const
 {
-    const Vector3 normal = _axis.length_squared() > 1e-12f ? _axis.normalized() : Vector3(0, 1, 0);
+    const glm::dvec3 normal = _axis.length_squared() > 1e-12f ? glm::normalize(DTransform::from(_axis)) : glm::dvec3(0, 1, 0);
     // Angle 0 lies along +x (or +z when the orbit is about x), in the orbit plane.
-    Vector3 start = Vector3(1, 0, 0) - normal * normal.x;
-    if (start.length_squared() < 1e-6f)
-        start = Vector3(0, 0, 1) - normal * normal.z;
-    start = start.normalized();
+    glm::dvec3 start = glm::dvec3(1, 0, 0) - normal * normal.x;
+    if (glm::dot(start, start) < 1e-6)
+        start = glm::dvec3(0, 0, 1) - normal * normal.z;
+    start = glm::normalize(start);
     double turns = double(_phase) / 360.0;
     if (_period != 0.0f)
         turns += time / double(_period);
-    const real_t angle = real_t(std::fmod(turns, 1.0) * 2.0 * Math_PI);
-    return Basis(normal, angle).xform(start) * _radius;
+    return DTransform::rotation(normal, std::fmod(turns, 1.0) * 2.0 * Math_PI) * start * double(_radius);
 }
 
 void JarBodyOrbit::apply(double time)
