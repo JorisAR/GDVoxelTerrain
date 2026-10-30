@@ -224,29 +224,47 @@ class JarBodyClouds : public JarBodyLayer
 // softness of shadows). Color and energy stay on the light. The light then
 // moves with the star as the universe turns (day and night, seasons), and the
 // other layers (water, atmosphere, clouds) use it as their sun.
+//
+// With `reflects` set (another JarBodyLight: the sun) it is a moon instead:
+// its light (`sun` must be set: its own DirectionalLight3D) comes from the
+// body, as strong as `energy` at full moon and following the phase, and
+// draws no disk in the sky (the moon itself is drawn).
 class JarBodyLight : public JarBodyLayer
 {
     GDCLASS(JarBodyLight, JarBodyLayer);
 
   private:
     bool _physicalSize = true;
+    JarBodyLight *_reflects = nullptr;
+    float _energy = 0.08f;
 
   protected:
     static void _bind_methods();
     void update(const JarCelestialBody &body) override;
 
   public:
-    // Lights driven by a star are in this group (JarVoxelUniverse leaves them
-    // to it; other layers prefer them as their sun).
+    // Lights driven by a JarBodyLight are in this group (JarVoxelUniverse
+    // leaves them to it); a star's are also in StarGroup (other layers use
+    // them as their sun), a moon's in MoonGroup.
     static constexpr const char *LightGroup = "jar_body_light";
+    static constexpr const char *StarGroup = "jar_star_light";
+    static constexpr const char *MoonGroup = "jar_moon_light";
 
     // Unit direction from `global_position` towards the star.
     Vector3 get_direction_at(const Vector3 &global_position) const;
     // The star's apparent diameter seen from `global_position`, in degrees.
     float get_angular_diameter_at(const Vector3 &global_position) const;
 
+    // Of a moon: the part of full moon light it gives the camera (0 new moon,
+    // 1 full moon), from where the sun is.
+    float get_phase_at(const Vector3 &global_position) const;
+
     bool get_physical_size() const { return _physicalSize; }
     void set_physical_size(bool value) { _physicalSize = value; }
+    JarBodyLight *get_reflects() const { return _reflects; }
+    void set_reflects(JarBodyLight *value) { _reflects = value; }
+    float get_energy() const { return _energy; }
+    void set_energy(float value) { _energy = std::max(0.0f, value); }
 };
 
 #endif // JAR_BODY_LAYER_H

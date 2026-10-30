@@ -415,6 +415,27 @@ func _test_star_light() -> void:
 	var towards := (star.get_center() - camera.global_position).normalized()
 	_check("star light follows the star", rad_to_deg(light.global_basis.z.angle_to(towards)) < 0.5 and towards.z < 0.5,
 		"%s vs %s" % [light.global_basis.z, towards])
+	# A moon reflecting it: full when the star is behind the viewer, dark
+	# when the star is behind the moon, its light as strong as its phase.
+	var moon := _body(root, Vector3(0, 0, -2000), 50.0, 1.0)
+	var moon_light := DirectionalLight3D.new()
+	root.add_child(moon_light)
+	var reflect := JarBodyLight.new()
+	reflect.sun = moon_light
+	reflect.reflects = shine
+	reflect.energy = 0.1
+	moon.add_child(reflect)
+	await _frames(1)
+	await get_tree().process_frame
+	var to_star := star.get_center() - moon.get_center()
+	var full := reflect.get_phase_at(moon.get_center() + to_star.normalized() * 500.0)
+	var new_moon := reflect.get_phase_at(moon.get_center() - to_star.normalized() * 500.0)
+	var half := reflect.get_phase_at(moon.get_center() + to_star.cross(Vector3.UP).normalized() * 500.0)
+	_check("moon phases", is_equal_approx(full, 1.0) and new_moon < 1e-3 and absf(half - 1.0 / PI) < 0.01,
+		"full %.3f half %.3f new %.3f" % [full, half, new_moon])
+	_check("moonlight follows the phase", is_equal_approx(moon_light.light_energy, 0.1 * reflect.get_phase_at(camera.global_position)))
+	_check("moonlight draws no disk", moon_light.sky_mode == DirectionalLight3D.SKY_MODE_LIGHT_ONLY
+		and moon_light.is_in_group("jar_moon_light") and not moon_light.is_in_group("jar_star_light"))
 	root.queue_free()
 	await _frames(2)
 

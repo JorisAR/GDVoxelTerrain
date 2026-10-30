@@ -13,6 +13,11 @@ uniform vec3 up_axis = vec3(0.0, 1.0, 0.0);
 uniform bool radial = true;
 uniform vec3 sun_direction = vec3(0.0, 1.0, 0.0);
 uniform vec3 sun_color = vec3(1.0);
+// A moon's light (color times energy; black without one) and the scene's
+// ambient light: what lights the clouds at night.
+uniform vec3 moon_direction = vec3(0.0, 1.0, 0.0);
+uniform vec3 moon_color = vec3(0.0);
+uniform vec3 ambient_light = vec3(0.0);
 
 group_uniforms shape;
 // Fraction of the sky covered, on average.
@@ -83,9 +88,12 @@ void fragment() {
 	// Self-shadowing: denser cloud towards the sun = darker here.
 	float towards_sun = density(p + world_to_body * sun * cloud_size * 0.35);
 	float lit = exp(-towards_sun * 2.0) * 0.8 + 0.2;
-	// Day and night: sunlight reaches the layer only where the sun is up.
+	// Day and night: sunlight (and moonlight) reach the layer only where the
+	// sun (moon) is up; the sky's and stars' light everywhere.
 	float day = smoothstep(-0.15, 0.2, dot(up, sun));
-	vec3 color = mix(shadow_color, cloud_color, lit) * sun_color * brightness * (0.08 + 0.92 * day);
+	float moon_up = smoothstep(-0.15, 0.2, dot(up, normalize(moon_direction)));
+	vec3 direct = sun_color * day + moon_color * moon_up;
+	vec3 color = mix(shadow_color, cloud_color, lit) * direct * brightness + cloud_color * ambient_light;
 	// Only a flat layer has an edge to hide; a planet's shell has none.
 	float fade = radial ? 1.0 : 1.0 - smoothstep(fade_distance * 0.6, fade_distance, length(VERTEX));
 	ALBEDO = color;

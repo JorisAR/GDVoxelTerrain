@@ -104,7 +104,7 @@ DirectionalLight3D *JarBodyLayer::find_sun()
     // A star's light first.
     if (tree != nullptr && !Engine::get_singleton()->is_editor_hint())
     {
-        const TypedArray<Node> stars = tree->get_nodes_in_group(JarBodyLight::LightGroup);
+        const TypedArray<Node> stars = tree->get_nodes_in_group(JarBodyLight::StarGroup);
         if (!stars.is_empty())
             if (auto *light = Object::cast_to<DirectionalLight3D>(stars[0]))
             {
@@ -159,6 +159,22 @@ void JarBodyLayer::apply_sun(const Ref<ShaderMaterial> &material)
         const Color c = light->get_color();
         material->set_shader_parameter("sun_color", Vector3(c.r, c.g, c.b));
     }
+    // A moon's light, for shaders that use it (moon_direction, moon_color:
+    // color times energy; black without a moon).
+    Color moon(0, 0, 0);
+    Vector3 moonDirection(0, 1, 0);
+    if (SceneTree *tree = get_tree())
+    {
+        const TypedArray<Node> moons = tree->get_nodes_in_group(JarBodyLight::MoonGroup);
+        if (!moons.is_empty())
+            if (const auto *light = Object::cast_to<DirectionalLight3D>(moons[0]); light && light->is_visible())
+            {
+                moon = light->get_color() * light->get_param(Light3D::PARAM_ENERGY);
+                moonDirection = light->get_global_basis().get_column(2).normalized();
+            }
+    }
+    material->set_shader_parameter("moon_direction", moonDirection);
+    material->set_shader_parameter("moon_color", Vector3(moon.r, moon.g, moon.b));
 }
 
 // ---------------------------------------------------------------- JarBodyLight
@@ -168,6 +184,15 @@ void JarBodyLight::_bind_methods()
     ClassDB::bind_method(D_METHOD("get_physical_size"), &JarBodyLight::get_physical_size);
     ClassDB::bind_method(D_METHOD("set_physical_size", "value"), &JarBodyLight::set_physical_size);
     ADD_PROPERTY(PropertyInfo(Variant::BOOL, "physical_size"), "set_physical_size", "get_physical_size");
+    ClassDB::bind_method(D_METHOD("get_reflects"), &JarBodyLight::get_reflects);
+    ClassDB::bind_method(D_METHOD("set_reflects", "value"), &JarBodyLight::set_reflects);
+    ADD_PROPERTY(PropertyInfo(Variant::OBJECT, "reflects", PROPERTY_HINT_NODE_TYPE, "JarBodyLight"), "set_reflects",
+                 "get_reflects");
+    ClassDB::bind_method(D_METHOD("get_energy"), &JarBodyLight::get_energy);
+    ClassDB::bind_method(D_METHOD("set_energy", "value"), &JarBodyLight::set_energy);
+    ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "energy", PROPERTY_HINT_RANGE, "0,2,0.001,or_greater"), "set_energy",
+                 "get_energy");
+    ClassDB::bind_method(D_METHOD("get_phase_at", "global_position"), &JarBodyLight::get_phase_at);
     ClassDB::bind_method(D_METHOD("get_direction_at", "global_position"), &JarBodyLight::get_direction_at);
     ClassDB::bind_method(D_METHOD("get_angular_diameter_at", "global_position"),
                          &JarBodyLight::get_angular_diameter_at);
@@ -194,13 +219,33 @@ float JarBodyLight::get_angular_diameter_at(const Vector3 &global_position) cons
     return float(Math::rad_to_deg(2.0 * std::asin(double(radius) / double(distance))));
 }
 
+float JarBodyLight::get_phase_at(const Vector3 &global_position) const
+{
+    const JarCelestialBody *body = get_body();
+    const JarCelestialBody *star = _reflects ? _reflects->get_body() : nullptr;
+    if (body == nullptr || star == nullptr)
+        return 1.0f;
+    // A Lambertian sphere: (sin a + (pi - a) cos a) / pi for the angle a
+    // between the sun and the viewer, seen from the moon.
+    const Vector3 toSun = (star->get_center() - body->get_center()).normalized();
+    const Vector3 toViewer = (global_position - body->get_center()).normalized();
+    const float a = std::acos(std::clamp(toSun.dot(toViewer), -1.0f, 1.0f));
+    return std::max(0.0f, (std::sin(a) + (float(Math_PI) - a) * std::cos(a)) / float(Math_PI));
+}
+
 void JarBodyLight::update(const JarCelestialBody &body)
 {
-    DirectionalLight3D *light = find_sun();
+    // A moon drives its own light only (else it would take the sun's).
+    DirectionalLight3D *light = _reflects ? get_sun() : find_sun();
     if (light == nullptr)
         return;
     if (!light->is_in_group(LightGroup))
+    {
         light->add_to_group(LightGroup);
+        light->add_to_group(_reflects ? MoonGroup : StarGroup);
+        if (_reflects)
+            light->set_sky_mode(DirectionalLight3D::SKY_MODE_LIGHT_ONLY); // the moon is drawn itself
+    }
     // From the star towards the camera (where the light matters; the scene's
     // origin in the editor); the light shines along its -z.
     Viewport *viewport = is_inside_tree() ? get_viewport() : nullptr;
@@ -214,6 +259,12 @@ void JarBodyLight::update(const JarCelestialBody &body)
         light->set_global_basis(basis);
     if (_physicalSize)
         light->set_param(Light3D::PARAM_SIZE, std::min(get_angular_diameter_at(at), 90.0f));
+    if (_reflects)
+    {
+        const float energy = _energy * get_phase_at(at);
+        if (!Math::is_equal_approx(light->get_param(Light3D::PARAM_ENERGY), energy))
+            light->set_param(Light3D::PARAM_ENERGY, energy);
+    }
     // Through the air the camera is in: reddened towards the horizon, none
     // below it. The light's own color is kept as its color above the air (at
     // runtime only: in the editor it would be saved with the scene).
@@ -695,4 +746,11 @@ void JarBodyClouds::update(const JarCelestialBody &body)
     // Clouds and wind move with the body when it turns in the scene.
     material->set_shader_parameter("world_to_body", body.get_global_basis().orthonormalized().transposed());
     apply_sun(material);
+    // The scene's ambient light (sky and starlight) lights them too.
+    Color ambient(0, 0, 0);
+    if (Viewport *viewport = get_viewport())
+        if (const Ref<World3D> world = viewport->find_world_3d(); world.is_valid() && world->get_environment().is_valid())
+            ambient = world->get_environment()->get_ambient_light_color() *
+                      world->get_environment()->get_ambient_light_energy();
+    material->set_shader_parameter("ambient_light", Vector3(ambient.r, ambient.g, ambient.b));
 }

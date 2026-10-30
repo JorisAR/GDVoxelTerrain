@@ -5,7 +5,9 @@
 	</brief_description>
 	<description>
 		Put it under a [JarCelestialBody] (the sun). Every frame it aims a [DirectionalLight3D] ([member JarBodyLayer.sun], else the first one in the scene) from the body's center at the camera, so the light comes from wherever the star is: as the universe turns around the anchor (a spinning planet, its orbit around the sun) the sun rises and sets. With [member physical_size] it also gives the light the star's real angular size, which sets the sun disk a sky shader draws from [code]LIGHT0_SIZE[/code] and the softness of shadows. Color, energy and shadows stay on the light.
-		The light joins the group [code]"jar_body_light"[/code]: [JarVoxelUniverse] leaves it to the star (it does not turn it with the sky), and the other layers ([JarBodyWater], [JarBodyAtmosphere], [JarBodyClouds]) use it as their sun.
+		Inside a [JarBodyAtmosphere] the light reaches the camera through the air: it reddens as the star sets and is gone below the horizon (balanced so the star overhead keeps the light's own color).
+		[b]Moons:[/b] with [member reflects] set to the star's JarBodyLight, it makes its body a moon instead: its own light ([member JarBodyLayer.sun] must be set, to a second [DirectionalLight3D]) shines from the moon at the camera, [member energy] strong at full moon and following the phase (a Lambertian sphere: [method get_phase_at]), reddened through the air like the sun, and draws no disk in the sky (the moon itself is drawn). It lights the night side, and the clouds at night.
+		The light joins the group [code]"jar_body_light"[/code] ([JarVoxelUniverse] leaves it to this node and does not turn it with the sky), and [code]"jar_star_light"[/code] or [code]"jar_moon_light"[/code]: the other layers ([JarBodyWater], [JarBodyAtmosphere], [JarBodyClouds]) use the star's as their sun and the moon's as [code]moon_direction[/code] and [code]moon_color[/code].
 		The star itself is not drawn (it is usually far beyond the camera's far plane): the sky shows its disk. [method get_direction_at] and [method get_angular_diameter_at] give what effects such as a lens flare or an atmosphere need.
 	</description>
 	<tutorials>
@@ -18,6 +20,13 @@
 				The star's apparent diameter seen from [param global_position], in degrees (from its effective radius and distance).
 			</description>
 		</method>
+		<method name="get_phase_at" qualifiers="const">
+			<return type="float" />
+			<param index="0" name="global_position" type="Vector3" />
+			<description>
+				Of a moon: the part of full moon light it sends to [param global_position], from where the star it [member reflects] is: 1 at full moon, 0 at new moon.
+			</description>
+		</method>
 		<method name="get_direction_at" qualifiers="const">
 			<return type="Vector3" />
 			<param index="0" name="global_position" type="Vector3" />
@@ -27,8 +36,14 @@
 		</method>
 	</methods>
 	<members>
+		<member name="energy" type="float" setter="set_energy" getter="get_energy" default="0.08">
+			Of a moon: its light's energy at full moon.
+		</member>
 		<member name="physical_size" type="bool" setter="set_physical_size" getter="get_physical_size" default="true">
 			Sets the light's angular size ([member Light3D.light_angular_distance]) to the star's apparent size at the camera. Off: the light's own setting is kept.
+		</member>
+		<member name="reflects" type="JarBodyLight" setter="set_reflects" getter="get_reflects">
+			The star whose light this body reflects: set it to make this a moon (see the description). Empty: a star.
 		</member>
 	</members>
 </class>
