@@ -154,4 +154,35 @@ class JarBodyClouds : public JarBodyLayer
     void set_material(const Ref<ShaderMaterial> &value);
 };
 
+// Makes its body a star: aims a DirectionalLight3D (`sun`, else the first one
+// in the scene) from the body's center at the camera every frame, and gives it
+// the body's real angular size (the sky's sun disk, LIGHT0_SIZE, and the
+// softness of shadows). Color and energy stay on the light. The light then
+// moves with the star as the universe turns (day and night, seasons), and the
+// other layers (water, atmosphere, clouds) use it as their sun.
+class JarBodyLight : public JarBodyLayer
+{
+    GDCLASS(JarBodyLight, JarBodyLayer);
+
+  private:
+    bool _physicalSize = true;
+
+  protected:
+    static void _bind_methods();
+    void update(const JarCelestialBody &body) override;
+
+  public:
+    // Lights driven by a star are in this group (JarVoxelUniverse leaves them
+    // to it; other layers prefer them as their sun).
+    static constexpr const char *LightGroup = "jar_body_light";
+
+    // Unit direction from `global_position` towards the star.
+    Vector3 get_direction_at(const Vector3 &global_position) const;
+    // The star's apparent diameter seen from `global_position`, in degrees.
+    float get_angular_diameter_at(const Vector3 &global_position) const;
+
+    bool get_physical_size() const { return _physicalSize; }
+    void set_physical_size(bool value) { _physicalSize = value; }
+};
+
 #endif // JAR_BODY_LAYER_H

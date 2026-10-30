@@ -8,7 +8,7 @@ var _watching := false
 
 func _ready() -> void:
 	await _test_scene("flat", "res://demo/flat.tscn", "Ground/JarVoxelVolume")
-	await _test_scene("planet", "res://demo/planet.tscn", "Planet/JarVoxelVolume")
+	await _test_scene("planet", "res://demo/planet.tscn", "%Planet/JarVoxelVolume")
 	await _test_moon(true)
 	await _test_moon(false)
 	await _test_flight_to_moon()
@@ -113,12 +113,12 @@ func _ground_distance(player: DemoPlayer, from: Vector3) -> float:
 func _test_moon(planet_anchor: bool) -> void:
 	var label := "moon (planet anchor)" if planet_anchor else "moon (moon anchor)"
 	var scene: Node = load("res://demo/planet.tscn").instantiate()
-	var planet: JarCelestialBody = scene.get_node("Planet")
-	var moon: JarCelestialBody = scene.get_node("Planet/MoonOrbit/Moon")
+	var planet: JarCelestialBody = scene.get_node("%Planet")
+	var moon: JarCelestialBody = scene.get_node("%Moon")
 	var player: DemoPlayer = scene.get_node("Player")
 	# Speed the moon up so a few seconds cover a lot of motion (the player
 	# follows the moon's frame, so the orbit's speed does not throw it off).
-	scene.get_node("Planet/MoonOrbit").period = 600.0
+	scene.get_node("%MoonOrbit").period = 600.0
 	moon.spin_period = 36.0 # fast, but slow enough not to bounce off crater rims
 	add_child(scene)
 	if planet_anchor:
@@ -158,8 +158,8 @@ func _test_moon(planet_anchor: bool) -> void:
 ## in speed relative to the moon.
 func _test_flight_to_moon() -> void:
 	var scene: Node = load("res://demo/planet.tscn").instantiate()
-	var planet: JarCelestialBody = scene.get_node("Planet")
-	var moon: JarCelestialBody = scene.get_node("Planet/MoonOrbit/Moon")
+	var planet: JarCelestialBody = scene.get_node("%Planet")
+	var moon: JarCelestialBody = scene.get_node("%Moon")
 	var player: DemoPlayer = scene.get_node("Player")
 	player.start_flying = true
 	player.fly_speed = 300.0

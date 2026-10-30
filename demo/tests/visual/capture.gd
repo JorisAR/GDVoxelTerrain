@@ -1,7 +1,8 @@
 extends Node
 ## Renders a configured view and saves a screenshot, for visual checks.
 ## Environment: SCENE (res path), VOXEL (voxel size), MESHER (sn|dc, else the
-## scene's), MANIFOLD=1, POS / LOOK ("x,y,z"), OUT (png path), WIRE=1 for
+## scene's), MANIFOLD=1, POS / LOOK ("x,y,z"), OUT (png path), TICKS (universe
+## time in physics ticks: time of day with a JarBodyLight sun), WIRE=1 for
 ## wireframe, ON_MOON=1 (POS / LOOK relative to the moon), NOFEAT=1 (no
 ## population), UP=radial (level on a planet). Checks: HOLES=1 (magenta background, water / atmosphere /
 ## clouds hidden; prints HOLE_PIXELS), PROBE="x,y" with HOLES (what the pixel's
@@ -26,9 +27,11 @@ func _ready() -> void:
 		player.start_flying = true
 		player.process_mode = Node.PROCESS_MODE_DISABLED
 	add_child(scene)
+	if OS.get_environment("TICKS") != "":
+		JarVoxelUniverse.set_ticks(int(OS.get_environment("TICKS")))
 	var camera: Camera3D = scene.find_children("*", "Camera3D", true, false)[0]
 	var pos := _vec(OS.get_environment("POS"))
-	var moon: Node3D = scene.get_node_or_null("Planet/MoonOrbit/Moon")
+	var moon: Node3D = scene.get_node_or_null("%Moon")
 	if OS.get_environment("ON_MOON") != "" and moon:
 		# POS / LOOK relative to the moon (it orbits, so world positions drift).
 		pos += moon.global_position
@@ -48,7 +51,7 @@ func _ready() -> void:
 			env_node.environment.fog_enabled = false
 			env_node.environment.volumetric_fog_enabled = false
 		# Nothing may cover the terrain: hide water, atmosphere and clouds.
-		for name in ["Planet/Water", "Planet/Atmosphere", "Planet/Clouds"]:
+		for name in ["%Planet/Water", "%Planet/Atmosphere", "%Planet/Clouds"]:
 			var n: Node3D = scene.get_node_or_null(name)
 			if n:
 				n.visible = false

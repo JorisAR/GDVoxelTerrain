@@ -54,6 +54,11 @@ class JarVoxelUniverse : public Object
     // the rest of the universe does; their poses in the universe (instance id).
     std::unordered_map<uint64_t, Basis> _skyRest;
     bool _skyFound = false;
+    // A new set of bodies starts its clock at 0 and shows its first anchor as
+    // placed in the scene (the scene is the universe at that time).
+    bool _viewStarted = false;
+    bool _skyStarted = false; // found the sky since the universe started
+    double _startTime = 0.0;
 
     void ensure_updater(Node *context);
     JarCelestialBody *choose_anchor() const;

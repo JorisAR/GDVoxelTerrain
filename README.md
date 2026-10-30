@@ -153,24 +153,30 @@ A `JarBiomeMap` (`population_biome_map`) places `JarBiome`s with a simple climat
 A `JarCelestialBody` is a planet, moon or star: the frame (center, up, radius, sea level) and gravity that everything attached to it shares. Put its `JarVoxelVolume` under it (or set `volume`); without a volume (a distant moon) its own `shape`, `radius` and `sea_level` are used. Flat volumes work too: gravity then points down the volume's up axis.
 
 ```
-Planet (JarCelestialBody)
-  JarVoxelVolume
-  Water (JarBodyWater)
-  Atmosphere (JarBodyAtmosphere)
-  Clouds (JarBodyClouds)
-  MoonOrbit (JarBodyOrbit)
-    Moon (JarCelestialBody)
+Sun (JarCelestialBody)
+  Light (JarBodyLight)          drives the scene's DirectionalLight3D
+  PlanetOrbit (JarBodyOrbit)
+    Planet (JarCelestialBody)
       JarVoxelVolume
+      Water (JarBodyWater)
+      Atmosphere (JarBodyAtmosphere)
+      Clouds (JarBodyClouds)
+      MoonOrbit (JarBodyOrbit)
+        Moon (JarCelestialBody)
+          JarVoxelVolume
 ```
+
+The scene as laid out in the editor is the universe at its start (orbits show their time 0 position): the first anchor stays exactly where it was placed, and the clock starts at 0 for every new set of bodies (`set_ticks()` sets any other time).
 
 - **Gravity**: `surface_gravity` at the radius, inverse square outside, linear to zero at the center, optionally cut off at `gravity_reach`. The `JarVoxelUniverse` singleton sums all bodies: `JarVoxelUniverse.get_gravity(position)` for strength and `get_up(position)` for up (a sharpened blend, so a nearby moon does not tilt the ground you stand on). Physics runs in the frame of the *anchor* (the body whose sphere of influence the first `JarVoxelViewer` is in, or `set_anchor_override()`): the physics space's default gravity points at it, so plain `RigidBody3D`s and `CharacterBody3D.get_gravity()` work with no `Area3D` at all.
 - **Frame switching**: the scene is shown relative to the anchor. Near its surface (below `rotating_frame_height`: the top of its atmosphere, else half its radius) the scene turns with it: the ground stands still (its colliders never move) and everything else, sky and sun included, turns around it. Higher up only its center stands still: the stars stay put and the body turns below. Flying from the planet to the moon makes the moon the anchor once you enter its sphere of influence (well above its surface): it stops where it is, nothing jumps, and free physics bodies keep their motion (velocities converted into the moon's frame; put controllers that handle this themselves in the `jar_frame_exempt` group). Poses are computed from time in doubles every tick, so switching back and forth never drifts. `universe/frame_switching` turns it off.
+- **Stars**: a `JarBodyLight` under a body makes it a sun: it aims a `DirectionalLight3D` from the body at the camera every frame, with the body's real angular size (the sky's sun disk and shadow softness). Give the planet a `spin_period` and an orbit around the sun, and day, night and seasons follow from the geometry. The demo's sun is 1000 km away with a 4.65 km radius (0.53 degrees), a 30 minute day and a 10 hour year. The star itself is not drawn; the sky draws its disk.
 - **Time**: orbits and spin are functions of universe time (integer physics ticks times `time_scale`), so they never drift and are identical on every machine. `JarBodyOrbit` carries its children on a circle around its parent body (`radius`, `period`, `axis`, `phase`); `spin_period` and `spin_axis` turn a body.
 - **Settings** (Project Settings, `jar_voxel_terrain/`): `universe/time_scale`, `universe/start_time`, `universe/frame_switching`, `gravity/physical_strength` (off: only the dominant body pulls), `gravity/up_sharpness`, `gravity/drive_space_gravity`.
 
 ### Water, atmosphere and clouds
 
-Layers of a `JarCelestialBody`: put them under the body (any depth). They read its frame, so they follow its radius, sea level and movement, and find the sun (the first `DirectionalLight3D`, or `sun`) on their own:
+Layers of a `JarCelestialBody`: put them under the body (any depth). They read its frame, so they follow its radius, sea level and movement, and find the sun (a `JarBodyLight`'s light, else the first `DirectionalLight3D`, or `sun`) on their own:
 
 - **`JarBodyWater`**: water at the body's sea level, a sphere for planets or a plane for flat worlds. A dense patch follows the camera and is projected onto the exact sea level, so coasts are precise up close. `water.gdshader` colors water by its depth, with waves, shore foam and transparency; under water, `underwater.gdshader` fogs the view by the distance through the water and dims it with depth. `level_offset` raises or lowers it. It is deliberately separate from the volume, so it can be replaced by a simulation later.
 - **`JarBodyAtmosphere`**: physically based single scattering (Rayleigh and Mie, light attenuated with an analytic Chapman function): blue sky and red sunsets from the ground, haze over distant terrain, and the planet seen through its air from space. The same physics applies to sky and ground; a small planet stays clear up close because the air density falls off gently over the atmosphere's height (`thickness`, a fraction of the radius). It is drawn after other transparent objects, so water and clouds get hazed too, and several planets can each have one.

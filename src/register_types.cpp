@@ -80,6 +80,7 @@ void initialize_jar_voxel_terrain_module(ModuleInitializationLevel p_level)
         GDREGISTER_CLASS(JarBodyWater);
         GDREGISTER_CLASS(JarBodyAtmosphere);
         GDREGISTER_CLASS(JarBodyClouds);
+    GDREGISTER_CLASS(JarBodyLight);
         JarVoxelUniverse::register_settings();
         Engine::get_singleton()->register_singleton("JarVoxelUniverse", memnew(JarVoxelUniverse));
     }

@@ -89,6 +89,17 @@ DirectionalLight3D *JarBodyLayer::find_sun()
             return light;
     _foundSun = 0;
     SceneTree *tree = get_tree();
+    // A star's light first.
+    if (tree != nullptr && !Engine::get_singleton()->is_editor_hint())
+    {
+        const TypedArray<Node> stars = tree->get_nodes_in_group(JarBodyLight::LightGroup);
+        if (!stars.is_empty())
+            if (auto *light = Object::cast_to<DirectionalLight3D>(stars[0]))
+            {
+                _foundSun = light->get_instance_id();
+                return light;
+            }
+    }
     Node *root = tree == nullptr ? nullptr
                  : Engine::get_singleton()->is_editor_hint() ? tree->get_edited_scene_root()
                                                              : tree->get_current_scene();
@@ -136,6 +147,61 @@ void JarBodyLayer::apply_sun(const Ref<ShaderMaterial> &material)
         const Color c = light->get_color();
         material->set_shader_parameter("sun_color", Vector3(c.r, c.g, c.b));
     }
+}
+
+// ---------------------------------------------------------------- JarBodyLight
+
+void JarBodyLight::_bind_methods()
+{
+    ClassDB::bind_method(D_METHOD("get_physical_size"), &JarBodyLight::get_physical_size);
+    ClassDB::bind_method(D_METHOD("set_physical_size", "value"), &JarBodyLight::set_physical_size);
+    ADD_PROPERTY(PropertyInfo(Variant::BOOL, "physical_size"), "set_physical_size", "get_physical_size");
+    ClassDB::bind_method(D_METHOD("get_direction_at", "global_position"), &JarBodyLight::get_direction_at);
+    ClassDB::bind_method(D_METHOD("get_angular_diameter_at", "global_position"),
+                         &JarBodyLight::get_angular_diameter_at);
+}
+
+Vector3 JarBodyLight::get_direction_at(const Vector3 &global_position) const
+{
+    const JarCelestialBody *body = get_body();
+    if (body == nullptr)
+        return Vector3(0, 1, 0);
+    const Vector3 d = body->get_center() - global_position;
+    return d.length_squared() > 1e-12f ? d.normalized() : Vector3(0, 1, 0);
+}
+
+float JarBodyLight::get_angular_diameter_at(const Vector3 &global_position) const
+{
+    const JarCelestialBody *body = get_body();
+    if (body == nullptr)
+        return 0.0f;
+    const float distance = (body->get_center() - global_position).length();
+    const float radius = body->get_effective_radius();
+    if (distance <= radius)
+        return 180.0f;
+    return float(Math::rad_to_deg(2.0 * std::asin(double(radius) / double(distance))));
+}
+
+void JarBodyLight::update(const JarCelestialBody &body)
+{
+    DirectionalLight3D *light = find_sun();
+    if (light == nullptr)
+        return;
+    if (!light->is_in_group(LightGroup))
+        light->add_to_group(LightGroup);
+    // From the star towards the camera (where the light matters; the scene's
+    // origin in the editor); the light shines along its -z.
+    Viewport *viewport = is_inside_tree() ? get_viewport() : nullptr;
+    Camera3D *camera = viewport ? viewport->get_camera_3d() : nullptr;
+    const Vector3 at = camera ? camera->get_global_position() : Vector3();
+    const Vector3 towards = get_direction_at(at);
+    const Vector3 helper = std::abs(towards.y) < 0.99f ? Vector3(0, 1, 0) : Vector3(1, 0, 0);
+    const Vector3 x = helper.cross(towards).normalized();
+    const Basis basis(x, towards.cross(x), towards);
+    if (!light->get_global_basis().is_equal_approx(basis))
+        light->set_global_basis(basis);
+    if (_physicalSize)
+        light->set_param(Light3D::PARAM_SIZE, std::min(get_angular_diameter_at(at), 90.0f));
 }
 
 // ---------------------------------------------------------------- JarBodyWater

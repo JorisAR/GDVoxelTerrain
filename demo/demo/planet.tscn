@@ -92,9 +92,26 @@ auto_exposure_min_sensitivity = 50.0
 
 [node name="PlanetDemo" type="Node3D" unique_id=700940484]
 
-[node name="Planet" type="JarCelestialBody" parent="." unique_id=1486947439]
+[node name="Sun" type="JarCelestialBody" parent="." unique_id=1203398541]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -42101.206427, 486213.93266, 872825.011159)
+radius = 4650.0
+surface_gravity = 30.0
 
-[node name="JarVoxelVolume" type="JarVoxelVolume" parent="Planet" unique_id=337742281]
+[node name="Light" type="JarBodyLight" parent="Sun" unique_id=1659315502]
+sun = NodePath("../../SunLight")
+
+[node name="PlanetOrbit" type="JarBodyOrbit" parent="Sun" unique_id=318843216]
+radius = 1000000.0
+period = 36000.0
+axis = Vector3(0.023426, 0.87384, -0.485649)
+phase = 87.586403
+top_level = true
+
+[node name="Planet" type="JarCelestialBody" parent="Sun/PlanetOrbit" unique_id=1486947439]
+unique_name_in_owner = true
+spin_period = 1800.0
+
+[node name="JarVoxelVolume" type="JarVoxelVolume" parent="Sun/PlanetOrbit/Planet" unique_id=337742281]
 extent = 10000.0
 chunk_scene = ExtResource("1_chunk")
 materials = Array[JarTerrainMaterial]([SubResource("Grass"), SubResource("Rock"), SubResource("Sand"), SubResource("Seabed"), SubResource("Snow"), SubResource("Dirt"), SubResource("DarkStone"), SubResource("Clay"), SubResource("Tundra"), SubResource("DryGrass")])
@@ -109,29 +126,31 @@ population_terrain_features = Array[JarTerrainFeature]([ExtResource("6_rock")])
 population_biome_map = ExtResource("17_biomes")
 population_terrain_details = Array[JarTerrainDetail]([ExtResource("6_grass")])
 
-[node name="Debris" type="JarVoxelDebris" parent="Planet/JarVoxelVolume" unique_id=1288236388]
+[node name="Debris" type="JarVoxelDebris" parent="Sun/PlanetOrbit/Planet/JarVoxelVolume" unique_id=1288236388]
 collision_layer = 3
 collision_mask = 3
 
-[node name="Water" type="JarBodyWater" parent="Planet" unique_id=1585027726]
+[node name="Water" type="JarBodyWater" parent="Sun/PlanetOrbit/Planet" unique_id=1585027726]
 
-[node name="Atmosphere" type="JarBodyAtmosphere" parent="Planet" unique_id=1764051413]
+[node name="Atmosphere" type="JarBodyAtmosphere" parent="Sun/PlanetOrbit/Planet" unique_id=1764051413]
 
-[node name="Clouds" type="JarBodyClouds" parent="Planet" unique_id=1226887604]
+[node name="Clouds" type="JarBodyClouds" parent="Sun/PlanetOrbit/Planet" unique_id=1226887604]
 
-[node name="MoonOrbit" type="JarBodyOrbit" parent="Planet" unique_id=1730493881]
+[node name="MoonOrbit" type="JarBodyOrbit" parent="Sun/PlanetOrbit/Planet" unique_id=1730493881]
+unique_name_in_owner = true
 radius = 11000.0
 period = 900.0
 axis = Vector3(0.2, 1, 0)
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 10786.388, -2157.2776, 0)
 top_level = true
 
-[node name="Moon" type="JarCelestialBody" parent="Planet/MoonOrbit" unique_id=1054570794]
+[node name="Moon" type="JarCelestialBody" parent="Sun/PlanetOrbit/Planet/MoonOrbit" unique_id=1054570794]
+unique_name_in_owner = true
 surface_gravity = 3.0
 spin_period = 180.0
 spin_axis = Vector3(0.3, 1, 0)
 
-[node name="JarVoxelVolume" type="JarVoxelVolume" parent="Planet/MoonOrbit/Moon" unique_id=1688426930]
+[node name="JarVoxelVolume" type="JarVoxelVolume" parent="Sun/PlanetOrbit/Planet/MoonOrbit/Moon" unique_id=1688426930]
 extent = 1024.0
 chunk_scene = ExtResource("1_chunk")
 materials = Array[JarTerrainMaterial]([SubResource("Regolith"), SubResource("MoonRock")])
@@ -142,7 +161,7 @@ meshing_algorithm = 1
 manifold = true
 lod_automatic_update_distance = 16.0
 
-[node name="Debris" type="JarVoxelDebris" parent="Planet/MoonOrbit/Moon/JarVoxelVolume" unique_id=31110237]
+[node name="Debris" type="JarVoxelDebris" parent="Sun/PlanetOrbit/Planet/MoonOrbit/Moon/JarVoxelVolume" unique_id=31110237]
 collision_layer = 3
 collision_mask = 3
 
@@ -153,7 +172,7 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2061.7, 2459.8, 2636.9)
 environment = SubResource("Environment")
 camera_attributes = SubResource("Exposure")
 
-[node name="Sun" type="DirectionalLight3D" parent="." unique_id=705585350]
+[node name="SunLight" type="DirectionalLight3D" parent="." unique_id=705585350]
 transform = Transform3D(0.9988, 0.0234, -0.0421, 0, 0.8738, 0.4862, 0.0482, -0.4857, 0.8728, 0, 0, 0)
 light_energy = 1.4
 shadow_enabled = true

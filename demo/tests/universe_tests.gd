@@ -15,6 +15,7 @@ func _ready() -> void:
 	await _test_frame_switching()
 	await _test_frame_switching_off()
 	await _test_rotating_frame()
+	await _test_star_light()
 	await _test_rigid_body_falls()
 	await _test_flat_body()
 	await _test_volume_body()
@@ -379,6 +380,40 @@ func _test_rotating_frame() -> void:
 	await _frames(2)
 	_check("sky restored without bodies", environment.sky_rotation.is_equal_approx(Vector3(0.1, 0.2, 0.0)), str(environment.sky_rotation))
 	_check("sun restored without bodies", sun.global_basis.is_equal_approx(sun_basis))
+	root.queue_free()
+	await _frames(2)
+
+## A star (JarBodyLight) aims its light from its center at the camera, with
+## its real angular size, and the universe leaves that light to it.
+func _test_star_light() -> void:
+	var root := Node3D.new()
+	add_child(root)
+	var camera := Camera3D.new()
+	root.add_child(camera)
+	camera.make_current()
+	var planet := _body(root, Vector3(0, -1000, 0), 900.0, 10.0)
+	planet.spin_period = 60.0
+	var star := _body(root, Vector3(0, 0, 10000), 100.0, 1.0)
+	var light := DirectionalLight3D.new()
+	root.add_child(light)
+	var shine := JarBodyLight.new()
+	shine.sun = light
+	star.add_child(shine)
+	await _frames(3)
+	await get_tree().process_frame
+	# (The light updates every frame, the star every physics tick: a tick apart.)
+	_check("star light shines from the star at the camera", rad_to_deg(light.global_basis.z.angle_to(Vector3(0, 0, 1))) < 0.5, str(light.global_basis.z))
+	var size := rad_to_deg(2.0 * asin(100.0 / 10000.0))
+	_check("star light angular size", is_equal_approx(light.light_angular_distance, size), "%.4f vs %.4f" % [light.light_angular_distance, size])
+	_check("star light direction query", shine.get_direction_at(Vector3.ZERO).is_equal_approx((star.get_center() - Vector3.ZERO).normalized()))
+	_check("star light in its group", light.is_in_group("jar_body_light"))
+	# The planet (anchor, rotating near its surface) turns the universe around:
+	# the star moves and its light follows it, not the sky rotation.
+	await _frames(60 * 15) # a quarter of a day
+	await get_tree().process_frame
+	var towards := (star.get_center() - camera.global_position).normalized()
+	_check("star light follows the star", rad_to_deg(light.global_basis.z.angle_to(towards)) < 0.5 and towards.z < 0.5,
+		"%s vs %s" % [light.global_basis.z, towards])
 	root.queue_free()
 	await _frames(2)
 

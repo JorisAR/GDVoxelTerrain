@@ -1,4 +1,5 @@
 #include "voxel_universe.h"
+#include "body_layer.h"
 #include "body_orbit.h"
 #include "celestial_body.h"
 #include "voxel_viewer.h"
@@ -108,6 +109,15 @@ void JarVoxelUniverse::_bind_methods()
 
 void JarVoxelUniverse::register_body(JarCelestialBody *body)
 {
+    if (_bodies.empty())
+    {
+        // A new universe (a scene loaded): its clock starts now, from the
+        // scene as placed. set_ticks() still sets any time after this.
+        _ticks = 0;
+        _startTime = get_time();
+        _viewStarted = false;
+        _skyStarted = false;
+    }
     // Where it hangs: relative to its carrier (the nearest orbit or body
     // above it), else its universe pose as placed in the scene now.
     Node3D *carrier = nullptr;
@@ -211,8 +221,11 @@ void JarVoxelUniverse::step(Node *context)
     _ticks++;
     const double time = get_time();
     // Placed first, so the anchor is chosen from where the bodies are now. A
-    // switch keeps this placement (the new anchor stops where it is).
-    place(time);
+    // switch keeps this placement (the new anchor stops where it is). Before
+    // the first anchor, the scene as placed (the universe at its start) is
+    // where they are: placing them without a view would move them anywhere.
+    if (_viewStarted || !bool(setting(FrameSwitching, true)))
+        place(time);
     JarCelestialBody *anchor = choose_anchor();
     _anchor = anchor ? anchor->get_instance_id() : 0;
     if (!bool(setting(FrameSwitching, true)))
@@ -221,7 +234,10 @@ void JarVoxelUniverse::step(Node *context)
     {
         const bool rotating = choose_rotating(anchor);
         if (anchor->get_instance_id() != _frameAnchor || rotating != _frameRotating)
+        {
             switch_frame(context, anchor, rotating, time);
+            place(time); // unchanged, except at the very first anchor
+        }
     }
     if (!_skyFound)
         find_sky(context);
@@ -307,9 +323,13 @@ void JarVoxelUniverse::switch_frame(Node *context, JarCelestialBody *anchor, boo
 {
     JarCelestialBody *previous = get_frame_anchor();
     const DTransform oldView = view_at(time);
-    // The new frame stops where the old view shows it now: nothing jumps.
-    const DTransform now = oldView * frame_transform(anchor, rotating, time);
-    const DTransform before = view_at(time - tick_time()) * frame_transform(anchor, rotating, time - tick_time());
+    // The new frame stops where the old view shows it now: nothing jumps. The
+    // very first one stays as placed in the scene (where the universe was at
+    // its start), however far its orbit has carried it since.
+    const double shown = _viewStarted ? time : _startTime;
+    const DTransform now = oldView * frame_transform(anchor, rotating, shown);
+    const DTransform before = view_at(shown - tick_time()) * frame_transform(anchor, rotating, shown - tick_time());
+    _viewStarted = true;
     _frameAnchor = anchor->get_instance_id();
     _frameRotating = rotating;
     _frameAnchorPose = now;
@@ -354,7 +374,10 @@ void JarVoxelUniverse::find_sky(Node *context)
     if (!context->is_inside_tree())
         return;
     _skyFound = true;
-    const Basis toUniverse = _lastView.inverse().to().basis;
+    // The sky and lights are as placed in the scene, which shows the universe
+    // as it was at its start (the first time), or as it is shown now.
+    const Basis toUniverse = (_skyStarted ? _lastView : view_at(_startTime)).inverse().to().basis;
+    _skyStarted = true;
     const Ref<World3D> world = context->get_viewport()->find_world_3d();
     if (world.is_valid() && world->get_environment().is_valid())
     {
@@ -362,7 +385,7 @@ void JarVoxelUniverse::find_sky(Node *context)
         _skyRest.try_emplace(environment->get_instance_id(),
                              toUniverse * Basis::from_euler(environment->get_sky_rotation()));
     }
-    // Lights not on a body: the sun and other sky lights.
+    // Lights not on a body and not driven by a star: other sky lights.
     TypedArray<Node> lights = context->get_tree()->get_root()->find_children("*", "DirectionalLight3D", true, false);
     for (int64_t i = 0; i < lights.size(); ++i)
     {
@@ -370,7 +393,7 @@ void JarVoxelUniverse::find_sky(Node *context)
         bool onBody = false;
         for (Node *n = light ? light->get_parent() : nullptr; n != nullptr && !onBody; n = n->get_parent())
             onBody = Object::cast_to<JarCelestialBody>(n) != nullptr;
-        if (light && !onBody)
+        if (light && !onBody && !light->is_in_group(JarBodyLight::LightGroup))
             _skyRest.try_emplace(light->get_instance_id(), toUniverse * light->get_global_basis());
     }
 }
@@ -396,6 +419,11 @@ void JarVoxelUniverse::place_sky(Node *context, const DTransform &view, bool res
         }
         else if (auto *light = Object::cast_to<DirectionalLight3D>(object); light && light->is_inside_tree())
         {
+            if (light->is_in_group(JarBodyLight::LightGroup))
+            {
+                it = _skyRest.erase(it); // a star drives it now
+                continue;
+            }
             if (light->get_global_basis() != basis)
                 light->set_global_basis(basis);
         }
