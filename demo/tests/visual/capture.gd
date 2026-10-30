@@ -1,6 +1,6 @@
 extends Node
 ## Renders a configured view and saves a screenshot, for visual checks.
-## Environment: SCENE (res path), LOOK=sun (towards the sun), ATMO (atmosphere
+## Environment: SCENE (res path), LOOK=sun (towards the sun), NOFLARE=1, NOATMO=1, ATMO (atmosphere
 ## properties: name=value,...), VOXEL (voxel size), MESHER (sn|dc, else the
 ## scene's), MANIFOLD=1, POS / LOOK ("x,y,z"), OUT (png path), TICKS (universe
 ## time in physics ticks: time of day with a JarBodyLight sun), WIRE=1 for
@@ -27,6 +27,15 @@ func _ready() -> void:
 	if player:
 		player.start_flying = true
 		player.process_mode = Node.PROCESS_MODE_DISABLED
+	for env_node: WorldEnvironment in scene.find_children("*", "WorldEnvironment", true, false):
+		for pair in OS.get_environment("SKY").split(",", false): # SKY=param=value,... (sky shader)
+			env_node.environment.sky.sky_material.set_shader_parameter(pair.get_slice("=", 0), str_to_var(pair.get_slice("=", 1)))
+	if OS.get_environment("NOATMO") == "1":
+		for atmosphere in scene.find_children("*", "JarBodyAtmosphere", true, false):
+			atmosphere.free()
+	if OS.get_environment("NOFLARE") == "1":
+		for flare in scene.find_children("*", "JarLensFlare", true, false):
+			flare.free()
 	for atmosphere in scene.find_children("*", "JarBodyAtmosphere", true, false):
 		for pair in OS.get_environment("ATMO").split(",", false): # ATMO=name=value,...
 			atmosphere.set(pair.get_slice("=", 0), str_to_var(pair.get_slice("=", 1)))
@@ -141,6 +150,8 @@ func _ready() -> void:
 		var lights := scene.find_children("*", "DirectionalLight3D", true, false)
 		if lights:
 			var towards: Vector3 = lights[0].global_basis.z
+			# SUN_YAW: degrees to turn away from the sun (puts it off center).
+			towards = towards.rotated(up, deg_to_rad(float(OS.get_environment("SUN_YAW"))))
 			camera.look_at(camera.global_position + towards * 100.0 + up * 8.0, up)
 			for i in 4:
 				await get_tree().process_frame

@@ -28,6 +28,7 @@
 #include "celestial_body.h"
 #include "body_orbit.h"
 #include "body_layer.h"
+#include "lens_flare.h"
 #include <godot_cpp/classes/engine.hpp>
 using namespace godot;
 
@@ -81,6 +82,7 @@ void initialize_jar_voxel_terrain_module(ModuleInitializationLevel p_level)
         GDREGISTER_CLASS(JarBodyAtmosphere);
         GDREGISTER_CLASS(JarBodyClouds);
     GDREGISTER_CLASS(JarBodyLight);
+    GDREGISTER_CLASS(JarLensFlare);
         JarVoxelUniverse::register_settings();
         Engine::get_singleton()->register_singleton("JarVoxelUniverse", memnew(JarVoxelUniverse));
     }

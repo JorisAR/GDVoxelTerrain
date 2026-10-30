@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="JarLensFlare" inherits="Node3D" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
+	<brief_description>
+		A lens flare for the sun.
+	</brief_description>
+	<description>
+		Draws a glow, a starburst, a faint halo ring, ghosts along the line from the sun through the screen's center and a thin horizontal streak over the whole screen, after everything else. It follows [member light] (else a [JarBodyLight] star's light, else the first [DirectionalLight3D] in the scene) and the current camera, and takes the light's color times its energy: orange at sunset through a [JarBodyAtmosphere], gone below the horizon. How much of the sun is visible is measured from the depth buffer around it, so terrain and moons hide the flare, partly while they cover part of the sun. Put one anywhere in the scene. Not drawn in the editor.
+		The look (strength and size of each part) is on [member material] ([code]lens_flare.gdshader[/code]).
+	</description>
+	<tutorials>
+	</tutorials>
+	<methods>
+		<method name="get_active_material">
+			<return type="ShaderMaterial" />
+			<description>
+				The material in use: [member material] or the default.
+			</description>
+		</method>
+	</methods>
+	<members>
+		<member name="intensity" type="float" setter="set_intensity" getter="get_intensity" default="1.0">
+			Overall strength of the flare.
+		</member>
+		<member name="light" type="DirectionalLight3D" setter="set_light" getter="get_light">
+			The light whose sun makes the flare. Empty: a [JarBodyLight] star's light, else the first [DirectionalLight3D] in the scene.
+		</member>
+		<member name="material" type="ShaderMaterial" setter="set_material" getter="get_material">
+			The flare's look. Empty: the default [code]lens_flare.gdshader[/code].
+		</member>
+	</members>
+</class>

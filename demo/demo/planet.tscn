@@ -97,7 +97,8 @@ radius = 4650.0
 surface_gravity = 30.0
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -42101.207, 486213.94, 872825)
 
-[node name="Light" type="JarBodyLight" parent="Sun" unique_id=1659315502]
+[node name="Light" type="JarBodyLight" parent="Sun" unique_id=1659315502 node_paths=PackedStringArray("sun")]
+sun = NodePath("../../SunLight")
 
 [node name="PlanetOrbit" type="JarBodyOrbit" parent="Sun" unique_id=318843216]
 radius = 1000000.0
@@ -165,7 +166,7 @@ lod_automatic_update_distance = 16.0
 collision_layer = 3
 collision_mask = 3
 
-[node name="Light" type="JarBodyLight" parent="Sun/PlanetOrbit/Planet/MoonOrbit/Moon" unique_id=902733119]
+[node name="Light" type="JarBodyLight" parent="Sun/PlanetOrbit/Planet/MoonOrbit/Moon" unique_id=902733119 node_paths=PackedStringArray("sun", "reflects")]
 sun = NodePath("../../../../../../MoonLight")
 reflects = NodePath("../../../../../Light")
 
@@ -187,3 +188,5 @@ directional_shadow_max_distance = 400.0
 light_color = Color(0.72, 0.8, 1, 1)
 light_energy = 0.0
 sky_mode = 1
+
+[node name="LensFlare" type="JarLensFlare" parent="." unique_id=1771092205]
