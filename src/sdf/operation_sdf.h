@@ -5,7 +5,7 @@
 
 // Combines two SDFs with a boolean operation (union / subtraction / intersection,
 // plus smooth variants). Lets you carve caves (subtract a sphere), fuse shapes
-// (union), or blend them (smooth ops) purely as data — no code.
+// (union), or blend them (smooth ops) purely as data - no code.
 //   result = op(sdf_a(p), sdf_b(p))
 class JarOperationSdf : public JarSignedDistanceField
 {

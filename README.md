@@ -114,7 +114,7 @@ Each voxel keeps its 4 strongest materials. `material_mode` picks how they reach
 
 The default shaders are procedural (no textures needed): large brightness / hue variation, fine detail and bump, fading with distance. Give materials textures and they are applied with triplanar mapping. Everything is computed in the volume's own space, so textures and rules follow moving volumes and work on planets and flat worlds alike.
 
-To customize, set the volume's `material` to your own `ShaderMaterial` (a copy of a default material to tweak its rule and look settings, or your own shader). The volume copies it per volume and fills in the material palette and texture arrays; chunks pass their origin and the volume's up field as instance uniforms. The easiest way to write a new shader is to include `terrain_common.gdshaderinc` like the defaults do; the inputs are documented there and on `JarVoxelVolume.material`.
+To customize, set the volume's `material` to your own `ShaderMaterial` (a copy of a default material to tweak its rule and look settings, or your own shader). The volume copies it per volume and fills in the material palette, texture arrays, its transform and up field (chunks need no instance uniforms). The easiest way to write a new shader is to include `terrain_common.gdshaderinc` like the defaults do; the inputs are documented there and on `JarVoxelVolume.material`.
 
 ### Population
 

@@ -168,8 +168,12 @@ void JarVoxelDebris::spawn(JarVoxelVolume &volume, Piece &piece)
     MeshInstance3D *meshInstance = memnew(MeshInstance3D);
     meshInstance->set_mesh(mesh);
     meshInstance->set_position(meshOffset);
-    // Shaded as the terrain it was, textures fixed to the piece.
-    JarVoxelChunk::apply_terrain_rendering(meshInstance, volume, block.origin);
+    // Shaded as the terrain it was, textures fixed to the piece: its own copy
+    // of the volume's material (see JarVoxelDebrisBody::pin_textures).
+    Ref<ShaderMaterial> material = volume.get_runtime_material();
+    if (material.is_valid())
+        material = material->duplicate();
+    meshInstance->set_material_override(material.is_valid() ? Ref<Material>(material) : volume.get_runtime_material());
 
     // A convex hull, a little inside the surface: a freshly cut piece must not
     // start out overlapping the terrain around it.
@@ -193,6 +197,9 @@ void JarVoxelDebris::spawn(JarVoxelVolume &volume, Piece &piece)
     body->_block = piece.island.block;
     body->_centroid = piece.island.centroid;
     body->_cells = piece.island.cells;
+    body->_material = material;
+    body->_mesh = meshInstance;
+    body->_meshOrigin = block.origin;
     body->add_child(meshInstance);
     body->add_child(shape);
     const float voxel = block.spacing;
@@ -208,6 +215,7 @@ void JarVoxelDebris::spawn(JarVoxelVolume &volume, Piece &piece)
     add_child(body);
     const glm::vec3 c = piece.island.centroid;
     body->set_global_transform(volume.get_global_transform() * Transform3D(Basis(), Vector3(c.x, c.y, c.z)));
+    body->pin_textures();
     _bodies.push_back(body->get_instance_id());
     emit_signal("debris_detached", body);
 }
@@ -252,6 +260,7 @@ void JarVoxelDebris::process(JarVoxelVolume &volume, double delta)
             continue;
         }
         ++i;
+        body->pin_textures();
         if (body->_merging)
             continue;
         active++;
@@ -343,6 +352,18 @@ void JarVoxelDebris::remove_body(JarVoxelDebrisBody *body)
     _bodies.erase(std::remove(_bodies.begin(), _bodies.end(), id), _bodies.end());
     _merging.erase(id);
     body->queue_free();
+}
+
+void JarVoxelDebrisBody::pin_textures()
+{
+    // The terrain shader takes the mesh origin's volume-space position from
+    // jar_world_to_volume: keep it at where the mesh was in the volume, so the
+    // piece keeps its textures however it moves.
+    if (_material.is_null() || _mesh == nullptr || !_mesh->is_inside_tree())
+        return;
+    const Transform3D toVolume = Transform3D(Basis(), Vector3(_meshOrigin.x, _meshOrigin.y, _meshOrigin.z)) *
+                                 _mesh->get_global_transform().affine_inverse();
+    _material->set_shader_parameter("jar_world_to_volume", Projection(toVolume));
 }
 
 TypedArray<JarVoxelDebrisBody> JarVoxelDebris::get_bodies() const

@@ -314,25 +314,18 @@ void JarVoxelChunk::hide_multi_mesh_instance(MultiMeshInstance3D *instance)
         instance->get_multimesh()->set_instance_count(0);
 }
 
-// Material and per-chunk shader inputs. The terrain shader works in volume
-// space (so textures and up directions follow a moving volume): it needs this
-// chunk's origin in the volume and the volume's up field.
+// The terrain shader works in volume space (so textures and up directions
+// follow a moving volume); its inputs are on the volume's material.
 void JarVoxelChunk::apply_rendering(const JarVoxelVolume &terrain)
 {
-    apply_terrain_rendering(mesh_instance, terrain, bounds.get_center());
+    apply_terrain_rendering(mesh_instance, terrain);
 }
 
-void JarVoxelChunk::apply_terrain_rendering(GeometryInstance3D *instance, const JarVoxelVolume &terrain,
-                                            const glm::vec3 &origin)
+void JarVoxelChunk::apply_terrain_rendering(GeometryInstance3D *instance, const JarVoxelVolume &terrain)
 {
     const Ref<Material> volumeMaterial = terrain.get_runtime_material();
     if (volumeMaterial.is_valid() && instance->get_material_override() != volumeMaterial)
         instance->set_material_override(volumeMaterial);
-    const UpField &up = terrain.get_up_field();
-    instance->set_instance_shader_parameter("jar_chunk_origin", Vector3(origin.x, origin.y, origin.z));
-    instance->set_instance_shader_parameter("jar_up_center",
-                                            Vector4(up.center.x, up.center.y, up.center.z, up.sea_level));
-    instance->set_instance_shader_parameter("jar_up_axis", Vector4(up.axis.x, up.axis.y, up.axis.z, float(up.mode)));
 }
 
 JarVoxelVolume *JarVoxelChunk::get_volume() const

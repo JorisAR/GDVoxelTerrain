@@ -98,7 +98,7 @@ class JarTerrainFeature : public JarTerrainPopulator
         BIND_FEATURE(scene, Variant::OBJECT, PROPERTY_HINT_RESOURCE_TYPE, "PackedScene");
         BIND_FEATURE(scene_mode, Variant::INT, PROPERTY_HINT_ENUM, "Batched,Nodes");
         BIND_FEATURE(collision_distance, Variant::FLOAT, PROPERTY_HINT_RANGE, "0,500,1,or_greater,suffix:m");
-        BIND_FEATURE(density, Variant::FLOAT, PROPERTY_HINT_RANGE, "0,1,0.0001,or_greater,suffix:/m²");
+        BIND_FEATURE(density, Variant::FLOAT, PROPERTY_HINT_RANGE, "0,1,0.0001,or_greater,suffix:/m2");
         BIND_FEATURE(footprint, Variant::FLOAT, PROPERTY_HINT_RANGE, "0,50,0.1,or_greater,suffix:m");
         BIND_FEATURE(draw_distance, Variant::FLOAT, PROPERTY_HINT_RANGE, "1,5000,1,or_greater,suffix:m");
         BIND_FEATURE(cast_shadows, Variant::BOOL, PROPERTY_HINT_NONE, "");

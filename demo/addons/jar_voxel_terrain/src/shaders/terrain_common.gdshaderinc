@@ -2,10 +2,14 @@
 // terrain_weights, terrain_split, terrain_indexed). Write your own terrain
 // shader by including this file, or by declaring the same inputs:
 //
-// Set per chunk (instance uniforms):
-//   jar_chunk_origin  chunk center in volume space (VERTEX is relative to it)
-//   jar_up_center     xyz: up center, w: sea level (height along the axis, or radius)
-//   jar_up_axis       xyz: up axis, w: mode (0 axis, 1 radial)
+// Set per volume, on its copy of the material (no instance uniforms: Godot
+// gives every instance using them a fixed block of the global shader buffer,
+// which thousands of chunks run out of):
+//   jar_world_to_volume  world to volume space; chunks sit at their center in
+//                        the volume, so MODEL_MATRIX gives the center (VERTEX
+//                        is relative to it)
+//   jar_up_center        xyz: up center, w: sea level (height along the axis, or radius)
+//   jar_up_axis          xyz: up axis, w: mode (0 axis, 1 radial)
 // Set per volume from its JarTerrainMaterials (see TerrainMaterialPalette):
 //   jar_palette       256x2: (id, 0) = linear albedo, roughness;
 //                            (id, 1) = 1 / texture size, albedo layer, normal layer, variation
@@ -14,9 +18,9 @@
 // Everything works in the volume's own space, so textures and rules stay put on
 // moving volumes and work the same on flat worlds and planets of any radius.
 
-instance uniform vec3 jar_chunk_origin;
-instance uniform vec4 jar_up_center = vec4(0.0);
-instance uniform vec4 jar_up_axis = vec4(0.0, 1.0, 0.0, 0.0);
+uniform mat4 jar_world_to_volume = mat4(1.0);
+uniform vec4 jar_up_center = vec4(0.0);
+uniform vec4 jar_up_axis = vec4(0.0, 1.0, 0.0, 0.0);
 
 uniform sampler2D jar_palette : filter_nearest;
 uniform sampler2DArray jar_albedo_textures : source_color, filter_linear_mipmap_anisotropic, repeat_enable;
@@ -70,7 +74,7 @@ varying vec4 jar_biomes;   // weights of biomes 0-3
 
 // Use in vertex(): fills jar_position and jar_normal (varyings may only be
 // written in the stage functions themselves).
-#define JAR_VERTEX jar_position = jar_chunk_origin + VERTEX; jar_normal = NORMAL; jar_biomes = CUSTOM1;
+#define JAR_VERTEX jar_position = (jar_world_to_volume * MODEL_MATRIX[3]).xyz + VERTEX; jar_normal = NORMAL; jar_biomes = CUSTOM1;
 
 // --- Noise ------------------------------------------------------------------
 

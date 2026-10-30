@@ -887,12 +887,13 @@ void JarVoxelVolume::initialize()
 void JarVoxelVolume::process()
 {
     // While a build thread owns the octree (_isBuilding), NO main-thread tree
-    // access may run — meshing dispatch, modify queue, and chunk queue all touch
+    // access may run - meshing dispatch, modify queue, and chunk queue all touch
     // the same nodes the worker is mutating. Letting any of them run concurrently
     // was the heap-corruption / nondeterministic-SIGSEGV race. So bail the whole
     // frame until the build finishes.
     if (_materialsDirty && _voxelRoot)
         rebuild_materials();
+    update_shader_frame();
     if (_featureManager)
         _featureManager->process(); // independent of the octree: runs during builds too
     if (_detailScheduler)
@@ -1317,11 +1318,35 @@ void JarVoxelVolume::rebuild_materials()
     }
     else
         _runtimeMaterial = base;
+    update_shader_frame(true);
     std::atomic_store(&_groundPalette,
                       GroundPalette::build(_terrainMaterials.is_empty() ? TerrainMaterialPalette::default_materials()
                                                                         : _terrainMaterials,
                                            _biomeMap, _runtimeMaterial));
     apply_rendering_to_chunks();
+}
+
+void JarVoxelVolume::update_shader_frame(bool force)
+{
+    const Ref<ShaderMaterial> material = _runtimeMaterial;
+    if (material.is_null() || !is_inside_tree())
+        return;
+    const Transform3D toVolume = get_global_transform().affine_inverse();
+    const UpField up = get_up_field();
+    const Vector4 center(up.center.x, up.center.y, up.center.z, up.sea_level);
+    const Vector4 axis(up.axis.x, up.axis.y, up.axis.z, float(up.mode));
+    if (force || toVolume != _shaderWorldToVolume)
+    {
+        _shaderWorldToVolume = toVolume;
+        material->set_shader_parameter("jar_world_to_volume", Projection(toVolume));
+    }
+    if (force || center != _shaderUpCenter || axis != _shaderUpAxis)
+    {
+        _shaderUpCenter = center;
+        _shaderUpAxis = axis;
+        material->set_shader_parameter("jar_up_center", center);
+        material->set_shader_parameter("jar_up_axis", axis);
+    }
 }
 
 // Main thread. Chunks also apply these whenever they are (re)meshed.

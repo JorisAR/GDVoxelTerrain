@@ -79,6 +79,11 @@ class JarVoxelVolume : public Node3D
     void on_terrain_material_changed();
     void on_biome_map_changed();
     void rebuild_materials(); // main thread
+    // The terrain shader's per-volume inputs (world to volume space, up field)
+    // on the runtime material, when they changed. Main thread, every frame.
+    void update_shader_frame(bool force = false);
+    Transform3D _shaderWorldToVolume;
+    Vector4 _shaderUpCenter, _shaderUpAxis;
 
     std::atomic<bool> _isBuilding{false};
     bool _initialBuildRequested = false; // first build waits for process(), when the player is in the tree

@@ -125,11 +125,9 @@ class JarVoxelChunk : public Node3D
             static_body->set_process_mode(active ? PROCESS_MODE_INHERIT : PROCESS_MODE_DISABLED);
     }
     void apply_rendering(const JarVoxelVolume &terrain);
-    // The volume's terrain material and shader inputs on any mesh showing
-    // terrain whose vertices are relative to `origin` (volume space): chunks,
-    // and pieces broken off a volume (their textures stay where they were).
-    static void apply_terrain_rendering(GeometryInstance3D *instance, const JarVoxelVolume &terrain,
-                                        const glm::vec3 &origin);
+    // The volume's terrain material on a chunk mesh (its shader inputs are set
+    // on the material, per volume: JarVoxelVolume::update_shader_frame).
+    static void apply_terrain_rendering(GeometryInstance3D *instance, const JarVoxelVolume &terrain);
     // The volume this chunk belongs to, e.g. from a physics raycast hit:
     // collider -> chunk (its body's owner) -> volume.
     JarVoxelVolume *get_volume() const;

@@ -8,7 +8,9 @@
 #include <atomic>
 #include <godot_cpp/classes/array_mesh.hpp>
 #include <godot_cpp/classes/node.hpp>
+#include <godot_cpp/classes/mesh_instance3d.hpp>
 #include <godot_cpp/classes/rigid_body3d.hpp>
+#include <godot_cpp/classes/shader_material.hpp>
 #include <memory>
 #include <mutex>
 #include <unordered_map>
@@ -32,6 +34,12 @@ class JarVoxelDebrisBody : public RigidBody3D
     int _cells = 0;
     double _restTime = 0.0; // seconds spent (nearly) still
     bool _merging = false;
+    // Shaded as the terrain it was: its own copy of the volume's material,
+    // whose volume space stays fixed to the piece (see pin_textures).
+    Ref<ShaderMaterial> _material;
+    MeshInstance3D *_mesh = nullptr;
+    glm::vec3 _meshOrigin{0.0f}; // the mesh's origin in its volume's space when it broke off
+    void pin_textures();
 
   public:
     // Solid voxels in the piece.
