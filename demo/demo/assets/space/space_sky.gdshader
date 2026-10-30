@@ -27,6 +27,9 @@ uniform float sun_corona_intensity = 0.4;
 // Used when the light has no angular size set.
 uniform float sun_default_size_degrees = 0.8;
 group_uniforms;
+// Set by JarVoxelUniverse: how the sky is turned (Environment.sky_rotation).
+// EYEDIR is in the turned sky; the lights are not, so they need it.
+uniform mat3 jar_sky_basis = mat3(1.0);
 
 float hash13(vec3 p) {
 	p = fract(p * 0.1031);
@@ -85,8 +88,9 @@ void sky() {
 	color += star_layer(dir, 360.0, star_brightness * 0.12);
 
 	if (LIGHT0_ENABLED) {
+		vec3 world_dir = jar_sky_basis * dir;
 		float size = LIGHT0_SIZE > 0.0 ? LIGHT0_SIZE * 0.5 : radians(sun_default_size_degrees) * 0.5;
-		float angle = acos(clamp(dot(dir, LIGHT0_DIRECTION), -1.0, 1.0));
+		float angle = acos(clamp(dot(world_dir, LIGHT0_DIRECTION), -1.0, 1.0));
 		float r = angle / size;
 		if (r < 1.0) {
 			// Limb darkening: the edge of the disk is dimmer and redder.

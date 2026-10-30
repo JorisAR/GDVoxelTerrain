@@ -1,6 +1,7 @@
 extends Node
 ## Renders a configured view and saves a screenshot, for visual checks.
-## Environment: SCENE (res path), VOXEL (voxel size), MESHER (sn|dc, else the
+## Environment: SCENE (res path), LOOK=sun (towards the sun), ATMO (atmosphere
+## properties: name=value,...), VOXEL (voxel size), MESHER (sn|dc, else the
 ## scene's), MANIFOLD=1, POS / LOOK ("x,y,z"), OUT (png path), TICKS (universe
 ## time in physics ticks: time of day with a JarBodyLight sun), WIRE=1 for
 ## wireframe, ON_MOON=1 (POS / LOOK relative to the moon), NOFEAT=1 (no
@@ -26,6 +27,9 @@ func _ready() -> void:
 	if player:
 		player.start_flying = true
 		player.process_mode = Node.PROCESS_MODE_DISABLED
+	for atmosphere in scene.find_children("*", "JarBodyAtmosphere", true, false):
+		for pair in OS.get_environment("ATMO").split(",", false): # ATMO=name=value,...
+			atmosphere.set(pair.get_slice("=", 0), str_to_var(pair.get_slice("=", 1)))
 	add_child(scene)
 	if OS.get_environment("TICKS") != "":
 		JarVoxelUniverse.set_ticks(int(OS.get_environment("TICKS")))
@@ -40,7 +44,8 @@ func _ready() -> void:
 	camera.global_position = pos
 	# UP=radial levels the view on a planet (up away from its center).
 	var up := pos.normalized() if OS.get_environment("UP") == "radial" else Vector3.UP
-	camera.look_at(_vec(OS.get_environment("LOOK")) + (moon.global_position if OS.get_environment("ON_MOON") != "" and moon else Vector3.ZERO), up)
+	if OS.get_environment("LOOK") != "sun":
+		camera.look_at(_vec(OS.get_environment("LOOK")) + (moon.global_position if OS.get_environment("ON_MOON") != "" and moon else Vector3.ZERO), up)
 	if OS.get_environment("HOLES") == "1":
 		# Magenta background: any hole between chunks shows up as magenta.
 		for env_node: WorldEnvironment in scene.find_children("*", "WorldEnvironment", true, false):
@@ -131,6 +136,14 @@ func _ready() -> void:
 		for i in 5:
 			await get_tree().process_frame
 	await RenderingServer.frame_post_draw
+	if OS.get_environment("LOOK") == "sun":
+		# Towards the sun, a little above the horizon's direction.
+		var lights := scene.find_children("*", "DirectionalLight3D", true, false)
+		if lights:
+			var towards: Vector3 = lights[0].global_basis.z
+			camera.look_at(camera.global_position + towards * 100.0 + up * 8.0, up)
+			for i in 4:
+				await get_tree().process_frame
 	var image := get_viewport().get_texture().get_image()
 	image.save_png(OS.get_environment("OUT"))
 	if OS.get_environment("HOLES") == "1":

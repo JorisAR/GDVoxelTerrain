@@ -1,9 +1,11 @@
 #ifndef JAR_BODY_LAYER_H
 #define JAR_BODY_LAYER_H
 
+#include "atmosphere_model.h"
 #include "celestial_body.h"
 #include <algorithm>
 #include <godot_cpp/classes/directional_light3d.hpp>
+#include <godot_cpp/classes/image_texture.hpp>
 #include <godot_cpp/classes/mesh_instance3d.hpp>
 #include <godot_cpp/classes/node3d.hpp>
 #include <godot_cpp/classes/shader_material.hpp>
@@ -97,31 +99,93 @@ class JarBodyWater : public JarBodyLayer
     void set_underwater_material(const Ref<ShaderMaterial> &value);
 };
 
-// A physically based atmosphere (Rayleigh and Mie single scattering) around a
-// round body: blue sky and red sunsets from the ground, a glowing rim from
-// space, haze over distant terrain. Its thickness is a fraction of the sea
-// level radius. The look is set on `material` (atmosphere.gdshader).
+// A physically based atmosphere around a round body (AtmosphereModel, after
+// Hillaire 2020): Rayleigh and Mie scattering, ozone, multiple scattering. Blue
+// sky, orange and red sunsets, deep blue twilight, a glowing rim from space,
+// distant terrain fading to blue. Its thickness is a fraction of the sea level
+// radius; the air's properties are set here, the look on `material`
+// (atmosphere.gdshader; atmosphere_extinction.gdshader dims what is behind).
+//
+// It also lights the scene while the camera is inside it: stars
+// (JarBodyLight) shine through it (their light reddens towards the horizon),
+// and the scene's ambient light becomes the sky's light, on top of the
+// Environment's own ambient light (starlight at night).
 class JarBodyAtmosphere : public JarBodyLayer
 {
     GDCLASS(JarBodyAtmosphere, JarBodyLayer);
 
   private:
     float _thickness = 0.25f;
+    Vector3 _rayleighDepth{0.02f, 0.045f, 0.11f};
+    float _rayleighHeight = 0.4f;
+    float _mieDepth = 0.006f;
+    float _mieHeight = 0.15f;
+    float _mieAnisotropy = 0.7f;
+    Vector3 _ozoneDepth{0.0042f, 0.0117f, 0.0005f};
+    float _ozoneHeight = 0.35f;
+    float _ozoneWidth = 0.3f;
+    Color _groundAlbedo{0.3f, 0.3f, 0.3f};
+    float _ambientStrength = 1.0f;
+    float _sunsetStrength = 5.0f;
+
     Ref<ShaderMaterial> _material;
     Ref<ShaderMaterial> _defaultMaterial;
+    Ref<ShaderMaterial> _extinction; // first pass, dims what is behind
     MeshInstance3D *_shell = nullptr;
     float _shellRadius = -1.0f;
+    AtmosphereModel _model;
+    Ref<ImageTexture> _transmittanceLut, _multiScatteringLut;
+    bool _ownsAmbient = false;
+
+    AtmosphereParams params_for(const JarCelestialBody::Frame &frame) const;
+    void apply_air(const Ref<ShaderMaterial> &material, const JarCelestialBody::Frame &frame) const;
+    void apply_ambient(const JarCelestialBody &body);
 
   protected:
     static void _bind_methods();
+    void _notification(int what);
     void build() override;
     void update(const JarCelestialBody &body) override;
 
   public:
+    static constexpr const char *Group = "jar_atmosphere";
+
     Ref<ShaderMaterial> get_active_material();
+    // The model as last built (empty until the body is known).
+    const AtmosphereModel &get_model() const { return _model; }
+    // Sunlight left at a global position for a star in `direction` (1 above
+    // the atmosphere; 0 behind the planet).
+    Color get_sunlight_at(const Vector3 &global_position, const Vector3 &direction) const;
+    // Sunlight at sea level with the star overhead (lights are balanced to it:
+    // a high sun keeps its light's color).
+    Color get_noon_sunlight() const;
+    // Whether a global position is inside the atmosphere.
+    bool contains(const Vector3 &global_position) const;
 
     float get_thickness() const { return _thickness; }
     void set_thickness(float value) { _thickness = std::clamp(value, 0.01f, 1.0f); }
+    Vector3 get_rayleigh_depth() const { return _rayleighDepth; }
+    void set_rayleigh_depth(const Vector3 &value) { _rayleighDepth = value.max(Vector3()); }
+    float get_rayleigh_height() const { return _rayleighHeight; }
+    void set_rayleigh_height(float value) { _rayleighHeight = std::clamp(value, 0.01f, 2.0f); }
+    float get_mie_depth() const { return _mieDepth; }
+    void set_mie_depth(float value) { _mieDepth = std::max(0.0f, value); }
+    float get_mie_height() const { return _mieHeight; }
+    void set_mie_height(float value) { _mieHeight = std::clamp(value, 0.01f, 2.0f); }
+    float get_mie_anisotropy() const { return _mieAnisotropy; }
+    void set_mie_anisotropy(float value) { _mieAnisotropy = std::clamp(value, 0.0f, 0.99f); }
+    Vector3 get_ozone_depth() const { return _ozoneDepth; }
+    void set_ozone_depth(const Vector3 &value) { _ozoneDepth = value.max(Vector3()); }
+    float get_ozone_height() const { return _ozoneHeight; }
+    void set_ozone_height(float value) { _ozoneHeight = std::clamp(value, 0.0f, 1.0f); }
+    float get_ozone_width() const { return _ozoneWidth; }
+    void set_ozone_width(float value) { _ozoneWidth = std::clamp(value, 0.01f, 1.0f); }
+    Color get_ground_albedo() const { return _groundAlbedo; }
+    void set_ground_albedo(const Color &value) { _groundAlbedo = value; }
+    float get_sunset_strength() const { return _sunsetStrength; }
+    void set_sunset_strength(float value) { _sunsetStrength = std::max(0.0f, value); }
+    float get_ambient_strength() const { return _ambientStrength; }
+    void set_ambient_strength(float value) { _ambientStrength = std::max(0.0f, value); }
     Ref<ShaderMaterial> get_material() const { return _material; }
     void set_material(const Ref<ShaderMaterial> &value);
 };

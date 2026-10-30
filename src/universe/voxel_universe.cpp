@@ -10,6 +10,8 @@
 #include <godot_cpp/classes/character_body3d.hpp>
 #include <godot_cpp/classes/directional_light3d.hpp>
 #include <godot_cpp/classes/environment.hpp>
+#include <godot_cpp/classes/shader_material.hpp>
+#include <godot_cpp/classes/sky.hpp>
 #include <godot_cpp/classes/engine.hpp>
 #include <godot_cpp/classes/physics_server3d.hpp>
 #include <godot_cpp/classes/project_settings.hpp>
@@ -415,7 +417,14 @@ void JarVoxelUniverse::place_sky(Node *context, const DTransform &view, bool res
         {
             const Vector3 euler = basis.get_euler();
             if (environment->get_sky_rotation() != euler)
+            {
                 environment->set_sky_rotation(euler);
+                // Sky shaders get their view direction turned (EYEDIR) but not
+                // the lights (LIGHT0_DIRECTION): this turns it back for them.
+                if (const Ref<Sky> sky = environment->get_sky(); sky.is_valid())
+                    if (const Ref<ShaderMaterial> material = sky->get_material(); material.is_valid())
+                        material->set_shader_parameter("jar_sky_basis", Basis::from_euler(euler));
+            }
         }
         else if (auto *light = Object::cast_to<DirectionalLight3D>(object); light && light->is_inside_tree())
         {

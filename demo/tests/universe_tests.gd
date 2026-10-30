@@ -16,6 +16,7 @@ func _ready() -> void:
 	await _test_frame_switching_off()
 	await _test_rotating_frame()
 	await _test_star_light()
+	await _test_atmosphere()
 	await _test_rigid_body_falls()
 	await _test_flat_body()
 	await _test_volume_body()
@@ -414,6 +415,32 @@ func _test_star_light() -> void:
 	var towards := (star.get_center() - camera.global_position).normalized()
 	_check("star light follows the star", rad_to_deg(light.global_basis.z.angle_to(towards)) < 0.5 and towards.z < 0.5,
 		"%s vs %s" % [light.global_basis.z, towards])
+	root.queue_free()
+	await _frames(2)
+
+## The atmosphere's model: sunlight overhead is bright and nearly white,
+## reddens towards the horizon, is gone behind the planet; none of it applies
+## above the air.
+func _test_atmosphere() -> void:
+	var root := Node3D.new()
+	add_child(root)
+	var planet := _body(root, Vector3.ZERO, 1000.0, 10.0)
+	var air := JarBodyAtmosphere.new()
+	planet.add_child(air)
+	await _frames(2)
+	await get_tree().process_frame
+	var ground := Vector3(0, 1001, 0)
+	var noon := air.get_sunlight_at(ground, Vector3.UP)
+	var low := air.get_sunlight_at(ground, Vector3(1, 0.03, 0).normalized())
+	var behind := air.get_sunlight_at(ground, Vector3(0.2, -1, 0).normalized())
+	_check("atmosphere contains the ground", air.contains(ground) and not air.contains(Vector3(0, 2000, 0)))
+	_check("noon sunlight is bright", noon.r > 0.5 and noon.b > 0.3, str(noon))
+	_check("low sun reddens", low.r > low.g and low.g > low.b and low.b < noon.b * 0.5, str(low))
+	_check("no sunlight behind the planet", behind.r < 1e-3, str(behind))
+	_check("no tint above the air", air.get_sunlight_at(Vector3(0, 5000, 0), Vector3.RIGHT).is_equal_approx(Color(1, 1, 1)))
+	var material: ShaderMaterial = air.get_active_material()
+	_check("atmosphere tables built", material.get_shader_parameter("transmittance_lut") is ImageTexture
+		and material.get_shader_parameter("multiscattering_lut") is ImageTexture)
 	root.queue_free()
 	await _frames(2)
 

@@ -1,6 +1,8 @@
 #include "body_layer.h"
 #include <godot_cpp/classes/camera3d.hpp>
 #include <godot_cpp/classes/engine.hpp>
+#include <godot_cpp/classes/environment.hpp>
+#include <godot_cpp/classes/world3d.hpp>
 #include <godot_cpp/classes/plane_mesh.hpp>
 #include <godot_cpp/classes/resource_loader.hpp>
 #include <godot_cpp/classes/scene_tree.hpp>
@@ -13,6 +15,16 @@ namespace
 const char *WaterShader = "res://addons/jar_voxel_terrain/nodes/water/water.gdshader";
 const char *UnderwaterShader = "res://addons/jar_voxel_terrain/nodes/water/underwater.gdshader";
 const char *AtmosphereShader = "res://addons/jar_voxel_terrain/nodes/atmosphere/atmosphere.gdshader";
+const char *ExtinctionShader = "res://addons/jar_voxel_terrain/nodes/atmosphere/atmosphere_extinction.gdshader";
+// Light a JarBodyLight gives its light before any atmosphere tints it.
+const char *BaseColorMeta = "jar_base_color";
+// The Environment's own ambient light (starlight), under the sky's.
+const char *AmbientFloorMeta = "jar_ambient_floor";
+
+glm::dvec3 to_d(const Vector3 &v)
+{
+    return glm::dvec3(v.x, v.y, v.z);
+}
 const char *CloudShader = "res://addons/jar_voxel_terrain/nodes/clouds/clouds.gdshader";
 
 // A frame with `up` as its y axis.
@@ -202,6 +214,34 @@ void JarBodyLight::update(const JarCelestialBody &body)
         light->set_global_basis(basis);
     if (_physicalSize)
         light->set_param(Light3D::PARAM_SIZE, std::min(get_angular_diameter_at(at), 90.0f));
+    // Through the air the camera is in: reddened towards the horizon, none
+    // below it. The light's own color is kept as its color above the air (at
+    // runtime only: in the editor it would be saved with the scene).
+    if (Engine::get_singleton()->is_editor_hint())
+        return;
+    if (!light->has_meta(BaseColorMeta))
+        light->set_meta(BaseColorMeta, light->get_color());
+    const Color base = light->get_meta(BaseColorMeta);
+    Color tint(1, 1, 1);
+    if (SceneTree *tree = get_tree())
+    {
+        const TypedArray<Node> atmospheres = tree->get_nodes_in_group(JarBodyAtmosphere::Group);
+        for (int64_t i = 0; i < atmospheres.size(); ++i)
+            if (const auto *atmosphere = Object::cast_to<JarBodyAtmosphere>(atmospheres[i]);
+                atmosphere && atmosphere->contains(at))
+            {
+                // Balanced so the sun overhead keeps the light's color; only a
+                // lower sun reddens.
+                const Color sunlight = atmosphere->get_sunlight_at(at, towards);
+                const Color noon = atmosphere->get_noon_sunlight();
+                tint *= Color(std::min(1.0f, sunlight.r / std::max(noon.r, 1e-4f)),
+                              std::min(1.0f, sunlight.g / std::max(noon.g, 1e-4f)),
+                              std::min(1.0f, sunlight.b / std::max(noon.b, 1e-4f)));
+            }
+    }
+    const Color color(base.r * tint.r, base.g * tint.g, base.b * tint.b);
+    if (!light->get_color().is_equal_approx(color))
+        light->set_color(color);
 }
 
 // ---------------------------------------------------------------- JarBodyWater
@@ -350,10 +390,29 @@ void JarBodyWater::update(const JarCelestialBody &body)
 
 void JarBodyAtmosphere::_bind_methods()
 {
-    ClassDB::bind_method(D_METHOD("get_thickness"), &JarBodyAtmosphere::get_thickness);
-    ClassDB::bind_method(D_METHOD("set_thickness", "value"), &JarBodyAtmosphere::set_thickness);
-    ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "thickness", PROPERTY_HINT_RANGE, "0.01,1,0.01"), "set_thickness",
-                 "get_thickness");
+#define BIND_AIR(m_name, m_type, m_hint, m_hint_text)                                                                 \
+    ClassDB::bind_method(D_METHOD("get_" #m_name), &JarBodyAtmosphere::get_##m_name);                                  \
+    ClassDB::bind_method(D_METHOD("set_" #m_name, "value"), &JarBodyAtmosphere::set_##m_name);                         \
+    ADD_PROPERTY(PropertyInfo(m_type, #m_name, m_hint, m_hint_text), "set_" #m_name, "get_" #m_name)
+    BIND_AIR(thickness, Variant::FLOAT, PROPERTY_HINT_RANGE, "0.01,1,0.01");
+    ADD_GROUP("Air", "");
+    BIND_AIR(rayleigh_depth, Variant::VECTOR3, PROPERTY_HINT_NONE, "");
+    BIND_AIR(rayleigh_height, Variant::FLOAT, PROPERTY_HINT_RANGE, "0.01,2,0.01");
+    BIND_AIR(mie_depth, Variant::FLOAT, PROPERTY_HINT_RANGE, "0,1,0.001,or_greater");
+    BIND_AIR(mie_height, Variant::FLOAT, PROPERTY_HINT_RANGE, "0.01,2,0.01");
+    BIND_AIR(mie_anisotropy, Variant::FLOAT, PROPERTY_HINT_RANGE, "0,0.99,0.01");
+    BIND_AIR(ozone_depth, Variant::VECTOR3, PROPERTY_HINT_NONE, "");
+    BIND_AIR(ozone_height, Variant::FLOAT, PROPERTY_HINT_RANGE, "0,1,0.01");
+    BIND_AIR(ozone_width, Variant::FLOAT, PROPERTY_HINT_RANGE, "0.01,1,0.01");
+    BIND_AIR(ground_albedo, Variant::COLOR, PROPERTY_HINT_COLOR_NO_ALPHA, "");
+    ADD_GROUP("Lighting", "");
+    BIND_AIR(sunset_strength, Variant::FLOAT, PROPERTY_HINT_RANGE, "0,10,0.01,or_greater");
+    BIND_AIR(ambient_strength, Variant::FLOAT, PROPERTY_HINT_RANGE, "0,4,0.01,or_greater");
+    ADD_GROUP("", "");
+#undef BIND_AIR
+    ClassDB::bind_method(D_METHOD("get_sunlight_at", "global_position", "direction"),
+                         &JarBodyAtmosphere::get_sunlight_at);
+    ClassDB::bind_method(D_METHOD("contains", "global_position"), &JarBodyAtmosphere::contains);
     ClassDB::bind_method(D_METHOD("get_material"), &JarBodyAtmosphere::get_material);
     ClassDB::bind_method(D_METHOD("set_material", "value"), &JarBodyAtmosphere::set_material);
     ADD_PROPERTY(PropertyInfo(Variant::OBJECT, "material", PROPERTY_HINT_RESOURCE_TYPE, "ShaderMaterial"),
@@ -373,14 +432,152 @@ Ref<ShaderMaterial> JarBodyAtmosphere::get_active_material()
 void JarBodyAtmosphere::set_material(const Ref<ShaderMaterial> &value)
 {
     _material = value;
-    if (_shell)
-        _shell->set_material_override(get_active_material());
+    if (_extinction.is_valid())
+        _extinction->set_next_pass(get_active_material());
+}
+
+void JarBodyAtmosphere::_notification(int what)
+{
+    if (what == NOTIFICATION_ENTER_TREE)
+        add_to_group(Group);
+    else if (what == NOTIFICATION_EXIT_TREE && _ownsAmbient && is_inside_tree())
+    {
+        // Leave the Environment as it was.
+        if (const Ref<World3D> world = get_viewport()->find_world_3d(); world.is_valid())
+            if (const Ref<Environment> environment = world->get_environment();
+                environment.is_valid() && environment->has_meta(AmbientFloorMeta))
+            {
+                const Color floor = environment->get_meta(AmbientFloorMeta);
+                environment->set_ambient_light_color(floor);
+                environment->set_ambient_light_energy(1.0f);
+            }
+        _ownsAmbient = false;
+    }
 }
 
 void JarBodyAtmosphere::build()
 {
     _shell = add_shell();
-    _shell->set_material_override(get_active_material());
+    _extinction = make_material(ExtinctionShader, 99); // dims what is behind, before the light is added
+    _extinction->set_next_pass(get_active_material());
+    _shell->set_material_override(_extinction);
+}
+
+AtmosphereParams JarBodyAtmosphere::params_for(const JarCelestialBody::Frame &frame) const
+{
+    AtmosphereParams p;
+    p.bottom = frame.seaLevel;
+    p.top = frame.seaLevel * (1.0 + _thickness);
+    p.rayleighDepth = to_d(_rayleighDepth);
+    p.rayleighHeight = _rayleighHeight;
+    p.mieDepth = _mieDepth;
+    p.mieHeight = _mieHeight;
+    p.mieAnisotropy = _mieAnisotropy;
+    p.ozoneDepth = to_d(_ozoneDepth);
+    p.ozoneCenter = _ozoneHeight;
+    p.ozoneWidth = _ozoneWidth;
+    p.groundAlbedo = glm::dvec3(_groundAlbedo.r, _groundAlbedo.g, _groundAlbedo.b);
+    p.sunsetStrength = _sunsetStrength;
+    return p;
+}
+
+void JarBodyAtmosphere::apply_air(const Ref<ShaderMaterial> &material, const JarCelestialBody::Frame &frame) const
+{
+    const AtmosphereParams &p = _model.params();
+    const double thickness = p.top - p.bottom;
+    // The model's per-meter coefficients at sea level.
+    const AtmosphereModel::Medium sea = _model.medium(0.0);
+    material->set_shader_parameter("planet_center", frame.center);
+    material->set_shader_parameter("planet_radius", float(p.bottom));
+    material->set_shader_parameter("atmosphere_radius", float(p.top));
+    material->set_shader_parameter("rayleigh_scattering", DTransform::to(sea.rayleighScattering));
+    material->set_shader_parameter("rayleigh_scale_height", float(p.rayleighHeight * thickness));
+    material->set_shader_parameter("mie_scattering", float(sea.mieScattering.x));
+    material->set_shader_parameter("mie_scale_height", float(p.mieHeight * thickness));
+    material->set_shader_parameter("mie_absorption", float(p.mieAbsorption));
+    material->set_shader_parameter("mie_anisotropy", float(p.mieAnisotropy));
+    material->set_shader_parameter("ozone_absorption",
+                                   DTransform::to(p.ozoneDepth / std::max(0.5 * p.ozoneWidth * thickness, 1e-6)));
+    material->set_shader_parameter("ozone_center", float(p.ozoneCenter * thickness));
+    material->set_shader_parameter("ozone_half_width", float(0.5 * p.ozoneWidth * thickness));
+    material->set_shader_parameter("transmittance_lut", _transmittanceLut);
+    material->set_shader_parameter("multiscattering_lut", _multiScatteringLut);
+}
+
+bool JarBodyAtmosphere::contains(const Vector3 &global_position) const
+{
+    const JarCelestialBody *body = get_body();
+    if (body == nullptr || !_model.is_built())
+        return false;
+    return (global_position - body->get_center()).length() < _model.params().top;
+}
+
+Color JarBodyAtmosphere::get_sunlight_at(const Vector3 &global_position, const Vector3 &direction) const
+{
+    const JarCelestialBody *body = get_body();
+    if (body == nullptr || !_model.is_built())
+        return Color(1, 1, 1);
+    const Vector3 offset = global_position - body->get_center();
+    const double r = offset.length();
+    if (r >= _model.params().top)
+        return Color(1, 1, 1); // above the air (what it hides from space is not tinted)
+    const double mu = r > 1e-6 ? offset.dot(direction.normalized()) / r : 1.0;
+    const glm::dvec3 t = _model.sunlight(r, mu);
+    return Color(t.x, t.y, t.z);
+}
+
+Color JarBodyAtmosphere::get_noon_sunlight() const
+{
+    if (!_model.is_built())
+        return Color(1, 1, 1);
+    const glm::dvec3 t = _model.sunlight(_model.params().bottom, 1.0);
+    return Color(t.x, t.y, t.z);
+}
+
+void JarBodyAtmosphere::apply_ambient(const JarCelestialBody &body)
+{
+    Viewport *viewport = get_viewport();
+    Camera3D *camera = viewport ? viewport->get_camera_3d() : nullptr;
+    const Ref<World3D> world = viewport ? viewport->find_world_3d() : Ref<World3D>();
+    const Ref<Environment> environment = world.is_valid() ? world->get_environment() : Ref<Environment>();
+    if (camera == nullptr || environment.is_null() || Engine::get_singleton()->is_editor_hint())
+        return;
+    if (!environment->has_meta(AmbientFloorMeta))
+        environment->set_meta(AmbientFloorMeta,
+                              environment->get_ambient_light_color() * environment->get_ambient_light_energy());
+    const Color floor = environment->get_meta(AmbientFloorMeta);
+    const Vector3 at = camera->get_global_position();
+    if (!contains(at))
+    {
+        if (_ownsAmbient)
+        {
+            environment->set_ambient_light_color(floor);
+            environment->set_ambient_light_energy(1.0f);
+            _ownsAmbient = false;
+        }
+        return;
+    }
+    _ownsAmbient = true;
+    // The sky's light: its average radiance over the upper hemisphere, for
+    // the sunlight above the atmosphere (base color times energy).
+    Color sky(0, 0, 0);
+    if (DirectionalLight3D *light = find_sun())
+    {
+        const Vector3 offset = at - body.get_center();
+        const double r = offset.length();
+        const Vector3 towards = light->get_global_basis().get_column(2).normalized();
+        const glm::dvec3 radiance = _model.sky_ambient(r, offset.dot(towards) / std::max(r, 1e-6));
+        const Color base = light->has_meta(BaseColorMeta) ? Color(light->get_meta(BaseColorMeta)) : light->get_color();
+        // As bright as the sky is drawn (the material's sunlight intensity), so
+        // shadows are lit by the sky one sees.
+        const Variant intensity = get_active_material()->get_shader_parameter("sun_intensity");
+        const float scale = (intensity.get_type() == Variant::NIL ? 16.0f : float(intensity)) * _ambientStrength;
+        sky = Color(radiance.x, radiance.y, radiance.z) * base * scale;
+    }
+    const Color total(floor.r + sky.r, floor.g + sky.g, floor.b + sky.b);
+    const float energy = std::max({total.r, total.g, total.b, 1e-6f});
+    environment->set_ambient_light_color(Color(total.r / energy, total.g / energy, total.b / energy));
+    environment->set_ambient_light_energy(energy);
 }
 
 void JarBodyAtmosphere::update(const JarCelestialBody &body)
@@ -403,11 +600,29 @@ void JarBodyAtmosphere::update(const JarCelestialBody &body)
         _shell->set_mesh(make_sphere(_shellRadius, 64, 32));
     }
     _shell->set_global_transform(Transform3D(Basis(), frame.center));
+    // The tables, when the air or the planet changed (a few milliseconds).
+    const AtmosphereParams params = params_for(frame);
+    if (!_model.is_built() || !(params == _model.params()))
+    {
+        _model.build(params);
+        _transmittanceLut = ImageTexture::create_from_image(_model.transmittance_image());
+        _multiScatteringLut = ImageTexture::create_from_image(_model.multiple_scattering_image());
+    }
     const Ref<ShaderMaterial> material = get_active_material();
-    material->set_shader_parameter("planet_center", frame.center);
-    material->set_shader_parameter("planet_radius", radius);
-    material->set_shader_parameter("atmosphere_radius", outer);
-    apply_sun(material);
+    if (_extinction->get_next_pass() != material)
+        _extinction->set_next_pass(material);
+    for (const Ref<ShaderMaterial> &m : {material, _extinction})
+    {
+        apply_air(m, frame);
+        apply_sun(m);
+        // The light above the atmosphere: it reddens on the way down here.
+        if (DirectionalLight3D *light = find_sun(); light && light->has_meta(BaseColorMeta))
+        {
+            const Color base = light->get_meta(BaseColorMeta);
+            m->set_shader_parameter("sun_color", Vector3(base.r, base.g, base.b));
+        }
+    }
+    apply_ambient(body);
 }
 
 // --------------------------------------------------------------- JarBodyClouds

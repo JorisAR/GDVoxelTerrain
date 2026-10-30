@@ -77,8 +77,8 @@ sky_material = ExtResource("15_sky")
 background_mode = 2
 sky = SubResource("Sky")
 ambient_light_source = 2
-ambient_light_color = Color(0.62, 0.68, 0.78, 1)
-ambient_light_energy = 0.35
+ambient_light_color = Color(0.45, 0.52, 0.7, 1)
+ambient_light_energy = 0.05
 tonemap_mode = 3
 glow_enabled = true
 glow_intensity = 0.4
@@ -93,23 +93,23 @@ auto_exposure_min_sensitivity = 50.0
 [node name="PlanetDemo" type="Node3D" unique_id=700940484]
 
 [node name="Sun" type="JarCelestialBody" parent="." unique_id=1203398541]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -42101.206427, 486213.93266, 872825.011159)
 radius = 4650.0
 surface_gravity = 30.0
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -42101.207, 486213.94, 872825)
 
 [node name="Light" type="JarBodyLight" parent="Sun" unique_id=1659315502]
-sun = NodePath("../../SunLight")
 
 [node name="PlanetOrbit" type="JarBodyOrbit" parent="Sun" unique_id=318843216]
 radius = 1000000.0
 period = 36000.0
 axis = Vector3(0.023426, 0.87384, -0.485649)
-phase = 87.586403
+phase = 87.5864
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.00390625, 0.28125, -0.1875)
 top_level = true
 
 [node name="Planet" type="JarCelestialBody" parent="Sun/PlanetOrbit" unique_id=1486947439]
-unique_name_in_owner = true
 spin_period = 1800.0
+unique_name_in_owner = true
 
 [node name="JarVoxelVolume" type="JarVoxelVolume" parent="Sun/PlanetOrbit/Planet" unique_id=337742281]
 extent = 10000.0
@@ -137,18 +137,18 @@ collision_mask = 3
 [node name="Clouds" type="JarBodyClouds" parent="Sun/PlanetOrbit/Planet" unique_id=1226887604]
 
 [node name="MoonOrbit" type="JarBodyOrbit" parent="Sun/PlanetOrbit/Planet" unique_id=1730493881]
-unique_name_in_owner = true
 radius = 11000.0
 period = 900.0
 axis = Vector3(0.2, 1, 0)
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 10786.388, -2157.2776, 0)
+unique_name_in_owner = true
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 10786.384, -2156.9963, -0.1875)
 top_level = true
 
 [node name="Moon" type="JarCelestialBody" parent="Sun/PlanetOrbit/Planet/MoonOrbit" unique_id=1054570794]
-unique_name_in_owner = true
 surface_gravity = 3.0
 spin_period = 180.0
 spin_axis = Vector3(0.3, 1, 0)
+unique_name_in_owner = true
 
 [node name="JarVoxelVolume" type="JarVoxelVolume" parent="Sun/PlanetOrbit/Planet/MoonOrbit/Moon" unique_id=1688426930]
 extent = 1024.0
@@ -173,7 +173,8 @@ environment = SubResource("Environment")
 camera_attributes = SubResource("Exposure")
 
 [node name="SunLight" type="DirectionalLight3D" parent="." unique_id=705585350]
-transform = Transform3D(0.9988, 0.0234, -0.0421, 0, 0.8738, 0.4862, 0.0482, -0.4857, 0.8728, 0, 0, 0)
+transform = Transform3D(0.9987146, 0.024603227, -0.04431396, 0, 0.8742882, 0.48540714, 0.050685756, -0.4847832, 0.8731645, 0, 0, 0)
 light_energy = 1.4
+light_angular_distance = 0.53467524
 shadow_enabled = true
 directional_shadow_max_distance = 400.0
