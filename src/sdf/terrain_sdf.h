@@ -3,6 +3,7 @@
 
 #include <atomic>
 #include "signed_distance_field.h"
+#include "jar_noise.h"
 #include <godot_cpp/classes/fast_noise_lite.hpp>
 
 // Terrain generator: a flat heightfield or a planet, built from layers that are
@@ -11,8 +12,12 @@
 //   1. base noise: rolling hills above sea level, scaled separately below it
 //      (`depth`) for ocean floors;
 //   2. mountains: a low-frequency mask raises mountain ranges where it passes
-//      a threshold;
+//      a threshold (shaped by a second noise, e.g. ridged, when one is given);
 //   3. erosion: branching gullies and sharp ridges on top of both.
+//
+// The noises can be FastNoiseLite or JarNoise. With JarNoise throughout, the
+// layers' slopes come from the noise's exact gradients in the same evaluation
+// (FastNoiseLite needs extra samples for every slope: about 5x the noise work).
 //
 // The erosion filter is by Rune Skovbo Johansen (runevision), building on work
 // by Clay John and Felix Westin (Fewes):
@@ -36,11 +41,27 @@ class JarTerrainSdf : public JarSignedDistanceField
     float _radius = 1000.0f;
     float _seaLevel = 0.0f; // meters above the base plane / sphere
 
-    Ref<FastNoiseLite> _noise;
+    // Each noise is a FastNoiseLite or a JarNoise (typed copies below).
+    struct Noise
+    {
+        Ref<Resource> resource;
+        Ref<FastNoiseLite> fast;
+        Ref<JarNoise> jar;
+        void set(const Ref<Resource> &value)
+        {
+            resource = value;
+            fast = value;
+            jar = value;
+        }
+        bool is_valid() const { return fast.is_valid() || jar.is_valid(); }
+        bool analytic() const { return fast.is_null(); } // a JarNoise, or none
+    };
+    Noise _noise;
     float _height = 60.0f; // amplitude of positive noise
     float _depth = 60.0f;  // amplitude of negative noise
 
-    Ref<FastNoiseLite> _mountainNoise;
+    Noise _mountainNoise;
+    Noise _mountainMask; // optional: where mountains are (else the mountain noise itself)
     float _mountainHeight = 200.0f;
     float _mountainThreshold = 0.2f; // mask value where mountains start
     float _mountainBlend = 0.5f;     // mask range over which they rise to full height
@@ -63,6 +84,8 @@ class JarTerrainSdf : public JarSignedDistanceField
         glm::vec3 gradient; // tangent gradient of the height (see evaluate)
         float layered;      // height before erosion
         glm::vec3 broad;    // low-passed tangent gradient of the layers (see evaluate)
+        glm::vec3 local{0.0f}; // with JarNoise only: the layers' own tangent gradient, always
+        glm::vec3 fine{0.0f};  // with JarNoise only: what the low-pass left out of it (local - broad)
         // Each erosion octave's part of `gradient` (see normalization()).
         glm::vec3 octaveSlopes[MaxOctaves];
         int octaveCount = 0;
@@ -72,6 +95,18 @@ class JarTerrainSdf : public JarSignedDistanceField
 
     void frame(const glm::vec3 &pos, glm::vec3 &surface, glm::vec3 &up, float &above) const;
     float layered_height(const glm::vec3 &surface) const; // base noise + mountains
+    // With JarNoise only: the layers and their exact gradients (3D, per meter
+    // of surface position), `broad` low-passed as differences over half
+    // `broadWavelength` would be, from one evaluation of each noise.
+    struct Layers
+    {
+        float height = 0.0f;
+        glm::vec3 gradient{0.0f};
+        glm::vec3 broad{0.0f};
+    };
+    bool analytic() const { return _noise.analytic() && _mountainNoise.analytic() && _mountainMask.analytic(); }
+    Layers analytic_layers(const glm::vec3 &surface, float broadWavelength) const;
+    float noise_value(const Noise &noise, const glm::vec3 &surface) const;
     float max_layered_height() const;
     glm::vec3 height_gradient(const glm::vec3 &surface, const glm::vec3 &up, float h, float step) const;
     glm::vec3 broad_gradient(const glm::vec3 &surface, const glm::vec3 &up, float step) const;
@@ -111,14 +146,32 @@ class JarTerrainSdf : public JarSignedDistanceField
     void set_radius(float v) { set_and_notify(_radius, std::max(1.0f, v)); }
     float get_sea_level() const { return _seaLevel; }
     void set_sea_level(float v) { set_and_notify(_seaLevel, v); }
-    Ref<FastNoiseLite> get_noise() const { return _noise; }
-    void set_noise(const Ref<FastNoiseLite> &v) { set_and_notify(_noise, v); }
+    Ref<Resource> get_noise() const { return _noise.resource; }
+    void set_noise(const Ref<Resource> &v)
+    {
+        _noise.set(v);
+        settings_changed();
+        emit_changed();
+    }
     float get_height() const { return _height; }
     void set_height(float v) { set_and_notify(_height, v); }
     float get_depth() const { return _depth; }
     void set_depth(float v) { set_and_notify(_depth, v); }
-    Ref<FastNoiseLite> get_mountain_noise() const { return _mountainNoise; }
-    void set_mountain_noise(const Ref<FastNoiseLite> &v) { set_shape_property(_mountainNoise, v); }
+    Ref<Resource> get_mountain_noise() const { return _mountainNoise.resource; }
+    void set_mountain_noise(const Ref<Resource> &v)
+    {
+        _mountainNoise.set(v);
+        settings_changed();
+        emit_changed();
+        notify_property_list_changed();
+    }
+    Ref<Resource> get_mountain_mask() const { return _mountainMask.resource; }
+    void set_mountain_mask(const Ref<Resource> &v)
+    {
+        _mountainMask.set(v);
+        settings_changed();
+        emit_changed();
+    }
     float get_mountain_height() const { return _mountainHeight; }
     void set_mountain_height(float v) { set_and_notify(_mountainHeight, std::max(0.0f, v)); }
     float get_mountain_threshold() const { return _mountainThreshold; }

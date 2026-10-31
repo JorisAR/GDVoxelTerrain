@@ -1,13 +1,22 @@
 [gd_resource type="JarTerrainSdf" format=3 uid="uid://dqn1tb1t75fft"]
 
-[sub_resource type="FastNoiseLite" id="Mountains"]
-seed = 11
-frequency = 0.0003
-fractal_octaves = 3
-
-[sub_resource type="FastNoiseLite" id="Continents"]
+[sub_resource type="JarNoise" id="Continents"]
 seed = 3
 frequency = 0.0001
+
+[sub_resource type="JarNoise" id="MountainBelts"]
+seed = 11
+frequency = 0.00012
+octaves = 3
+
+[sub_resource type="JarNoise" id="Ridges"]
+seed = 17
+frequency = 0.0003
+fractal_type = 2
+octaves = 5
+gain = 0.45
+warp_strength = 500.0
+warp_frequency = 0.0002
 
 [resource]
 shape = 1
@@ -16,6 +25,10 @@ sea_level = -5.0
 noise = SubResource("Continents")
 height = 250.0
 depth = 400.0
-mountain_noise = SubResource("Mountains")
-mountain_height = 700.0
+mountain_noise = SubResource("Ridges")
+mountain_mask = SubResource("MountainBelts")
+mountain_height = 900.0
+mountain_threshold = 0.05
+mountain_blend = 0.4
+erosion_strength = 0.4
 erosion_scale = 150.0

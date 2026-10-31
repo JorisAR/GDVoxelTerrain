@@ -31,23 +31,26 @@ func _ready() -> void:
 				_check("%s manifold" % label, r.nonmanifold == 0, "%d non-manifold edges" % r.nonmanifold)
 			holder.queue_free()
 			await get_tree().process_frame
-	await _eroded_mountain()
+	await _eroded_mountain("eroded mountain", load("res://tests/planet_terrain_4km.tres"), Vector3(2004.3, 2408.4, 2732.2), 10000.0)
+	# The demo planet now (JarNoise ridges): around its highest peak.
+	var planet: JarTerrainSdf = load("res://demo/planet/planet_terrain.tres")
+	var up := Vector3(-0.2983, 0.9543, 0.0194).normalized()
+	await _eroded_mountain("ridged peak", planet, up * (planet.radius + planet.sample_height(up * planet.radius)), 36000.0)
 	await _reported_spots()
 	print("Topology tests: %s" % ("ALL PASSED" if _failures == 0 else "%d FAILED" % _failures))
 	get_tree().quit(1 if _failures > 0 else 0)
 
-## Steep eroded mountainside of the demo planet. Its distance field
+## Steep eroded mountainside of a planet. Its distance field
 ## overestimates on pinched slopes; the octree used to drop leaves with
 ## surface in them there (holes), and chunk borders showed in the shading
 ## (normals averaged from each chunk's own faces).
-func _eroded_mountain() -> void:
+func _eroded_mountain(label: String, sdf: JarSignedDistanceField, spot: Vector3, extent: float) -> void:
 	var holder := Node.new()
 	add_child(holder)
-	var spot := Vector3(2004.3, 2408.4, 2732.2)
 	var volume := JarVoxelVolume.new()
 	volume.chunk_scene = TestWorld.CHUNK_SCENE
-	volume.extent = 10000.0
-	volume.sdf = load("res://demo/planet/planet_terrain.tres")
+	volume.extent = extent
+	volume.sdf = sdf
 	volume.meshing_algorithm = JarVoxelVolume.MESHING_DUAL_CONTOURING
 	volume.manifold = true
 	holder.add_child(volume)
@@ -56,10 +59,10 @@ func _eroded_mountain() -> void:
 	holder.add_child(viewer)
 	await _settle(volume)
 	var r := Topology.analyze(volume, spot, 40.0)
-	print("INFO eroded mountain %s" % r)
-	_check("eroded mountain no holes", r.open == 0, "%d open edges" % r.open)
+	print("INFO %s %s" % [label, r])
+	_check("%s no holes" % label, r.open == 0, "%d open edges" % r.open)
 	var seams := Topology.seam_normals(volume, spot, 40.0)
-	_check("eroded mountain chunk borders shade alike", seams.shared > 100 and seams.mismatched * 10 < seams.shared,
+	_check("%s chunk borders shade alike" % label, seams.shared > 100 and seams.mismatched * 10 < seams.shared,
 		"%d of %d shared vertices differ" % [seams.mismatched, seams.shared])
 	holder.queue_free()
 	await get_tree().process_frame
@@ -78,7 +81,7 @@ func _reported_spots() -> void:
 		var volume := JarVoxelVolume.new()
 		volume.chunk_scene = TestWorld.CHUNK_SCENE
 		volume.extent = 10000.0
-		volume.sdf = load("res://demo/planet/planet_terrain.tres")
+		volume.sdf = load("res://tests/planet_terrain_4km.tres")
 		volume.meshing_algorithm = JarVoxelVolume.MESHING_DUAL_CONTOURING
 		volume.manifold = true
 		holder.add_child(volume)

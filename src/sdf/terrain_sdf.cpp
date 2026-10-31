@@ -92,24 +92,70 @@ void JarTerrainSdf::frame(const glm::vec3 &pos, glm::vec3 &surface, glm::vec3 &u
     }
 }
 
+float JarTerrainSdf::noise_value(const Noise &noise, const glm::vec3 &surface) const
+{
+    if (noise.jar.is_valid())
+        return noise.jar->sample(_shape == SHAPE_SPHERE ? surface : glm::vec3(surface.x, 0.0f, surface.z)).value;
+    return _shape == SHAPE_SPHERE ? noise.fast->get_noise_3d(surface.x, surface.y, surface.z)
+                                  : noise.fast->get_noise_2d(surface.x, surface.z);
+}
+
 float JarTerrainSdf::layered_height(const glm::vec3 &surface) const
 {
-    const bool sphere = _shape == SHAPE_SPHERE;
+    if (analytic())
+        return analytic_layers(surface, 0.0f).height;
     float h = 0.0f;
     if (_noise.is_valid())
     {
-        const float n = sphere ? _noise->get_noise_3d(surface.x, surface.y, surface.z)
-                               : _noise->get_noise_2d(surface.x, surface.z);
+        const float n = noise_value(_noise, surface);
         h = n > 0.0f ? n * _height : n * _depth;
     }
     if (_mountainNoise.is_valid() && _mountainHeight > 0.0f)
     {
-        const float m = sphere ? _mountainNoise->get_noise_3d(surface.x, surface.y, surface.z)
-                               : _mountainNoise->get_noise_2d(surface.x, surface.z);
+        // Where: the mask (or the mountain noise itself); how high: the
+        // mountain noise's shape, when a mask is given.
+        const float m = noise_value(_mountainMask.is_valid() ? _mountainMask : _mountainNoise, surface);
         const float t = std::clamp((m - _mountainThreshold) / _mountainBlend, 0.0f, 1.0f);
-        h += _mountainHeight * t * t * (3.0f - 2.0f * t);
+        const float shape = _mountainMask.is_valid() ? 0.5f * (noise_value(_mountainNoise, surface) + 1.0f) : 1.0f;
+        h += _mountainHeight * t * t * (3.0f - 2.0f * t) * shape;
     }
     return h;
+}
+
+JarTerrainSdf::Layers JarTerrainSdf::analytic_layers(const glm::vec3 &surface, float broadWavelength) const
+{
+    const glm::vec3 p = _shape == SHAPE_SPHERE ? surface : glm::vec3(surface.x, 0.0f, surface.z);
+    Layers layers;
+    if (_noise.jar.is_valid())
+    {
+        const JarNoise::Sample n = _noise.jar->sample(p, broadWavelength);
+        const float scale = n.value > 0.0f ? _height : _depth;
+        layers.height = n.value * scale;
+        layers.gradient = n.gradient * scale;
+        layers.broad = n.broad * scale;
+    }
+    if (_mountainNoise.jar.is_valid() && _mountainHeight > 0.0f)
+    {
+        const bool masked = _mountainMask.jar.is_valid();
+        const JarNoise::Sample m = (masked ? _mountainMask.jar : _mountainNoise.jar)->sample(p, broadWavelength);
+        const float raw = (m.value - _mountainThreshold) / _mountainBlend;
+        const float t = std::clamp(raw, 0.0f, 1.0f);
+        const float rise = t * t * (3.0f - 2.0f * t);
+        const float riseSlope = raw > 0.0f && raw < 1.0f ? 6.0f * t * (1.0f - t) / _mountainBlend : 0.0f;
+        float shape = 1.0f;
+        glm::vec3 shapeGradient(0.0f), shapeBroad(0.0f);
+        if (masked)
+        {
+            const JarNoise::Sample s = _mountainNoise.jar->sample(p, broadWavelength);
+            shape = 0.5f * (s.value + 1.0f);
+            shapeGradient = 0.5f * s.gradient;
+            shapeBroad = 0.5f * s.broad;
+        }
+        layers.height += _mountainHeight * rise * shape;
+        layers.gradient += _mountainHeight * (riseSlope * shape * m.gradient + rise * shapeGradient);
+        layers.broad += _mountainHeight * (riseSlope * shape * m.broad + rise * shapeBroad);
+    }
+    return layers;
 }
 
 float JarTerrainSdf::max_layered_height() const
@@ -119,6 +165,11 @@ float JarTerrainSdf::max_layered_height() const
 
 glm::vec3 JarTerrainSdf::height_gradient(const glm::vec3 &surface, const glm::vec3 &up, float h, float step) const
 {
+    if (analytic())
+    {
+        const glm::vec3 g = analytic_layers(surface, 0.0f).gradient;
+        return g - up * glm::dot(g, up);
+    }
     // Forward differences along two tangent directions: the local slope.
     const glm::vec3 t1 = glm::normalize(std::abs(up.y) < 0.9f ? glm::cross(up, glm::vec3(0, 1, 0))
                                                                : glm::cross(up, glm::vec3(1, 0, 0)));
@@ -140,6 +191,13 @@ glm::vec3 JarTerrainSdf::height_gradient(const glm::vec3 &surface, const glm::ve
 // terrain along two circles of latitude.
 glm::vec3 JarTerrainSdf::broad_gradient(const glm::vec3 &surface, const glm::vec3 &up, float step) const
 {
+    if (analytic())
+    {
+        // The octaves at least two steps long: what the differences below
+        // keep (they average out anything shorter).
+        const glm::vec3 g = analytic_layers(surface, 2.0f * step).broad;
+        return g - up * glm::dot(g, up);
+    }
     const float d = step / std::sqrt(3.0f);
     static const glm::vec3 corners[4] = {glm::vec3(1, -1, -1), glm::vec3(-1, -1, 1), glm::vec3(-1, 1, -1),
                                          glm::vec3(1, 1, 1)};
@@ -276,9 +334,10 @@ glm::mat3 JarTerrainSdf::lattice_jacobian(const glm::ivec3 &point, float spacing
         place(s, u);
         return broad_gradient(s, u, step);
     };
-    const glm::vec3 broad = broad_gradient(center, up, step);
-    entry.jacobian = glm::outerProduct((broad_at(t1 * e) - broad) / e, t1) +
-                     glm::outerProduct((broad_at(t2 * e) - broad) / e, t2);
+    // Central differences: their error does not depend on the tangent basis
+    // (forward ones made a step where it switches, on a sphere at y = 0.9).
+    entry.jacobian = glm::outerProduct((broad_at(t1 * e) - broad_at(-t1 * e)) / (2.0f * e), t1) +
+                     glm::outerProduct((broad_at(t2 * e) - broad_at(-t2 * e)) / (2.0f * e), t2);
     shared_store(hash, generation, point, entry.jacobian);
     return entry.jacobian;
 }
@@ -305,6 +364,23 @@ void JarTerrainSdf::prepare()
 
 JarTerrainSdf::Sample JarTerrainSdf::evaluate(const glm::vec3 &surface, const glm::vec3 &up, bool localGradient) const
 {
+    if (analytic())
+    {
+        // Height, local and low-passed slope from one evaluation of each noise.
+        const float step = 0.25f * _erosionScale;
+        const Layers layers = analytic_layers(surface, 2.0f * step);
+        const glm::vec3 local = layers.gradient - up * glm::dot(layers.gradient, up);
+        const glm::vec3 broad = layers.broad - up * glm::dot(layers.broad, up);
+        Sample result{layers.height, localGradient ? local : glm::vec3(0.0f), layers.height, glm::vec3(0.0f)};
+        result.local = local;
+        result.fine = local - broad;
+        if (!_erosion || _octaves <= 0 || _erosionStrength <= 0.0f || max_layered_height() <= 0.0f)
+        {
+            result.broad = local;
+            return result;
+        }
+        return erode(surface, up, broad, broad_jacobian(surface, step), result);
+    }
     const float h = layered_height(surface);
     Sample result{h, localGradient ? height_gradient(surface, up, h, 0.5f) : glm::vec3(0.0f), h, glm::vec3(0.0f)};
     const float range = max_layered_height();
@@ -550,6 +626,11 @@ float JarTerrainSdf::normalization(const Sample &sample, float gap) const
     glm::vec3 g = sample.broad + sample.gradient;
     float width = _erosionScale;
     const float gap2 = gap * gap;
+    // The layers' detail under the low-pass's cutoff (known with JarNoise):
+    // the same, over the cutoff's width. Without it, slopes of fine noise
+    // detail were missing and distances on them came out too large.
+    const float fineWidth = 0.5f * _erosionScale;
+    g += sample.fine / (1.0f + gap2 / (fineWidth * fineWidth));
     for (int k = 0; k < sample.octaveCount; ++k)
     {
         const float fade = 1.0f / (1.0f + gap2 / (width * width));
@@ -626,8 +707,9 @@ void JarTerrainSdf::_validate_property(PropertyInfo &property) const
     bool hidden = false;
     if (name == "radius")
         hidden = _shape != SHAPE_SPHERE;
-    else if (name == "mountain_height" || name == "mountain_threshold" || name == "mountain_blend")
-        hidden = _mountainNoise.is_null();
+    else if (name == "mountain_height" || name == "mountain_threshold" || name == "mountain_blend" ||
+             name == "mountain_mask")
+        hidden = !_mountainNoise.is_valid();
     else if (name == "erosion_strength" || name == "erosion_scale" || name == "octaves" || name == "lacunarity" ||
              name == "gain" || name == "detail" || name == "gully_weight" || name == "assumed_slope" ||
              name == "crease_softness")
@@ -648,11 +730,12 @@ void JarTerrainSdf::_bind_methods()
     BIND_PROP(radius, Variant::FLOAT, PROPERTY_HINT_RANGE, "1,100000,1,or_greater,suffix:m");
     BIND_PROP(sea_level, Variant::FLOAT, PROPERTY_HINT_NONE, "suffix:m");
     ADD_GROUP("Base", "");
-    BIND_PROP(noise, Variant::OBJECT, PROPERTY_HINT_RESOURCE_TYPE, "FastNoiseLite");
+    BIND_PROP(noise, Variant::OBJECT, PROPERTY_HINT_RESOURCE_TYPE, "JarNoise,FastNoiseLite");
     BIND_PROP(height, Variant::FLOAT, PROPERTY_HINT_RANGE, "0,2000,0.1,or_greater,suffix:m");
     BIND_PROP(depth, Variant::FLOAT, PROPERTY_HINT_RANGE, "0,2000,0.1,or_greater,suffix:m");
     ADD_GROUP("Mountains", "");
-    BIND_PROP(mountain_noise, Variant::OBJECT, PROPERTY_HINT_RESOURCE_TYPE, "FastNoiseLite");
+    BIND_PROP(mountain_noise, Variant::OBJECT, PROPERTY_HINT_RESOURCE_TYPE, "JarNoise,FastNoiseLite");
+    BIND_PROP(mountain_mask, Variant::OBJECT, PROPERTY_HINT_RESOURCE_TYPE, "JarNoise,FastNoiseLite");
     BIND_PROP(mountain_height, Variant::FLOAT, PROPERTY_HINT_RANGE, "0,5000,0.1,or_greater,suffix:m");
     BIND_PROP(mountain_threshold, Variant::FLOAT, PROPERTY_HINT_RANGE, "-1,1,0.01");
     BIND_PROP(mountain_blend, Variant::FLOAT, PROPERTY_HINT_RANGE, "0.01,2,0.01");
@@ -689,8 +772,39 @@ glm::vec3 JarTerrainSdf::gradient(const glm::vec3 &pos) const
     if (far > 0.0f)
         return JarSignedDistanceField::gradient(pos); // blend band: rarely sampled
 
-    const Sample c = evaluate(surface, up, false);
     const bool sphere = _shape == SHAPE_SPHERE;
+    if (analytic())
+    {
+        // The eroded height's slope is exact here (layers and gullies, chain
+        // rule throughout): no differences, which at planet scale (16 km: a
+        // float step of 2 mm) were mostly rounding noise. The normalization's
+        // own change is weighted by the distance: differences over a wider
+        // step do there.
+        const Sample c = evaluate(surface, up, false);
+        const glm::vec3 slope = c.gradient + c.local;
+        const float n = normalization(c, above - c.height);
+        const float d = (above - c.height) / n;
+        glm::vec3 nSlope(0.0f);
+        if (std::abs(d) > 1e-3f)
+        {
+            const glm::vec3 t1 = glm::normalize(std::abs(up.y) < 0.9f ? glm::cross(up, glm::vec3(0, 1, 0))
+                                                                       : glm::cross(up, glm::vec3(1, 0, 0)));
+            const glm::vec3 t2 = glm::cross(up, t1);
+            constexpr float Step = 0.25f;
+            auto norm = [&](const glm::vec3 &offset) {
+                glm::vec3 s = surface + offset;
+                if (sphere)
+                    s = glm::normalize(s) * _radius;
+                const Sample t = evaluate(s, sphere ? s / _radius : up, false);
+                return normalization(t, above - t.height);
+            };
+            nSlope = t1 * ((norm(t1 * Step) - n) / Step) + t2 * ((norm(t2 * Step) - n) / Step);
+        }
+        // On a sphere, moving `pos` sideways moves its surface point less.
+        const float scale = sphere ? _radius / std::max(glm::length(pos), 1e-3f) : 1.0f;
+        return (up - scale * (slope + d * nSlope)) / n;
+    }
+    const Sample c = evaluate(surface, up, false);
     const glm::vec3 t1 = glm::normalize(std::abs(up.y) < 0.9f ? glm::cross(up, glm::vec3(0, 1, 0))
                                                                : glm::cross(up, glm::vec3(1, 0, 0)));
     const glm::vec3 t2 = glm::cross(up, t1);

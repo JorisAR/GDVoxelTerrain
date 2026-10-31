@@ -26,7 +26,7 @@ func _ready() -> void:
 func _test_fast_flight() -> void:
 	var holder := Node.new()
 	add_child(holder)
-	var sdf: JarSignedDistanceField = load("res://demo/planet/planet_terrain.tres")
+	var sdf: JarSignedDistanceField = load("res://tests/planet_terrain_4km.tres")
 	var volume := JarVoxelVolume.new()
 	volume.chunk_scene = TestWorld.CHUNK_SCENE
 	volume.extent = 10000.0

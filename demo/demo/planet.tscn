@@ -134,7 +134,7 @@ collision_mask = 3
 [node name="Water" type="JarBodyWater" parent="Sun/PlanetOrbit/Planet" unique_id=1585027726]
 
 [node name="Atmosphere" type="JarBodyAtmosphere" parent="Sun/PlanetOrbit/Planet" unique_id=1764051413]
-thickness = 0.12
+thickness = 0.2
 
 [node name="Clouds" type="JarBodyClouds" parent="Sun/PlanetOrbit/Planet" unique_id=1226887604]
 altitude = 1100.0

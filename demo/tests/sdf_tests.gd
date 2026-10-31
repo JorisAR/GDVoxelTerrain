@@ -9,6 +9,7 @@ func _ready() -> void:
 	_test_primitives()
 	_test_modifiers()
 	_test_mesh_sdfs()
+	_test_jar_noise()
 	_test_eroded_terrain()
 	_test_eroded_planet()
 	_test_craters()
@@ -148,15 +149,20 @@ func _compare_mesh(name: String, mesh: Mesh, reference: JarSignedDistanceField) 
 ## Erosion SDF: surface near the eroded height, sign correct, lower bound far
 ## away, and continuous (no jumps between nearby points).
 func _test_eroded_terrain() -> void:
-	var noise := FastNoiseLite.new()
-	noise.frequency = 0.003
-	for shape in [JarTerrainSdf.SHAPE_FLAT, JarTerrainSdf.SHAPE_SPHERE]:
+	var fast := FastNoiseLite.new()
+	fast.frequency = 0.003
+	var jar := JarNoise.new()
+	jar.frequency = 0.003
+	for setup in [[fast, JarTerrainSdf.SHAPE_FLAT], [fast, JarTerrainSdf.SHAPE_SPHERE],
+			[jar, JarTerrainSdf.SHAPE_FLAT], [jar, JarTerrainSdf.SHAPE_SPHERE]]:
+		var noise: Resource = setup[0]
+		var shape: int = setup[1]
 		var sdf := JarTerrainSdf.new()
 		sdf.noise = noise
 		sdf.height = 100.0
 		sdf.shape = shape
 		sdf.radius = 1000.0
-		var label: String = ["flat", "sphere"][shape]
+		var label: String = ["flat", "sphere"][shape] + (" (JarNoise)" if noise is JarNoise else "")
 		var up := Vector3.UP
 		var base := Vector3(37, 0, -12) if shape == JarTerrainSdf.SHAPE_FLAT else Vector3(0.3, 1.0, 0.2).normalized() * 1000.0
 		if shape == JarTerrainSdf.SHAPE_SPHERE:
@@ -190,6 +196,43 @@ func _test_eroded_terrain() -> void:
 		_check("eroded %s distance-like" % label, slopes[100] < 1.6 and slopes[190] < 2.9,
 			"gradient length median %.2f, 95%% %.2f" % [slopes[100], slopes[190]])
 
+## JarNoise: exact gradients (against differences of the value), values in
+## about [-1, 1], the same values for the same seed and others for another.
+func _test_jar_noise() -> void:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 3
+	for setup in [["fbm", JarNoise.FRACTAL_FBM, 0.0], ["ridged", JarNoise.FRACTAL_RIDGED, 0.0], ["warped", JarNoise.FRACTAL_FBM, 40.0]]:
+		var n := JarNoise.new()
+		n.seed = 7
+		n.frequency = 0.01
+		n.fractal_type = setup[1]
+		n.warp_strength = setup[2]
+		var lo := 1e9
+		var hi := -1e9
+		var errors: Array[float] = []
+		var typical := 0.0
+		for i in 1000:
+			# Near the origin: a float's step at 500 m is already 3e-5 m.
+			var p := Vector3(rng.randf_range(-50, 50), rng.randf_range(-50, 50), rng.randf_range(-50, 50))
+			var v := n.get_noise_3d(p.x, p.y, p.z)
+			lo = minf(lo, v)
+			hi = maxf(hi, v)
+			var e := 0.01
+			var numeric := Vector3(n.get_noise_3d(p.x + e, p.y, p.z) - n.get_noise_3d(p.x - e, p.y, p.z),
+				n.get_noise_3d(p.x, p.y + e, p.z) - n.get_noise_3d(p.x, p.y - e, p.z),
+				n.get_noise_3d(p.x, p.y, p.z + e) - n.get_noise_3d(p.x, p.y, p.z - e)) / (2.0 * e)
+			errors.append((n.get_gradient_3d(p) - numeric).length())
+			typical += numeric.length() / 1000.0
+		errors.sort()
+		_check("JarNoise %s gradient exact" % setup[0], errors[500] < 0.002 * typical and errors[990] < 0.02 * typical,
+			"error median %.4f%%, 99%% %.4f%% of the typical gradient" % [errors[500] / typical * 100.0, errors[990] / typical * 100.0])
+		_check("JarNoise %s range" % setup[0], lo > -1.05 and hi < 1.05 and hi - lo > 0.8, "[%.3f, %.3f]" % [lo, hi])
+	var a := JarNoise.new()
+	var b := JarNoise.new()
+	b.seed = 1
+	_check("JarNoise deterministic", a.get_noise_3d(12.5, -3.0, 7.0) == JarNoise.new().get_noise_3d(12.5, -3.0, 7.0)
+		and a.get_noise_3d(12.5, -3.0, 7.0) != b.get_noise_3d(12.5, -3.0, 7.0))
+
 ## The demo planet's eroded terrain: no step where the tangent frame of the
 ## slope estimate used to switch axes (|up.y| = 0.9, a ~2 m cliff along two
 ## circles of latitude), and the gradient override agrees with differences of
@@ -214,7 +257,8 @@ func _test_eroded_planet() -> void:
 	for i in 300:
 		var up := Vector3(rng.randf_range(-1, 1), rng.randf_range(-1, 1), rng.randf_range(-1, 1)).normalized()
 		var p := up * (sdf.radius + sdf.sample_height(up * sdf.radius) + rng.randf_range(-2.0, 2.0))
-		var e := 0.02
+		# Not much smaller: at 16 km a float's step is 2 mm (rounding noise).
+		var e := 0.25
 		var numeric := Vector3(sdf.sample(p + Vector3(e, 0, 0)) - sdf.sample(p - Vector3(e, 0, 0)),
 			sdf.sample(p + Vector3(0, e, 0)) - sdf.sample(p - Vector3(0, e, 0)),
 			sdf.sample(p + Vector3(0, 0, e)) - sdf.sample(p - Vector3(0, 0, e)))

@@ -18,6 +18,7 @@
 #include "biome_map.h"
 #include "terrain_feature.h"
 #include "terrain_populator.h"
+#include "jar_noise.h"
 #include "terrain_sdf.h"
 #include "voxel_chunk.h"
 #include "voxel_volume.h"
@@ -41,6 +42,7 @@ void initialize_jar_voxel_terrain_module(ModuleInitializationLevel p_level)
         GDREGISTER_CLASS(JarBoxSdf);
         GDREGISTER_CLASS(JarSphereSdf);
         GDREGISTER_CLASS(JarPlaneSdf);
+        GDREGISTER_CLASS(JarNoise);
         GDREGISTER_CLASS(JarTerrainSdf);
         GDREGISTER_CLASS(JarOperationSdf);
         GDREGISTER_CLASS(JarTorusSdf);

@@ -1,0 +1,76 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="JarNoise" inherits="Resource" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
+	<brief_description>
+		Fractal noise for terrain, with exact gradients.
+	</brief_description>
+	<description>
+		3D simplex noise that returns its exact gradient along with the value, so terrain slopes cost no extra samples. Fractals: [constant FRACTAL_FBM] (rolling, natural detail) or [constant FRACTAL_RIDGED] (sharp, branching crests for mountain ranges), with an optional domain warp that bends the shapes into more natural, less grid-like forms.
+		It runs inside the extension, with no engine call per sample. [JarTerrainSdf] takes it for any of its noises; with [JarNoise] throughout it builds terrain about twice as fast as with [FastNoiseLite], and its distances and normals are more accurate.
+		Values are in about [-1, 1]. Gradients are per unit of input (per meter for positions in meters), frequency included. 2D sampling reads the XZ plane of the 3D noise.
+	</description>
+	<tutorials>
+	</tutorials>
+	<methods>
+		<method name="get_gradient_3d" qualifiers="const">
+			<return type="Vector3" />
+			<param index="0" name="position" type="Vector3" />
+			<description>
+				Exact gradient of [method get_noise_3d] at [param position].
+			</description>
+		</method>
+		<method name="get_noise_2d" qualifiers="const">
+			<return type="float" />
+			<param index="0" name="x" type="float" />
+			<param index="1" name="y" type="float" />
+			<description>
+				Noise value at (x, 0, y), in about [-1, 1].
+			</description>
+		</method>
+		<method name="get_noise_3d" qualifiers="const">
+			<return type="float" />
+			<param index="0" name="x" type="float" />
+			<param index="1" name="y" type="float" />
+			<param index="2" name="z" type="float" />
+			<description>
+				Noise value at (x, y, z), in about [-1, 1].
+			</description>
+		</method>
+	</methods>
+	<members>
+		<member name="fractal_type" type="int" setter="set_fractal_type" getter="get_fractal_type" default="1">
+			How octaves combine: [constant FRACTAL_NONE], [constant FRACTAL_FBM] or [constant FRACTAL_RIDGED].
+		</member>
+		<member name="frequency" type="float" setter="set_frequency" getter="get_frequency" default="0.01">
+			Frequency of the first octave: 1 / its feature size, in cycles per unit (per meter).
+		</member>
+		<member name="gain" type="float" setter="set_gain" getter="get_gain" default="0.5">
+			Amplitude of each octave relative to the previous one. Lower values give smoother noise.
+		</member>
+		<member name="lacunarity" type="float" setter="set_lacunarity" getter="get_lacunarity" default="2.0">
+			Frequency of each octave relative to the previous one.
+		</member>
+		<member name="octaves" type="int" setter="set_octaves" getter="get_octaves" default="5">
+			Number of octaves (ignored with [constant FRACTAL_NONE]). Each costs one simplex sample.
+		</member>
+		<member name="seed" type="int" setter="set_seed" getter="get_seed" default="0">
+			Different seeds give unrelated noise.
+		</member>
+		<member name="warp_frequency" type="float" setter="set_warp_frequency" getter="get_warp_frequency" default="0.005">
+			Frequency of the domain warp's own noise. Lower than [member frequency] bends whole features; higher roughens them.
+		</member>
+		<member name="warp_strength" type="float" setter="set_warp_strength" getter="get_warp_strength" default="0.0">
+			How far, in input units (meters), the input position is pushed around before sampling: 0 turns the warp off. It costs three more simplex samples. Keep [member warp_strength] * [member warp_frequency] well below 1, or features fold over themselves.
+		</member>
+	</members>
+	<constants>
+		<constant name="FRACTAL_NONE" value="0" enum="FractalType">
+			One octave of simplex noise.
+		</constant>
+		<constant name="FRACTAL_FBM" value="1" enum="FractalType">
+			Octaves summed (fractal Brownian motion): rolling, natural detail.
+		</constant>
+		<constant name="FRACTAL_RIDGED" value="2" enum="FractalType">
+			Per octave 1 - |n|, squared: sharp crests along the noise's zero lines, branching like mountain ridges. The crests are rounded off very slightly, so the gradient stays continuous.
+		</constant>
+	</constants>
+</class>

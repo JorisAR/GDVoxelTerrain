@@ -6,8 +6,9 @@
 	<description>
 		A heightfield along +Y ([constant SHAPE_FLAT]) or a planet around the origin ([constant SHAPE_SPHERE]), built from layers evaluated per point, so it works with chunked, infinite and editable volumes:
 		- [b]Base[/b]: [member noise] scaled by [member height] above zero and by [member depth] below it (ocean floors).
-		- [b]Mountains[/b]: where the low-frequency [member mountain_noise] passes [member mountain_threshold], the ground rises by up to [member mountain_height].
+		- [b]Mountains[/b]: where the low-frequency [member mountain_mask] (or, without one, [member mountain_noise] itself) passes [member mountain_threshold], the ground rises by up to [member mountain_height], shaped by [member mountain_noise].
 		- [b]Erosion[/b]: an erosion filter carves branching gullies and sharp ridges into both.
+		The noises can be [JarNoise] or [FastNoiseLite]. Use [JarNoise] throughout where you can: it gives its exact slope along with every value, which makes the terrain about twice as fast to build and its distances and normals more accurate (with [FastNoiseLite], each slope takes several more noise samples).
 		Heights are measured from the base plane or the sphere of [member radius]; [member sea_level] places the sea relative to it. Volumes in [constant JarVoxelVolume.UP_MODE_AUTO] take their up direction and sea level from this SDF, so the materials, population rules, water and atmosphere follow when you change the radius or sea level.
 		The erosion technique is by Rune Skovbo Johansen (runevision), building on work by Clay John and Felix Westin (Fewes): [url=https://blog.runevision.com/2026/03/fast-and-gorgeous-erosion-filter.html]Fast and Gorgeous Erosion Filter[/url]. This is an independent implementation written from that article, extended to 3D cells so it also works on spheres. Keep the smallest gullies ([member erosion_scale] / [member lacunarity]^([member octaves] - 1)) a few voxels wide; anything finer only aliases. Surface nets suit eroded terrain best.
 	</description>
@@ -57,19 +58,22 @@
 			Width factor from one gully octave to the next: each octave is this many times narrower.
 		</member>
 		<member name="mountain_blend" type="float" setter="set_mountain_blend" getter="get_mountain_blend" default="0.5">
-			Range of [member mountain_noise] values over which mountains rise from nothing to [member mountain_height]. Small values give steep mountain feet.
+			Range of [member mountain_mask] (or [member mountain_noise]) values over which mountains rise from nothing to [member mountain_height]. Small values give steep mountain feet.
 		</member>
 		<member name="mountain_height" type="float" setter="set_mountain_height" getter="get_mountain_height" default="200.0">
 			Height in meters that mountains add on top of the base terrain.
 		</member>
-		<member name="mountain_noise" type="FastNoiseLite" setter="set_mountain_noise" getter="get_mountain_noise">
-			Mask noise for mountain ranges, usually of a much lower frequency than [member noise]. A ridged fractal type gives mountain chains. Without it there are no mountains.
+		<member name="mountain_mask" type="Resource" setter="set_mountain_mask" getter="get_mountain_mask">
+			Where mountain ranges are: a smooth, low-frequency [JarNoise] or [FastNoiseLite]. Mountains rise where it passes [member mountain_threshold], and [member mountain_noise] then shapes them (its value, mapped to [0, 1], scales the height): mountain belts with ridged ranges, peaks and foothills. Without a mask, [member mountain_noise] itself is the mask and mountains rise to full height wherever it passes the threshold.
+		</member>
+		<member name="mountain_noise" type="Resource" setter="set_mountain_noise" getter="get_mountain_noise">
+			Noise for mountain ranges ([JarNoise] or [FastNoiseLite]), of a lower frequency than [member noise]. A ridged fractal ([constant JarNoise.FRACTAL_RIDGED]), ideally domain warped, gives branching ranges with sharp crests. With a [member mountain_mask] it shapes the mountains within the mask; without one it is the mask. Without it there are no mountains.
 		</member>
 		<member name="mountain_threshold" type="float" setter="set_mountain_threshold" getter="get_mountain_threshold" default="0.2">
-			Value of [member mountain_noise] where mountains start. Higher values give fewer, more sporadic mountains.
+			Value of [member mountain_mask] (or [member mountain_noise] without a mask) where mountains start. Higher values give fewer, more sporadic mountains.
 		</member>
-		<member name="noise" type="FastNoiseLite" setter="set_noise" getter="get_noise">
-			Base noise, sampled in 2D (XZ) for [constant SHAPE_FLAT] and in 3D on the sphere for [constant SHAPE_SPHERE]. Without noise the base surface is flat.
+		<member name="noise" type="Resource" setter="set_noise" getter="get_noise">
+			Base noise ([JarNoise] or [FastNoiseLite]), sampled in 2D (XZ) for [constant SHAPE_FLAT] and in 3D on the sphere for [constant SHAPE_SPHERE]. Without noise the base surface is flat.
 		</member>
 		<member name="octaves" type="int" setter="set_octaves" getter="get_octaves" default="4">
 			Number of gully octaves, from [member erosion_scale] down.
