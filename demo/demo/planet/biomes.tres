@@ -6,12 +6,12 @@
 
 [sub_resource type="FastNoiseLite" id="Moisture"]
 seed = 47
-frequency = 0.0005
+frequency = 0.00025
 fractal_octaves = 3
 
 [sub_resource type="FastNoiseLite" id="Temperature"]
 seed = 31
-frequency = 0.0004
+frequency = 0.0002
 fractal_octaves = 3
 
 [resource]

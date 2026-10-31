@@ -3,7 +3,7 @@
 [ext_resource type="JarTerrainSdf" uid="uid://da7ojhqqhsfdd" path="res://demo/planet/moon_terrain.tres" id="1_terrain"]
 
 [resource]
-size = 45.0
+size = 120.0
 density = 0.4
 rim = 0.12
 sdf = ExtResource("1_terrain")

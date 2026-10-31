@@ -20,6 +20,9 @@ extends CharacterBody3D
 @export var mouse_sensitivity := 0.0025
 ## How quickly the body turns to match a new gravity direction (1/s).
 @export var align_speed := 8.0
+## While flying, the most it turns to follow up (degrees per second): passing
+## from one body's pull into another's swings up around calmly, not at once.
+@export var max_fly_turn_speed := 60.0
 @export var start_flying := false
 
 @onready var head: Node3D = $Head
@@ -208,8 +211,15 @@ func _debris_nodes() -> Array[Node]:
 		_debris = get_tree().root.find_children("*", "JarVoxelDebris", true, false)
 	return _debris
 
+var _volume_nodes: Array[Node] = []
+
+## The scene's volumes, found once (searching the whole tree every frame is slow:
+## a planet has thousands of chunk nodes).
 func _volumes() -> Array[Node]:
-	return get_tree().root.find_children("*", "JarVoxelVolume", true, false)
+	_volume_nodes = _volume_nodes.filter(func(v): return is_instance_valid(v))
+	if _volume_nodes.is_empty():
+		_volume_nodes = get_tree().root.find_children("*", "JarVoxelVolume", true, false)
+	return _volume_nodes
 
 ## Rotates the body so its up axis follows gravity, keeping the heading.
 func _align_to(up: Vector3, delta: float) -> void:
@@ -218,7 +228,11 @@ func _align_to(up: Vector3, delta: float) -> void:
 		return
 	var turn := Quaternion(current, up)
 	var target := Basis(turn) * global_basis
-	global_basis = global_basis.orthonormalized().slerp(target.orthonormalized(), clampf(align_speed * delta, 0.0, 1.0))
+	var weight := clampf(align_speed * delta, 0.0, 1.0)
+	if flying:
+		var angle := current.angle_to(up)
+		weight = minf(weight, deg_to_rad(max_fly_turn_speed) * get_physics_process_delta_time() / angle)
+	global_basis = global_basis.orthonormalized().slerp(target.orthonormalized(), weight)
 
 func _walk(input: Vector2, gravity: Vector3, delta: float) -> void:
 	var up := up_direction

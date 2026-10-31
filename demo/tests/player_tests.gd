@@ -125,9 +125,9 @@ func _test_moon(planet_anchor: bool) -> void:
 		JarVoxelUniverse.set_anchor_override(planet)
 	await get_tree().physics_frame
 	# A fixed spot on the moon (it spins, so not a fixed world direction).
-	player.global_position = moon.get_center() + moon.global_basis.y * 360.0
+	player.global_position = moon.get_center() + moon.global_basis.y * (moon.get_effective_radius() + 80.0)
 	await _wait_until(func(): return player._spawned and player.is_on_floor(), 20000)
-	_check("%s spawns on moon" % label, player.is_on_floor() and player.global_position.distance_to(moon.global_position) < 345.0,
+	_check("%s spawns on moon" % label, player.is_on_floor() and player.global_position.distance_to(moon.global_position) < moon.get_effective_radius() + 60.0,
 		"distance to moon center %.1f" % player.global_position.distance_to(moon.global_position))
 	_check("%s anchor" % label, JarVoxelUniverse.get_frame_anchor() == (planet if planet_anchor else moon))
 	var radius := player.global_position.distance_to(moon.global_position)
@@ -162,7 +162,7 @@ func _test_flight_to_moon() -> void:
 	var moon: JarCelestialBody = scene.get_node("%Moon")
 	var player: DemoPlayer = scene.get_node("Player")
 	player.start_flying = true
-	player.fly_speed = 300.0
+	player.fly_speed = 1500.0
 	add_child(scene)
 	await get_tree().physics_frame
 	var toward := (moon.get_center() - planet.get_center()).normalized()
@@ -184,7 +184,7 @@ func _test_flight_to_moon() -> void:
 	var max_turn := 0.0
 	var max_jump := 0.0
 	var frames := 0
-	while player.global_position.distance_to(moon.get_center()) > 700.0 and frames < 3000:
+	while player.global_position.distance_to(moon.get_center()) > moon.get_effective_radius() + 800.0 and frames < 5000:
 		# Steer at the moon (the head is the view; forward is its -z).
 		player.head.look_at(moon.get_center(), player.global_basis.y)
 		await get_tree().physics_frame
@@ -200,7 +200,7 @@ func _test_flight_to_moon() -> void:
 	Input.action_release("move_forward")
 	JarVoxelUniverse.anchor_changed.disconnect(on_switch)
 	JarVoxelUniverse.frame_changed.disconnect(on_frame)
-	_check("flight reaches the moon", frames < 3000, "%d frames" % frames)
+	_check("flight reaches the moon", frames < 5000, "%d frames" % frames)
 	_check("flight switches the anchor to the moon", moon in switches and JarVoxelUniverse.get_frame_anchor() == moon
 		and not JarVoxelUniverse.is_frame_rotating())
 	_check("flight turns smoothly", max_turn < 1.5, "max %.2f deg per frame" % max_turn)

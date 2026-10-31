@@ -3,13 +3,13 @@
 [sub_resource type="FastNoiseLite" id="Noise"]
 noise_type = 2
 seed = 7
-frequency = 0.008
+frequency = 0.004
 fractal_octaves = 4
 
 [resource]
 shape = 1
-radius = 320.0
+radius = 1280.0
 noise = SubResource("Noise")
-height = 10.0
-depth = 18.0
+height = 30.0
+depth = 50.0
 erosion = false

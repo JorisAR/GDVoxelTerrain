@@ -58,8 +58,8 @@ func _ready() -> void:
 	var place := func():
 		if on_moon:
 			var up := moon.global_basis.y
-			camera.global_position = moon.global_position + up * 340.0
-			camera.look_at(moon.global_position + up * 300.0 + moon.global_basis.x * 200.0, up)
+			camera.global_position = moon.get_center() + up * (moon.get_effective_radius() + 40.0)
+			camera.look_at(moon.get_center() + up * moon.get_effective_radius() + moon.global_basis.x * 200.0, up)
 		else:
 			camera.global_position = _vec(OS.get_environment("POS"))
 			camera.look_at(_vec(OS.get_environment("LOOK")))

@@ -93,19 +93,19 @@ auto_exposure_min_sensitivity = 50.0
 [node name="PlanetDemo" type="Node3D" unique_id=700940484]
 
 [node name="Sun" type="JarCelestialBody" parent="." unique_id=1203398541]
-radius = 4650.0
+radius = 18600.0
 surface_gravity = 30.0
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -42101.207, 486213.94, 872825)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -168404.83, 1944855.8, 3491300)
 
 [node name="Light" type="JarBodyLight" parent="Sun" unique_id=1659315502 node_paths=PackedStringArray("sun")]
 sun = NodePath("../../SunLight")
 
 [node name="PlanetOrbit" type="JarBodyOrbit" parent="Sun" unique_id=318843216]
-radius = 1000000.0
+radius = 4000000.0
 period = 36000.0
 axis = Vector3(0.023426, 0.87384, -0.485649)
 phase = 87.5864
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.00390625, 0.28125, -0.1875)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.015625, 1.125, -0.75)
 top_level = true
 
 [node name="Planet" type="JarCelestialBody" parent="Sun/PlanetOrbit" unique_id=1486947439]
@@ -113,7 +113,7 @@ spin_period = 1800.0
 unique_name_in_owner = true
 
 [node name="JarVoxelVolume" type="JarVoxelVolume" parent="Sun/PlanetOrbit/Planet" unique_id=337742281]
-extent = 10000.0
+extent = 36000.0
 chunk_scene = ExtResource("1_chunk")
 materials = Array[JarTerrainMaterial]([SubResource("Grass"), SubResource("Rock"), SubResource("Sand"), SubResource("Seabed"), SubResource("Snow"), SubResource("Dirt"), SubResource("DarkStone"), SubResource("Clay"), SubResource("Tundra"), SubResource("DryGrass")])
 material = ExtResource("3_material")
@@ -134,25 +134,27 @@ collision_mask = 3
 [node name="Water" type="JarBodyWater" parent="Sun/PlanetOrbit/Planet" unique_id=1585027726]
 
 [node name="Atmosphere" type="JarBodyAtmosphere" parent="Sun/PlanetOrbit/Planet" unique_id=1764051413]
+thickness = 0.12
 
 [node name="Clouds" type="JarBodyClouds" parent="Sun/PlanetOrbit/Planet" unique_id=1226887604]
+altitude = 1100.0
 
 [node name="MoonOrbit" type="JarBodyOrbit" parent="Sun/PlanetOrbit/Planet" unique_id=1730493881]
-radius = 11000.0
-period = 900.0
+radius = 60000.0
+period = 1800.0
 axis = Vector3(0.2, 1, 0)
 unique_name_in_owner = true
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 10786.384, -2156.9963, -0.1875)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 58834.824, -11765.844, -0.75)
 top_level = true
 
 [node name="Moon" type="JarCelestialBody" parent="Sun/PlanetOrbit/Planet/MoonOrbit" unique_id=1054570794]
 surface_gravity = 3.0
-spin_period = 180.0
+spin_period = 600.0
 spin_axis = Vector3(0.3, 1, 0)
 unique_name_in_owner = true
 
 [node name="JarVoxelVolume" type="JarVoxelVolume" parent="Sun/PlanetOrbit/Planet/MoonOrbit/Moon" unique_id=1688426930]
-extent = 1024.0
+extent = 4096.0
 chunk_scene = ExtResource("1_chunk")
 materials = Array[JarTerrainMaterial]([SubResource("Regolith"), SubResource("MoonRock")])
 material = ExtResource("13_moon_material")
@@ -171,7 +173,7 @@ reflects = NodePath("../../../../../Light")
 sun = NodePath("../../../../../../MoonLight")
 
 [node name="Player" parent="." unique_id=184981125 instance=ExtResource("14_player")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2061.7, 2459.8, 2636.9)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 8246.8, 9839.2, 10547.6)
 
 [node name="WorldEnvironment" type="WorldEnvironment" parent="." unique_id=1854622839]
 environment = SubResource("Environment")
@@ -184,9 +186,9 @@ shadow_enabled = true
 directional_shadow_max_distance = 400.0
 
 [node name="MoonLight" type="DirectionalLight3D" parent="." unique_id=412907551]
-transform = Transform3D(-0.28932843, 0.4326623, 0.8538691, 0, 0.8920209, -0.45199415, -0.95722985, -0.13077475, -0.258087, 0, 0, 0)
+transform = Transform3D(-0.20412448, 0.37763318, 0.9031758, 0, 0.9226012, -0.38575527, -0.97894496, -0.078742094, -0.18832548, 0, 0, 0)
 light_color = Color(0.72, 0.8, 1, 1)
-light_energy = 0.048209097
+light_energy = 0.043707762
 sky_mode = 1
 
 [node name="LensFlare" type="JarLensFlare" parent="." unique_id=1771092205]
