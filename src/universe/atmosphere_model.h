@@ -24,16 +24,16 @@ using namespace godot;
 struct AtmosphereParams
 {
     double bottom = 1000.0;                       // planet (sea level) radius
-    double top = 1250.0;                          // outer radius
+    double top = 1500.0;                          // outer radius
     glm::dvec3 rayleighDepth{0.02, 0.045, 0.11};  // vertical optical depth
-    double rayleighHeight = 0.4;                  // scale height / thickness
+    double rayleighHeight = 0.2;                  // scale height / thickness
     double mieDepth = 0.006;
-    double mieHeight = 0.15;
+    double mieHeight = 0.075;
     double mieAnisotropy = 0.7;
     double mieAbsorption = 0.11;                  // absorbed per scattered
     glm::dvec3 ozoneDepth{0.0042, 0.0117, 0.0005}; // vertical optical depth (absorption)
-    double ozoneCenter = 0.35;                    // height of the ozone layer's peak / thickness
-    double ozoneWidth = 0.3;                      // its full width / thickness
+    double ozoneCenter = 0.175;                   // height of the ozone layer's peak / thickness
+    double ozoneWidth = 0.15;                     // its full width / thickness
     glm::dvec3 groundAlbedo{0.3};
     // Air counted this many times over on sunlight's way in (not on the way to
     // the camera): a game planet is so small that sunlight crosses little air

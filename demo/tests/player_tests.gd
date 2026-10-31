@@ -171,9 +171,15 @@ func _test_flight_to_moon() -> void:
 	var switches := [] # lambdas capture locals by value
 	var on_switch := func(_a, b): switches.append(b)
 	JarVoxelUniverse.anchor_changed.connect(on_switch)
+	var switched_at := [-10] # the frame of the last frame switch (measurements across it mix frames)
+	var on_frame := func(_anchor, _rotating): switched_at[0] = Engine.get_physics_frames()
+	JarVoxelUniverse.frame_changed.connect(on_frame)
 	Input.action_press("move_forward")
 	var last_basis := player.global_basis
-	var last_rel := player.global_position - moon.get_center()
+	# Motion relative to the moon as a rigid frame (its orbit and spin): the
+	# same in any scene frame, unlike the scene velocity relative to its center
+	# (which jumps by omega x distance when the frame stops turning).
+	var last_position := player.global_position
 	var last_rel_velocity := Vector3.ZERO
 	var max_turn := 0.0
 	var max_jump := 0.0
@@ -184,16 +190,16 @@ func _test_flight_to_moon() -> void:
 		await get_tree().physics_frame
 		frames += 1
 		var turn := rad_to_deg(Quaternion(last_basis.orthonormalized()).angle_to(Quaternion(player.global_basis.orthonormalized())))
-		var rel := player.global_position - moon.get_center()
-		var rel_velocity := (rel - last_rel) * 60.0
-		if frames > 60: # once up to speed
+		var rel_velocity := (player.global_position - last_position) * 60.0 - JarVoxelUniverse.get_body_velocity_at(moon, player.global_position)
+		if frames > 60 and Engine.get_physics_frames() - switched_at[0] > 2: # up to speed, not across a switch
 			max_turn = maxf(max_turn, turn)
 			max_jump = maxf(max_jump, rel_velocity.distance_to(last_rel_velocity))
 		last_basis = player.global_basis
-		last_rel = rel
+		last_position = player.global_position
 		last_rel_velocity = rel_velocity
 	Input.action_release("move_forward")
 	JarVoxelUniverse.anchor_changed.disconnect(on_switch)
+	JarVoxelUniverse.frame_changed.disconnect(on_frame)
 	_check("flight reaches the moon", frames < 3000, "%d frames" % frames)
 	_check("flight switches the anchor to the moon", moon in switches and JarVoxelUniverse.get_frame_anchor() == moon
 		and not JarVoxelUniverse.is_frame_rotating())

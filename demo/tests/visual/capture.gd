@@ -30,6 +30,11 @@ func _ready() -> void:
 	for env_node: WorldEnvironment in scene.find_children("*", "WorldEnvironment", true, false):
 		for pair in OS.get_environment("SKY").split(",", false): # SKY=param=value,... (sky shader)
 			env_node.environment.sky.sky_material.set_shader_parameter(pair.get_slice("=", 0), str_to_var(pair.get_slice("=", 1)))
+	if OS.get_environment("SUNSIZE") != "": # degrees; the star's own size off
+		for star in scene.find_children("*", "JarBodyLight", true, false):
+			star.physical_size = false
+		for l: DirectionalLight3D in scene.find_children("*", "DirectionalLight3D", true, false):
+			l.light_angular_distance = float(OS.get_environment("SUNSIZE"))
 	if OS.get_environment("NOATMO") == "1":
 		for atmosphere in scene.find_children("*", "JarBodyAtmosphere", true, false):
 			atmosphere.free()

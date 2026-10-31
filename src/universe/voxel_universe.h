@@ -149,6 +149,9 @@ class JarVoxelUniverse : public Object
     // and near it (its rotating frame height) it does not turn either.
     JarCelestialBody *get_frame_anchor() const;
     bool is_frame_rotating() const { return _frameRotating; }
+    // Signals: anchor_changed(previous, current) when the anchor body changes;
+    // frame_changed(anchor, rotating) on every switch (also between turning
+    // with the anchor and not), after free bodies' velocities were converted.
 };
 
 // Internal: drives JarVoxelUniverse::step() at the end of each physics frame.

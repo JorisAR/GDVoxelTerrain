@@ -4,7 +4,7 @@
 		Makes its JarCelestialBody a star that lights the scene.
 	</brief_description>
 	<description>
-		Put it under a [JarCelestialBody] (the sun). Every frame it aims a [DirectionalLight3D] ([member JarBodyLayer.sun], else the first one in the scene) from the body's center at the camera, so the light comes from wherever the star is: as the universe turns around the anchor (a spinning planet, its orbit around the sun) the sun rises and sets. With [member physical_size] it also gives the light the star's real angular size, which sets the sun disk a sky shader draws from [code]LIGHT0_SIZE[/code] and the softness of shadows. Color, energy and shadows stay on the light.
+		Put it under a [JarCelestialBody] (the sun). It aims a [DirectionalLight3D] ([member JarBodyLayer.sun], else the first one in the scene) from the body's center at the camera, so the light comes from wherever the star is: as the universe turns around the anchor (a spinning planet, its orbit around the sun) the sun rises and sets. The light is re-aimed each time the star moved 0.05 degrees (re-aiming the shadow map every frame makes shadow edges crawl). Near a surface, its shadows fade out as the star reaches the horizon (grazing light gives the worst shadow artifacts). Color, energy and shadows stay on the light.
 		Inside a [JarBodyAtmosphere] the light reaches the camera through the air: it reddens as the star sets and is gone below the horizon (balanced so the star overhead keeps the light's own color).
 		[b]Moons:[/b] with [member reflects] set to the star's JarBodyLight, it makes its body a moon instead: its own light ([member JarBodyLayer.sun] must be set, to a second [DirectionalLight3D]) shines from the moon at the camera, [member energy] strong at full moon and following the phase (a Lambertian sphere: [method get_phase_at]), reddened through the air like the sun, and draws no disk in the sky (the moon itself is drawn). It lights the night side, and the clouds at night.
 		The light joins the group [code]"jar_body_light"[/code] ([JarVoxelUniverse] leaves it to this node and does not turn it with the sky), and [code]"jar_star_light"[/code] or [code]"jar_moon_light"[/code]: the other layers ([JarBodyWater], [JarBodyAtmosphere], [JarBodyClouds]) use the star's as their sun and the moon's as [code]moon_direction[/code] and [code]moon_color[/code].
@@ -39,8 +39,8 @@
 		<member name="energy" type="float" setter="set_energy" getter="get_energy" default="0.08">
 			Of a moon: its light's energy at full moon.
 		</member>
-		<member name="physical_size" type="bool" setter="set_physical_size" getter="get_physical_size" default="true">
-			Sets the light's angular size ([member Light3D.light_angular_distance]) to the star's apparent size at the camera. Off: the light's own setting is kept.
+		<member name="physical_size" type="bool" setter="set_physical_size" getter="get_physical_size" default="false">
+			Sets the light's angular size ([member Light3D.light_angular_distance]) to the star's apparent size at the camera: physically sized soft shadows (PCSS). These need more shadow bias than Godot's default (else striped shadow acne). Off: the light's own setting is kept. Either way a shader sky gets the star's real size as [code]jar_sun_size[/code] (radians), for its sun disk.
 		</member>
 		<member name="reflects" type="JarBodyLight" setter="set_reflects" getter="get_reflects">
 			The star whose light this body reflects: set it to make this a moon (see the description). Empty: a star.

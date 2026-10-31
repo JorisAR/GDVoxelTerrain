@@ -107,6 +107,9 @@ void JarVoxelUniverse::_bind_methods()
     ADD_SIGNAL(MethodInfo("anchor_changed",
                           PropertyInfo(Variant::OBJECT, "previous", PROPERTY_HINT_NODE_TYPE, "JarCelestialBody"),
                           PropertyInfo(Variant::OBJECT, "current", PROPERTY_HINT_NODE_TYPE, "JarCelestialBody")));
+    ADD_SIGNAL(MethodInfo("frame_changed",
+                          PropertyInfo(Variant::OBJECT, "anchor", PROPERTY_HINT_NODE_TYPE, "JarCelestialBody"),
+                          PropertyInfo(Variant::BOOL, "rotating")));
 }
 
 void JarVoxelUniverse::register_body(JarCelestialBody *body)
@@ -369,6 +372,7 @@ void JarVoxelUniverse::switch_frame(Node *context, JarCelestialBody *anchor, boo
     }
     if (previous != anchor)
         emit_signal("anchor_changed", previous, anchor);
+    emit_signal("frame_changed", anchor, rotating);
 }
 
 void JarVoxelUniverse::find_sky(Node *context)

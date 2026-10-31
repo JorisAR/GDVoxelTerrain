@@ -76,10 +76,14 @@ AtmosphereModel::Medium AtmosphereModel::medium(double h) const
     const double mie = std::exp(-h / (_p.mieHeight * thickness));
     const double halfWidth = 0.5 * _p.ozoneWidth * thickness;
     const double ozone = std::max(0.0, 1.0 - std::abs(h - _p.ozoneCenter * thickness) / halfWidth);
+    // Everything fades to nothing over the top tenth: the atmosphere never
+    // ends in a visible edge, whatever its profile.
+    const double top = std::clamp((thickness - h) / (0.1 * thickness), 0.0, 1.0);
+    const double fade = top * top * (3.0 - 2.0 * top);
     Medium m;
-    m.rayleighScattering = _rayleigh * rayleigh;
-    m.mieScattering = glm::dvec3(_mie * mie);
-    m.extinction = m.rayleighScattering + m.mieScattering * (1.0 + _p.mieAbsorption) + _ozone * ozone;
+    m.rayleighScattering = _rayleigh * (rayleigh * fade);
+    m.mieScattering = glm::dvec3(_mie * mie * fade);
+    m.extinction = m.rayleighScattering + m.mieScattering * (1.0 + _p.mieAbsorption) + _ozone * (ozone * fade);
     return m;
 }
 

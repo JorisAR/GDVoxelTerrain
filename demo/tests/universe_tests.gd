@@ -399,6 +399,7 @@ func _test_star_light() -> void:
 	root.add_child(light)
 	var shine := JarBodyLight.new()
 	shine.sun = light
+	shine.physical_size = true
 	star.add_child(shine)
 	await _frames(3)
 	await get_tree().process_frame

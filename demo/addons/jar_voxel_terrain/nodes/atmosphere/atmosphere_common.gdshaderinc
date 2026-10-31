@@ -51,10 +51,13 @@ struct Medium {
 Medium medium_at(float r) {
 	float h = max(r - planet_radius, 0.0);
 	float ozone = max(0.0, 1.0 - abs(h - ozone_center) / ozone_half_width);
+	// Everything fades to nothing over the top tenth (as the CPU model).
+	float thickness = atmosphere_radius - planet_radius;
+	float fade = smoothstep(0.0, 1.0, clamp((thickness - h) / (0.1 * thickness), 0.0, 1.0));
 	Medium m;
-	m.rayleigh = rayleigh_scattering * exp(-h / rayleigh_scale_height);
-	m.mie = mie_scattering * exp(-h / mie_scale_height);
-	m.extinction = m.rayleigh + vec3(m.mie * (1.0 + mie_absorption)) + ozone_absorption * ozone;
+	m.rayleigh = rayleigh_scattering * exp(-h / rayleigh_scale_height) * fade;
+	m.mie = mie_scattering * exp(-h / mie_scale_height) * fade;
+	m.extinction = m.rayleigh + vec3(m.mie * (1.0 + mie_absorption)) + ozone_absorption * ozone * fade;
 	return m;
 }
 

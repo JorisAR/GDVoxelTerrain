@@ -115,15 +115,15 @@ class JarBodyAtmosphere : public JarBodyLayer
     GDCLASS(JarBodyAtmosphere, JarBodyLayer);
 
   private:
-    float _thickness = 0.25f;
+    float _thickness = 0.5f;
     Vector3 _rayleighDepth{0.02f, 0.045f, 0.11f};
-    float _rayleighHeight = 0.4f;
+    float _rayleighHeight = 0.2f;
     float _mieDepth = 0.006f;
-    float _mieHeight = 0.15f;
+    float _mieHeight = 0.075f;
     float _mieAnisotropy = 0.7f;
     Vector3 _ozoneDepth{0.0042f, 0.0117f, 0.0005f};
-    float _ozoneHeight = 0.35f;
-    float _ozoneWidth = 0.3f;
+    float _ozoneHeight = 0.175f;
+    float _ozoneWidth = 0.15f;
     Color _groundAlbedo{0.3f, 0.3f, 0.3f};
     float _ambientStrength = 1.0f;
     float _sunsetStrength = 5.0f;
@@ -219,9 +219,12 @@ class JarBodyClouds : public JarBodyLayer
 };
 
 // Makes its body a star: aims a DirectionalLight3D (`sun`, else the first one
-// in the scene) from the body's center at the camera every frame, and gives it
-// the body's real angular size (the sky's sun disk, LIGHT0_SIZE, and the
-// softness of shadows). Color and energy stay on the light. The light then
+// in the scene) from the body's center at the camera (each time it moved a
+// little: re-aiming shadows every frame makes their edges crawl), and tells a
+// shader sky its real angular size (jar_sun_size). Near a surface, shadows
+// fade out as it reaches the horizon. With `physical_size` the light gets that
+// size too: soft shadows (PCSS), which need more shadow bias. Color and energy
+// stay on the light. The light then
 // moves with the star as the universe turns (day and night, seasons), and the
 // other layers (water, atmosphere, clouds) use it as their sun.
 //
@@ -234,7 +237,7 @@ class JarBodyLight : public JarBodyLayer
     GDCLASS(JarBodyLight, JarBodyLayer);
 
   private:
-    bool _physicalSize = true;
+    bool _physicalSize = false;
     JarBodyLight *_reflects = nullptr;
     float _energy = 0.08f;
 

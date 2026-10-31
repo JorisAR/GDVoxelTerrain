@@ -15,6 +15,8 @@ uniform float star_brightness = 0.08;
 uniform float star_size = 0.0009;
 // Stars per layer cell; higher = more stars.
 uniform float star_density : hint_range(0.0, 1.0) = 0.35;
+// How quickly stars disappear as the sky brightens (jar_daylight).
+uniform float star_daylight_fade = 25.0;
 group_uniforms galaxy;
 uniform vec3 galaxy_normal = vec3(0.3, 0.9, 0.3);
 uniform vec3 galaxy_color : source_color = vec3(0.55, 0.6, 0.75);
@@ -30,6 +32,11 @@ group_uniforms;
 // Set by JarVoxelUniverse: how the sky is turned (Environment.sky_rotation).
 // EYEDIR is in the turned sky; the lights are not, so they need it.
 uniform mat3 jar_sky_basis = mat3(1.0);
+// Set by JarBodyLight: the sun's apparent diameter (radians; 0: the light's size).
+uniform float jar_sun_size = 0.0;
+// Set by JarBodyAtmosphere: how bright the sky is around the camera. Stars and
+// the galaxy fade out against a bright sky (as the eye's adaptation would).
+uniform float jar_daylight = 0.0;
 
 float hash13(vec3 p) {
 	p = fract(p * 0.1031);
@@ -81,15 +88,16 @@ void sky() {
 	// Galactic band: brighter near the plane, broken up by noise.
 	float band = 1.0 - abs(dot(dir, normalize(galaxy_normal)));
 	float clouds = value_noise(dir * 6.0) * 0.6 + value_noise(dir * 17.0) * 0.4;
-	color += galaxy_color * galaxy_brightness * pow(band, 6.0) * (0.4 + clouds);
+	float night = exp(-jar_daylight * star_daylight_fade);
+	color += galaxy_color * galaxy_brightness * pow(band, 6.0) * (0.4 + clouds) * night;
 	// Three layers: few bright stars, many faint ones.
-	color += star_layer(dir, 90.0, star_brightness);
-	color += star_layer(dir, 180.0, star_brightness * 0.35);
-	color += star_layer(dir, 360.0, star_brightness * 0.12);
+	color += star_layer(dir, 90.0, star_brightness) * night;
+	color += star_layer(dir, 180.0, star_brightness * 0.35) * night;
+	color += star_layer(dir, 360.0, star_brightness * 0.12) * night;
 
 	if (LIGHT0_ENABLED) {
 		vec3 world_dir = jar_sky_basis * dir;
-		float size = LIGHT0_SIZE > 0.0 ? LIGHT0_SIZE * 0.5 : radians(sun_default_size_degrees) * 0.5;
+		float size = jar_sun_size > 0.0 ? jar_sun_size * 0.5 : LIGHT0_SIZE > 0.0 ? LIGHT0_SIZE * 0.5 : radians(sun_default_size_degrees) * 0.5;
 		float angle = acos(clamp(dot(world_dir, LIGHT0_DIRECTION), -1.0, 1.0));
 		float r = angle / size;
 		if (r < 1.0) {

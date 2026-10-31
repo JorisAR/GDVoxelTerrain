@@ -121,6 +121,13 @@
 		</method>
 	</methods>
 	<signals>
+		<signal name="frame_changed">
+			<param index="0" name="anchor" type="JarCelestialBody" />
+			<param index="1" name="rotating" type="bool" />
+			<description>
+				The scene's frame switched (another anchor, or between turning with it and not), after the velocities of free physics bodies were converted. Controllers that steer towards a velocity can use it to blend into the new frame.
+			</description>
+		</signal>
 		<signal name="anchor_changed">
 			<param index="0" name="previous" type="JarCelestialBody" />
 			<param index="1" name="current" type="JarCelestialBody" />

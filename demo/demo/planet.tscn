@@ -166,9 +166,9 @@ lod_automatic_update_distance = 16.0
 collision_layer = 3
 collision_mask = 3
 
-[node name="Light" type="JarBodyLight" parent="Sun/PlanetOrbit/Planet/MoonOrbit/Moon" unique_id=902733119 node_paths=PackedStringArray("sun", "reflects")]
-sun = NodePath("../../../../../../MoonLight")
+[node name="Light" type="JarBodyLight" parent="Sun/PlanetOrbit/Planet/MoonOrbit/Moon" unique_id=902733119 node_paths=PackedStringArray("reflects", "sun")]
 reflects = NodePath("../../../../../Light")
+sun = NodePath("../../../../../../MoonLight")
 
 [node name="Player" parent="." unique_id=184981125 instance=ExtResource("14_player")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2061.7, 2459.8, 2636.9)
@@ -180,13 +180,13 @@ camera_attributes = SubResource("Exposure")
 [node name="SunLight" type="DirectionalLight3D" parent="." unique_id=705585350]
 transform = Transform3D(0.9987146, 0.024603227, -0.04431396, 0, 0.8742882, 0.48540714, 0.050685756, -0.4847832, 0.8731645, 0, 0, 0)
 light_energy = 1.4
-light_angular_distance = 0.53467524
 shadow_enabled = true
 directional_shadow_max_distance = 400.0
 
 [node name="MoonLight" type="DirectionalLight3D" parent="." unique_id=412907551]
+transform = Transform3D(-0.28932843, 0.4326623, 0.8538691, 0, 0.8920209, -0.45199415, -0.95722985, -0.13077475, -0.258087, 0, 0, 0)
 light_color = Color(0.72, 0.8, 1, 1)
-light_energy = 0.0
+light_energy = 0.048209097
 sky_mode = 1
 
 [node name="LensFlare" type="JarLensFlare" parent="." unique_id=1771092205]

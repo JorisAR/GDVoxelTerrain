@@ -30,6 +30,12 @@ var _spawned := false
 var _moved_to_surface := false
 var _frame: JarCelestialBody # body whose motion the player currently follows
 var _frame_transform: Transform3D
+# Fly mode steers towards fly_speed relative to the scene's frame. When the
+# universe switches frames it converts the velocity; that change is kept here
+# and fades out, instead of being steered away within a few frames (a jolt).
+var _fly_offset := Vector3.ZERO
+var _last_velocity := Vector3.ZERO
+var _frame_switched := false
 
 func _ready() -> void:
 	flying = start_flying
@@ -37,6 +43,7 @@ func _ready() -> void:
 	floor_max_angle = deg_to_rad(50.0)
 	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 	_add_population_buttons()
+	JarVoxelUniverse.frame_changed.connect(func(_anchor, _rotating): _frame_switched = true)
 
 var _features_button: CheckButton
 var _details_button: CheckButton
@@ -95,6 +102,9 @@ func _unhandled_input(event: InputEvent) -> void:
 			fly_speed = maxf(fly_speed / 1.5, 1.0)
 
 func _physics_process(delta: float) -> void:
+	if _frame_switched:
+		_frame_switched = false
+		_fly_offset += velocity - _last_velocity
 	_follow_frame()
 	var gravity := get_gravity()
 	var pull := gravity
@@ -119,8 +129,10 @@ func _physics_process(delta: float) -> void:
 	if flying:
 		_fly(input, delta)
 	else:
+		_fly_offset = Vector3.ZERO
 		_walk(input, gravity, delta)
 	move_and_slide()
+	_last_velocity = velocity
 	_update_hud()
 
 ## Stands on the ground once the terrain around the spawn point is final.
@@ -236,7 +248,8 @@ func _fly(input: Vector2, delta: float) -> void:
 	if Input.is_action_pressed("move_down"):
 		dir -= up_direction
 	var target := dir.normalized() * fly_speed if dir.length_squared() > 1e-6 else Vector3.ZERO
-	velocity = velocity.lerp(target, clampf(8.0 * delta, 0.0, 1.0))
+	_fly_offset *= exp(-delta / 1.5)
+	velocity = velocity.lerp(target + _fly_offset, clampf(8.0 * delta, 0.0, 1.0))
 
 func _update_hud() -> void:
 	var editor := head.get_node_or_null("Camera3D/Editor")

@@ -6,7 +6,7 @@
 	<description>
 		A smooth spherical atmosphere after Hillaire ("A Scalable and Production Ready Sky and Atmosphere Rendering Technique", 2020): Rayleigh scattering (blue sky, orange and red sunsets), Mie scattering (haze, the glow around the sun), ozone absorption (deep blue twilight) and multiple scattering (twilight and the edge of the night side are not black). Transmittance and multiple scattering are precomputed on the CPU whenever the air or the planet changes (a few milliseconds); the shader then marches each view ray once. Seen from the ground: the sky, and haze over distant terrain, which also fades towards blue (per color); from space: the glowing rim. Drawn after other transparent objects, so water and clouds get hazed too. Hidden on flat bodies.
 		While the camera is inside it, it lights the scene: the light of a [JarBodyLight] star reaches the camera through it (reddening as the sun goes down, none behind the planet), balanced so that the sun overhead keeps the light's own color; and the [Environment]'s ambient light becomes its own ambient light (starlight, say) plus the sky's light, as bright as the sky is drawn.
-		Heights are fractions of the atmosphere's [member thickness], so the same air works on a planet of any size. The physics are set here; the look (brightness, quality) on [member material].
+		Heights are fractions of the atmosphere's [member thickness], so the same air works on a planet of any size. All of it fades to nothing over the top tenth of the thickness, so the atmosphere never ends in a visible edge; keep the thickness several scale heights tall. While the camera is inside, a shader sky gets the sky's brightness as [code]jar_daylight[/code] (to fade its stars). The physics are set here; the look (brightness, quality) on [member material].
 	</description>
 	<tutorials>
 	</tutorials>
@@ -55,28 +55,28 @@
 		<member name="mie_depth" type="float" setter="set_mie_depth" getter="get_mie_depth" default="0.006">
 			Vertical optical depth of the haze (Mie scattering).
 		</member>
-		<member name="mie_height" type="float" setter="set_mie_height" getter="get_mie_height" default="0.15">
+		<member name="mie_height" type="float" setter="set_mie_height" getter="get_mie_height" default="0.075">
 			Height over which the haze thins out to 1/e, as a fraction of [member thickness].
 		</member>
 		<member name="ozone_depth" type="Vector3" setter="set_ozone_depth" getter="get_ozone_depth" default="Vector3(0.0042, 0.0117, 0.0005)">
 			Vertical optical depth of the ozone layer per color (absorption): it keeps the twilight sky blue.
 		</member>
-		<member name="ozone_height" type="float" setter="set_ozone_height" getter="get_ozone_height" default="0.35">
+		<member name="ozone_height" type="float" setter="set_ozone_height" getter="get_ozone_height" default="0.175">
 			Height of the ozone layer's peak, as a fraction of [member thickness].
 		</member>
-		<member name="ozone_width" type="float" setter="set_ozone_width" getter="get_ozone_width" default="0.3">
+		<member name="ozone_width" type="float" setter="set_ozone_width" getter="get_ozone_width" default="0.15">
 			Full width of the ozone layer, as a fraction of [member thickness].
 		</member>
 		<member name="rayleigh_depth" type="Vector3" setter="set_rayleigh_depth" getter="get_rayleigh_depth" default="Vector3(0.02, 0.045, 0.11)">
 			Vertical optical depth of the air per color (red, green, blue): how much light it scatters between the ground and space. Earth's is about (0.05, 0.11, 0.27).
 		</member>
-		<member name="rayleigh_height" type="float" setter="set_rayleigh_height" getter="get_rayleigh_height" default="0.4">
-			Height over which the air thins out to 1/e, as a fraction of [member thickness]. Earth has about 0.1; a game planet is so small that everything in view is far in atmospheric terms, so a gentler profile keeps nearby terrain clear.
+		<member name="rayleigh_height" type="float" setter="set_rayleigh_height" getter="get_rayleigh_height" default="0.2">
+			Height over which the air thins out to 1/e, as a fraction of [member thickness]. Earth has about 0.01; a game planet is so small that everything in view is far in atmospheric terms, so a gentler profile keeps nearby terrain clear.
 		</member>
 		<member name="sunset_strength" type="float" setter="set_sunset_strength" getter="get_sunset_strength" default="5.0">
 			The air counts this many times over for sunlight on its way in (not on the way to the camera). On a small planet sunlight crosses little air even at the horizon, so sunsets would be pale; this makes them orange and red (and the sky and terrain they light) without hazing nearby terrain. 1: physical.
 		</member>
-		<member name="thickness" type="float" setter="set_thickness" getter="get_thickness" default="0.25">
+		<member name="thickness" type="float" setter="set_thickness" getter="get_thickness" default="0.5">
 			Height of the atmosphere as a fraction of the sea level radius.
 		</member>
 	</members>

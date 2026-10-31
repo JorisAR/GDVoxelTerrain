@@ -2,7 +2,9 @@
 #include <godot_cpp/classes/camera3d.hpp>
 #include <godot_cpp/classes/engine.hpp>
 #include <godot_cpp/classes/environment.hpp>
+#include <godot_cpp/classes/sky.hpp>
 #include <godot_cpp/classes/world3d.hpp>
+#include "voxel_universe.h"
 #include <godot_cpp/classes/plane_mesh.hpp>
 #include <godot_cpp/classes/resource_loader.hpp>
 #include <godot_cpp/classes/scene_tree.hpp>
@@ -20,6 +22,21 @@ const char *ExtinctionShader = "res://addons/jar_voxel_terrain/nodes/atmosphere/
 const char *BaseColorMeta = "jar_base_color";
 // The Environment's own ambient light (starlight), under the sky's.
 const char *AmbientFloorMeta = "jar_ambient_floor";
+// The light's own shadow opacity, before fading towards the horizon.
+const char *BaseShadowMeta = "jar_base_shadow_opacity";
+// Lights are re-aimed once their star moved this far (radians, 0.05 degrees).
+constexpr float LightStep = 0.000873f;
+
+// A shader parameter on the scene's sky material (if it is a ShaderMaterial).
+void set_sky_parameter(Viewport *viewport, const StringName &name, const Variant &value)
+{
+    const Ref<World3D> world = viewport ? viewport->find_world_3d() : Ref<World3D>();
+    const Ref<Environment> environment = world.is_valid() ? world->get_environment() : Ref<Environment>();
+    const Ref<Sky> sky = environment.is_valid() ? environment->get_sky() : Ref<Sky>();
+    if (const Ref<ShaderMaterial> material = sky.is_valid() ? Ref<ShaderMaterial>(sky->get_material()) : Ref<ShaderMaterial>();
+        material.is_valid() && material->get_shader_parameter(name) != value)
+        material->set_shader_parameter(name, value);
+}
 
 glm::dvec3 to_d(const Vector3 &v)
 {
@@ -252,13 +269,17 @@ void JarBodyLight::update(const JarCelestialBody &body)
     Camera3D *camera = viewport ? viewport->get_camera_3d() : nullptr;
     const Vector3 at = camera ? camera->get_global_position() : Vector3();
     const Vector3 towards = get_direction_at(at);
-    const Vector3 helper = std::abs(towards.y) < 0.99f ? Vector3(0, 1, 0) : Vector3(1, 0, 0);
-    const Vector3 x = helper.cross(towards).normalized();
-    const Basis basis(x, towards.cross(x), towards);
-    if (!light->get_global_basis().is_equal_approx(basis))
-        light->set_global_basis(basis);
+    // Only once it moved a little: re-aiming the shadow map every frame makes
+    // shadow edges crawl as the sun moves.
+    if (light->get_global_basis().get_column(2).normalized().angle_to(towards) > LightStep)
+    {
+        const Vector3 helper = std::abs(towards.y) < 0.99f ? Vector3(0, 1, 0) : Vector3(1, 0, 0);
+        const Vector3 x = helper.cross(towards).normalized();
+        light->set_global_basis(Basis(x, towards.cross(x), towards));
+    }
+    const float size = std::min(get_angular_diameter_at(at), 90.0f);
     if (_physicalSize)
-        light->set_param(Light3D::PARAM_SIZE, std::min(get_angular_diameter_at(at), 90.0f));
+        light->set_param(Light3D::PARAM_SIZE, size);
     if (_reflects)
     {
         const float energy = _energy * get_phase_at(at);
@@ -270,6 +291,24 @@ void JarBodyLight::update(const JarCelestialBody &body)
     // runtime only: in the editor it would be saved with the scene).
     if (Engine::get_singleton()->is_editor_hint())
         return;
+    if (!_reflects)
+        set_sky_parameter(viewport, "jar_sun_size", float(Math::deg_to_rad(size))); // the sky's sun disk
+    // Shadows fade out as the star reaches the horizon (near a surface):
+    // grazing light gives the worst shadow artifacts, and real low-sun shadows
+    // are faint anyway.
+    if (!light->has_meta(BaseShadowMeta))
+        light->set_meta(BaseShadowMeta, light->get_param(Light3D::PARAM_SHADOW_OPACITY));
+    float shadow = light->get_meta(BaseShadowMeta);
+    if (JarVoxelUniverse *universe = JarVoxelUniverse::get_singleton())
+        if (const JarCelestialBody *ground = universe->get_dominant_body(at);
+            ground && ground->get_altitude(at) < ground->get_effective_rotating_frame_height())
+        {
+            const float elevation = towards.dot(ground->get_up_at(at));
+            const float t = std::clamp(elevation / 0.12f, 0.0f, 1.0f); // fully on above ~7 degrees
+            shadow *= t * t * (3.0f - 2.0f * t);
+        }
+    if (!Math::is_equal_approx(light->get_param(Light3D::PARAM_SHADOW_OPACITY), shadow))
+        light->set_param(Light3D::PARAM_SHADOW_OPACITY, shadow);
     if (!light->has_meta(BaseColorMeta))
         light->set_meta(BaseColorMeta, light->get_color());
     const Color base = light->get_meta(BaseColorMeta);
@@ -604,6 +643,7 @@ void JarBodyAtmosphere::apply_ambient(const JarCelestialBody &body)
         {
             environment->set_ambient_light_color(floor);
             environment->set_ambient_light_energy(1.0f);
+            set_sky_parameter(viewport, "jar_daylight", 0.0f);
             _ownsAmbient = false;
         }
         return;
@@ -625,6 +665,8 @@ void JarBodyAtmosphere::apply_ambient(const JarCelestialBody &body)
         const float scale = (intensity.get_type() == Variant::NIL ? 16.0f : float(intensity)) * _ambientStrength;
         sky = Color(radiance.x, radiance.y, radiance.z) * base * scale;
     }
+    // How bright the sky is here: shader skies fade their stars with it.
+    set_sky_parameter(viewport, "jar_daylight", std::max({sky.r, sky.g, sky.b}));
     const Color total(floor.r + sky.r, floor.g + sky.g, floor.b + sky.b);
     const float energy = std::max({total.r, total.g, total.b, 1e-6f});
     environment->set_ambient_light_color(Color(total.r / energy, total.g / energy, total.b / energy));
