@@ -855,6 +855,17 @@ void JarVoxelVolume::set_details_enabled(bool value)
 
 void JarVoxelVolume::_notification(int p_what)
 {
+    if (p_what == NOTIFICATION_PREDELETE)
+    {
+        // Node frees its children (the chunks) on PREDELETE, before our
+        // destructor runs: stop everything that reads them first (a build
+        // running while the scene was freed read freed chunks).
+        stop_build_worker();
+        _detailScheduler.reset();
+        _featureManager.reset();
+        _meshComputeScheduler.reset();
+        return;
+    }
     if (!is_active())
     {
         return;
