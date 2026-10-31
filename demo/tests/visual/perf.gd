@@ -1,14 +1,19 @@
 extends Node
 ## Measures frame times of a demo scene from a given viewpoint, to find what
-## costs FPS. Run windowed (rendering is part of the cost), vsync is turned off:
+## costs FPS. Run windowed (rendering is part of the cost). Capped at 60 fps
+## with vsync (uncapped runs keep the GPU at full load, which can hang an
+## unstable system): compare gpu_ms, render_cpu_ms, process_ms, physics_ms.
 ##   SCENE=res://demo/planet.tscn POS=x,y,z LOOK=x,y,z godot --path demo res://tests/visual/perf.tscn
 ## ON_MOON=1 puts the camera on the moon (which moves: colliders follow it).
-## DISABLE=atmosphere,water,features,details,shadows,clouds switches parts off.
+## DISABLE=atmosphere,water,features,details,shadows,clouds,flare,moonlight,
+## softsun (sun light without its physical size: no soft shadows), spin (bodies
+## do not spin) switches parts off.
+## TICKS sets the universe time (time of day).
 ## Prints one PERF line.
 
 func _ready() -> void:
-	DisplayServer.window_set_vsync_mode(DisplayServer.VSYNC_DISABLED)
-	Engine.max_fps = 0
+	DisplayServer.window_set_vsync_mode(DisplayServer.VSYNC_ENABLED)
+	Engine.max_fps = 60
 	var scene: Node = load(OS.get_environment("SCENE")).instantiate()
 	var player := scene.get_node_or_null("Player")
 	if player:
@@ -24,10 +29,29 @@ func _ready() -> void:
 		if name.to_lower() in disabled:
 			for n in scene.find_children(name, "", true, false):
 				n.queue_free()
+	if "spin" in disabled:
+		for b: JarCelestialBody in scene.find_children("*", "JarCelestialBody", true, false):
+			b.spin_period = 0.0
+	if "flare" in disabled:
+		for n in scene.find_children("*", "JarLensFlare", true, false):
+			n.queue_free()
+	if "moonlight" in disabled:
+		for n in scene.find_children("*", "JarBodyLight", true, false):
+			if n.reflects:
+				n.get_sun().queue_free()
+				n.queue_free()
+	if "softsun" in disabled:
+		for n in scene.find_children("*", "JarBodyLight", true, false):
+			n.physical_size = false
+		for l: DirectionalLight3D in scene.find_children("*", "DirectionalLight3D", true, false):
+			l.light_angular_distance = 0.0
 	if "shadows" in disabled:
 		for l: DirectionalLight3D in scene.find_children("*", "DirectionalLight3D", true, false):
 			l.shadow_enabled = false
 	add_child(scene)
+	if OS.get_environment("TICKS") != "":
+		JarVoxelUniverse.set_ticks(int(OS.get_environment("TICKS")))
+	RenderingServer.viewport_set_measure_render_time(get_viewport().get_viewport_rid(), true)
 	var camera: Camera3D = scene.find_children("*", "Camera3D", true, false)[0]
 	var moon: Node3D = scene.get_node_or_null("%Moon")
 	var on_moon := OS.get_environment("ON_MOON") == "1" and moon != null
@@ -59,6 +83,8 @@ func _ready() -> void:
 	var frames: Array[float] = []
 	var process := 0.0
 	var physics := 0.0
+	var gpu := 0.0
+	var render_cpu := 0.0
 	var last := Time.get_ticks_usec()
 	for i in 300:
 		await get_tree().process_frame
@@ -68,6 +94,8 @@ func _ready() -> void:
 		last = now
 		process += Performance.get_monitor(Performance.TIME_PROCESS) * 1000.0
 		physics += Performance.get_monitor(Performance.TIME_PHYSICS_PROCESS) * 1000.0
+		gpu += RenderingServer.viewport_get_measured_render_time_gpu(get_viewport().get_viewport_rid())
+		render_cpu += RenderingServer.viewport_get_measured_render_time_cpu(get_viewport().get_viewport_rid())
 	frames.sort()
 	var avg := 0.0
 	for f in frames:
@@ -75,8 +103,8 @@ func _ready() -> void:
 	avg /= frames.size()
 	var draws := RenderingServer.get_rendering_info(RenderingServer.RENDERING_INFO_TOTAL_DRAW_CALLS_IN_FRAME)
 	var prims := RenderingServer.get_rendering_info(RenderingServer.RENDERING_INFO_TOTAL_PRIMITIVES_IN_FRAME)
-	print("PERF %s avg_ms=%.2f fps=%.0f p95_ms=%.2f process_ms=%.2f physics_ms=%.2f draws=%d prims=%d" % [
-		OS.get_environment("LABEL"), avg, 1000.0 / avg, frames[int(frames.size() * 0.95)], process / 300.0,
+	print("PERF %s p95_frame_ms=%.2f gpu_ms=%.2f render_cpu_ms=%.2f process_ms=%.2f physics_ms=%.2f draws=%d prims=%d" % [
+		OS.get_environment("LABEL"), frames[int(frames.size() * 0.95)], gpu / 300.0, render_cpu / 300.0, process / 300.0,
 		physics / 300.0, draws, prims])
 	get_tree().quit()
 

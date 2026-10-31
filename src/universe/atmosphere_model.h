@@ -41,6 +41,8 @@ struct AtmosphereParams
     // (and the sky and terrain they light) without hazing nearby terrain.
     double sunsetStrength = 5.0;
 
+    // The radii within a millionth: a turning planet's radius (from its
+    // transform's scale) wobbles in the last bits, which must not rebuild.
     bool operator==(const AtmosphereParams &o) const;
 };
 

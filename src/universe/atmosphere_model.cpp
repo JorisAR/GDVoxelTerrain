@@ -60,7 +60,8 @@ glm::dvec3 step_integral(const glm::dvec3 &source, const glm::dvec3 &extinction,
 
 bool AtmosphereParams::operator==(const AtmosphereParams &o) const
 {
-    return bottom == o.bottom && top == o.top && rayleighDepth == o.rayleighDepth &&
+    const auto close = [](double a, double b) { return std::abs(a - b) <= 1e-6 * std::max(std::abs(a), std::abs(b)); };
+    return close(bottom, o.bottom) && close(top, o.top) && rayleighDepth == o.rayleighDepth &&
            rayleighHeight == o.rayleighHeight && mieDepth == o.mieDepth && mieHeight == o.mieHeight &&
            mieAnisotropy == o.mieAnisotropy && mieAbsorption == o.mieAbsorption && ozoneDepth == o.ozoneDepth &&
            ozoneCenter == o.ozoneCenter && ozoneWidth == o.ozoneWidth && groundAlbedo == o.groundAlbedo &&
