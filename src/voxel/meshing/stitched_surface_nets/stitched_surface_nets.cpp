@@ -19,6 +19,7 @@ MesherSettings MesherSettings::from(const JarVoxelVolume &terrain)
     s.featureThreshold = terrain.get_dual_contouring_feature_threshold();
     s.materialMode = static_cast<MaterialMode>(terrain.get_material_mode());
     s.sdf = terrain.get_sdf_ptr();
+    s.voxelSize = terrain.get_voxel_size();
     return s;
 }
 
@@ -32,7 +33,8 @@ StitchedSurfaceNets::StitchedSurfaceNets(const MesherSettings &settings, Stitche
                                          const glm::vec3 &origin)
     : _origin(origin), _cubicVoxels(settings.cubicVoxels), _dualContouring(settings.dualContouring),
       _manifold(settings.manifold && !settings.cubicVoxels), _featureThreshold(settings.featureThreshold),
-      _materialMode(settings.materialMode), _meshChunk(std::move(input)), _sdf(settings.sdf)
+      _materialMode(settings.materialMode), _meshChunk(std::move(input)), _sdf(settings.sdf),
+      _voxelSize(settings.voxelSize)
 {
     if (_manifold)
     {
@@ -61,6 +63,8 @@ glm::vec3 StitchedSurfaceNets::gradient_at(int node_id)
         // displacement): divide by the gradient length so the value is a true
         // distance locally. Otherwise sample planes land at the wrong height and
         // slopes come out terraced.
+        // At the node's own spacing, like its value (see DetailScope).
+        const JarSignedDistanceField::DetailScope detail(_voxelSize > 0.0f ? node->edge_length(_voxelSize) : 0.0f);
         const glm::vec3 g = _sdf->gradient(node->_center);
         const float len = glm::length(g);
         _gradients[node_id] = len > 0.0f ? g / len : glm::vec3(0.0f, 1.0f, 0.0f);

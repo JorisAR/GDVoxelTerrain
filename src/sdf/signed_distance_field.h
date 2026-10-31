@@ -25,6 +25,24 @@ class JarSignedDistanceField : public Resource
   public:
     virtual ~JarSignedDistanceField() = default;
 
+    // The spacing the current thread samples fields at, in meters (0: unknown,
+    // full detail). The octree and the mesher set it per node (DetailScope), so
+    // fields may leave out detail finer than it: it would only alias, and
+    // coarse LODs (most of the chunks) then cost less.
+    static inline thread_local float t_detailSize = 0.0f;
+    struct DetailScope
+    {
+        float previous;
+        explicit DetailScope(float size) : previous(t_detailSize)
+        {
+            t_detailSize = size;
+        }
+        ~DetailScope()
+        {
+            t_detailSize = previous;
+        }
+    };
+
     // Signed distance in the field's local space: negative inside.
     virtual float distance(const glm::vec3 &pos) const = 0;
 

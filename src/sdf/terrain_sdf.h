@@ -113,6 +113,9 @@ class JarTerrainSdf : public JarSignedDistanceField
     float max_deviation() const;
     glm::mat3 broad_jacobian(const glm::vec3 &surface, float step) const;
     glm::mat3 lattice_jacobian(const glm::ivec3 &point, float spacing, float step) const;
+    glm::mat3 direct_jacobian(const glm::vec3 &center, const glm::vec3 &up, float step) const;
+    void place_on_surface(glm::vec3 &s, glm::vec3 &u) const;
+    int erosion_octaves() const; // fewer for coarse samples (see DetailScope)
     std::atomic<uint64_t> _generation{0}; // new on every change: invalidates the per-thread caches
     // Without `localGradient` the gradient only holds the erosion's part (the
     // layers' local slope costs two more noise samples); `broad` then has the

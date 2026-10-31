@@ -292,18 +292,50 @@ void JarVoxelVolume::build_worker()
 
 void JarVoxelVolume::build_octree()
 {
-    // The top of the tree is walked on this thread; subtrees below forkSize are
-    // independent and built in parallel on the (idle) meshing pool.
-    VoxelOctreeNode::BuildContext ctx;
-    ctx.forkSize = ChunkSizeLog2 + 4;
-    _voxelRoot->build(*this, &ctx);
-    JobSystem::get_pool().parallel_for(
-        ctx.subtrees.size(), [this, &ctx](size_t i) {
-            ctx.subtrees[i]->build(*this);
-            ctx.subtrees[i]->update_if_dirty(); // settle the subtree while it is hot in cache
+    // Subtrees are independent and built in parallel on the (idle) meshing
+    // pool. The walk down to them is parallel too, in passes: this thread walks
+    // only the top (down to 4 km nodes at 1 m voxels), the next pass walks
+    // those parts in parallel down to 512 m nodes, and a last pass splits the
+    // full-detail region further (64 m). Before, one thread walked the ~200k
+    // nodes above 512 m (a third of the build) and the region around the
+    // viewer was a single subtree that took another third.
+    const int forkSize = ChunkSizeLog2 + 4;
+    const int passForks[3] = {std::max(forkSize, std::min(forkSize + 3, int(_voxelRoot->_size) - 1)), forkSize,
+                              forkSize - 3};
+    std::vector<std::vector<VoxelOctreeNode::BuildContext>> passes;
+    std::vector<VoxelOctreeNode *> walk{_voxelRoot.get()};
+    std::vector<VoxelOctreeNode *> subtrees;
+    for (int pass = 0; pass < 3 && !walk.empty(); ++pass)
+    {
+        std::vector<VoxelOctreeNode::BuildContext> &contexts = passes.emplace_back(walk.size());
+        JobSystem::get_pool().parallel_for(walk.size(), [this, &walk, &contexts, &passForks, pass](size_t i) {
+            contexts[i].forkSize = passForks[pass];
+            walk[i]->build(*this, &contexts[i]);
         });
-    for (VoxelOctreeNode *node : ctx.deferredPost)
-        node->build_post(*this);
+        // Only subtrees that need detail below the next fork size are walked
+        // again; the rest are built whole.
+        std::vector<VoxelOctreeNode *> next;
+        for (const VoxelOctreeNode::BuildContext &context : contexts)
+            for (VoxelOctreeNode *node : context.subtrees)
+                (pass < 2 && node->_size > passForks[pass + 1] && desired_lod(*node) <= passForks[pass + 1]
+                     ? next
+                     : subtrees)
+                    .push_back(node);
+        walk.swap(next);
+    }
+    // The finest (costliest) subtrees first, so none is left running alone at
+    // the end.
+    std::stable_partition(subtrees.begin(), subtrees.end(),
+                          [&](VoxelOctreeNode *node) { return node->_size < passForks[2]; });
+    JobSystem::get_pool().parallel_for(subtrees.size(), [this, &subtrees](size_t i) {
+        subtrees[i]->build(*this);
+        subtrees[i]->update_if_dirty(); // settle the subtree while it is hot in cache
+    });
+    // Children before parents: the deepest pass first.
+    for (auto pass = passes.rbegin(); pass != passes.rend(); ++pass)
+        for (const VoxelOctreeNode::BuildContext &context : *pass)
+            for (VoxelOctreeNode *node : context.deferredPost)
+                node->build_post(*this);
 }
 
 // Signal the worker to stop and JOIN it, so no build is in flight once the

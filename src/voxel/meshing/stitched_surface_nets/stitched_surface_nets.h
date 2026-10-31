@@ -35,6 +35,7 @@ struct MesherSettings
     MaterialMode materialMode = MaterialMode(0);
     // Normals of samples that carry none; may be null when they all do.
     const JarSignedDistanceField *sdf = nullptr;
+    float voxelSize = 0.0f; // for the sdf's detail per node (0: full detail)
     static MesherSettings from(const JarVoxelVolume &terrain);
 };
 
@@ -77,6 +78,7 @@ class StitchedSurfaceNets
     // Dual contouring: surface normal per node (stored by edits, otherwise the
     // volume SDF's analytic gradient), computed on demand and cached.
     const JarSignedDistanceField *_sdf;
+    float _voxelSize;
     std::vector<glm::vec3> _gradients;
     std::vector<float> _distanceScale; // 1 / |gradient|: turns sample values into true distances
     std::vector<bool> _hasGradient;

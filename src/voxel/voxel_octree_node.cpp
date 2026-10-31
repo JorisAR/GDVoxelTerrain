@@ -247,6 +247,7 @@ void VoxelOctreeNode::build(JarVoxelVolume &terrain, BuildContext *ctx)
 
     if (!has_flag(FlagGenerated))
     {
+        const JarSignedDistanceField::DetailScope detail(edge_length(terrain.get_voxel_size()));
         float value = terrain.get_sdf_ptr()->distance(_center);
         set_value(value);
         if (has_surface(terrain, value) && (_size > LoD))
@@ -331,7 +332,10 @@ void VoxelOctreeNode::modify_sdf_in_bounds(JarVoxelVolume &terrain, const Modify
 
     LoD = terrain.desired_lod(*this);
     if (!has_flag(FlagGenerated))
+    {
+        const JarSignedDistanceField::DetailScope detail(edge_length(terrain.get_voxel_size()));
         set_value(terrain.get_sdf_ptr()->distance(_center));
+    }
 
     if (settings.paintOnly)
     {
@@ -384,7 +388,10 @@ void VoxelOctreeNode::modify_sdf_in_bounds(JarVoxelVolume &terrain, const Modify
         // child instead, so edits next to untouched terrain stay accurate.
         if (wasLeaf && !is_leaf() && !has_normal())
             for (auto &child : *_children)
+            {
+                const JarSignedDistanceField::DetailScope detail(child.edge_length(terrain.get_voxel_size()));
                 child.set_value(terrain.get_sdf_ptr()->distance(child._center));
+            }
     }
     else
         if(settings.bounds.encloses(bounds))

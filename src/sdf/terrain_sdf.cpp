@@ -62,16 +62,12 @@ inline void fast_sincos(float angle, float &s, float &c)
     c = sin_half(cy);
 }
 
-// Random point inside a grid cell, in [0, 1)^3.
+// Random point inside a grid cell, in [0, 1)^3 (10 bits of one hash each).
 glm::vec3 cell_offset(const glm::ivec3 &cell)
 {
-    uint32_t h = hash_u32(uint32_t(cell.x) * 0x8da6b343U ^ uint32_t(cell.y) * 0xd8163841U ^ uint32_t(cell.z) * 0xcb1ab31fU);
-    const float a = float(h & 0x3FF) / 1024.0f;
-    h = hash_u32(h);
-    const float b = float(h & 0x3FF) / 1024.0f;
-    h = hash_u32(h);
-    const float c = float(h & 0x3FF) / 1024.0f;
-    return glm::vec3(a, b, c);
+    const uint32_t h = hash_u32(uint32_t(cell.x) * 0x8da6b343U ^ uint32_t(cell.y) * 0xd8163841U ^ uint32_t(cell.z) * 0xcb1ab31fU);
+    constexpr float Scale = 1.0f / 1024.0f;
+    return glm::vec3(float(h & 0x3FF), float((h >> 10) & 0x3FF), float((h >> 20) & 0x3FF)) * Scale;
 }
 } // namespace
 
@@ -228,15 +224,36 @@ glm::mat3 JarTerrainSdf::broad_jacobian(const glm::vec3 &surface, float step) co
     const glm::ivec3 base = glm::ivec3(glm::floor(g));
     const glm::vec3 f = g - glm::vec3(base);
     const bool flat = _shape != SHAPE_SPHERE;
+    // Consecutive samples nearly always fall in the same lattice cell: keep
+    // its corners per thread (8 cache lookups per sample were a fifth of the
+    // terrain's cost).
+    struct Cell
+    {
+        uint64_t generation = 0;
+        glm::ivec3 base{0};
+        glm::mat3 corners[8];
+    };
+    thread_local Cell cell;
+    const uint64_t generation = _generation.load(std::memory_order_relaxed);
+    if (cell.generation != generation || cell.base != base)
+    {
+        cell.generation = generation;
+        cell.base = base;
+        for (int corner = 0; corner < 8; ++corner)
+        {
+            const glm::ivec3 o((corner >> 0) & 1, (corner >> 1) & 1, (corner >> 2) & 1);
+            // Flat ground: surface.y is always 0, one layer of the lattice.
+            cell.corners[corner] = flat && o.y != 0 ? glm::mat3(0.0f) : lattice_jacobian(base + o, spacing, step);
+        }
+    }
     glm::mat3 result(0.0f);
     for (int corner = 0; corner < 8; ++corner)
     {
         const glm::ivec3 o((corner >> 0) & 1, (corner >> 1) & 1, (corner >> 2) & 1);
         if (flat && o.y != 0)
-            continue; // flat ground: surface.y is always 0, one layer of the lattice
+            continue;
         const float w = (o.x ? f.x : 1.0f - f.x) * (flat ? 1.0f : (o.y ? f.y : 1.0f - f.y)) * (o.z ? f.z : 1.0f - f.z);
-        if (w > 0.0f)
-            result += w * lattice_jacobian(base + o, spacing, step);
+        result += w * cell.corners[corner];
     }
     return result;
 }
@@ -254,7 +271,7 @@ struct SharedJacobian
     std::atomic<int32_t> point[3] = {};
     std::atomic<float> values[9] = {};
 };
-constexpr uint32_t SharedSize = 1u << 16;
+constexpr uint32_t SharedSize = 1u << 18;
 SharedJacobian s_sharedJacobians[SharedSize];
 
 bool shared_lookup(uint32_t hash, uint64_t generation, const glm::ivec3 &point, glm::mat3 &out)
@@ -315,31 +332,44 @@ glm::mat3 JarTerrainSdf::lattice_jacobian(const glm::ivec3 &point, float spacing
 
     glm::vec3 center = glm::vec3(point) * spacing;
     glm::vec3 up(0.0f, 1.0f, 0.0f);
-    auto place = [&](glm::vec3 &s, glm::vec3 &u) {
-        if (_shape == SHAPE_SPHERE)
-        {
-            u = glm::length(s) > 1e-6f ? glm::normalize(s) : glm::vec3(0.0f, 1.0f, 0.0f);
-            s = u * _radius;
-        }
-        else
-            s.y = 0.0f;
-    };
-    place(center, up);
+    place_on_surface(center, up);
+    entry.jacobian = direct_jacobian(center, up, step);
+    shared_store(hash, generation, point, entry.jacobian);
+    return entry.jacobian;
+}
+
+// Moves `s` onto the base surface (plane or sphere) and sets `u` to the up
+// direction there.
+void JarTerrainSdf::place_on_surface(glm::vec3 &s, glm::vec3 &u) const
+{
+    if (_shape == SHAPE_SPHERE)
+    {
+        u = glm::length(s) > 1e-6f ? glm::normalize(s) : glm::vec3(0.0f, 1.0f, 0.0f);
+        s = u * _radius;
+    }
+    else
+    {
+        s.y = 0.0f;
+        u = glm::vec3(0.0f, 1.0f, 0.0f);
+    }
+}
+
+// The low-passed slope's Jacobian at a surface point, by differences.
+glm::mat3 JarTerrainSdf::direct_jacobian(const glm::vec3 &center, const glm::vec3 &up, float step) const
+{
     const glm::vec3 t1 = glm::normalize(std::abs(up.y) < 0.9f ? glm::cross(up, glm::vec3(0, 1, 0))
                                                                : glm::cross(up, glm::vec3(1, 0, 0)));
     const glm::vec3 t2 = glm::cross(up, t1);
     const float e = 0.25f * step;
     auto broad_at = [&](const glm::vec3 &offset) {
         glm::vec3 s = center + offset, u = up;
-        place(s, u);
+        place_on_surface(s, u);
         return broad_gradient(s, u, step);
     };
     // Central differences: their error does not depend on the tangent basis
     // (forward ones made a step where it switches, on a sphere at y = 0.9).
-    entry.jacobian = glm::outerProduct((broad_at(t1 * e) - broad_at(-t1 * e)) / (2.0f * e), t1) +
-                     glm::outerProduct((broad_at(t2 * e) - broad_at(-t2 * e)) / (2.0f * e), t2);
-    shared_store(hash, generation, point, entry.jacobian);
-    return entry.jacobian;
+    return glm::outerProduct((broad_at(t1 * e) - broad_at(-t1 * e)) / (2.0f * e), t1) +
+           glm::outerProduct((broad_at(t2 * e) - broad_at(-t2 * e)) / (2.0f * e), t2);
 }
 
 namespace
@@ -362,6 +392,19 @@ void JarTerrainSdf::prepare()
     settings_changed(); // the noises may have been edited in place
 }
 
+// Gullies narrower than the caller's sample spacing would only alias (see
+// DetailScope): coarse LODs leave them out. They change the height by well
+// under that spacing, which the octree's margins allow for.
+int JarTerrainSdf::erosion_octaves() const
+{
+    if (t_detailSize <= 0.0f)
+        return _octaves;
+    int octaves = 0;
+    for (float width = _erosionScale; octaves < _octaves && width >= t_detailSize; width /= _lacunarity)
+        ++octaves;
+    return octaves;
+}
+
 JarTerrainSdf::Sample JarTerrainSdf::evaluate(const glm::vec3 &surface, const glm::vec3 &up, bool localGradient) const
 {
     if (analytic())
@@ -379,7 +422,10 @@ JarTerrainSdf::Sample JarTerrainSdf::evaluate(const glm::vec3 &surface, const gl
             result.broad = local;
             return result;
         }
-        return erode(surface, up, broad, broad_jacobian(surface, step), result);
+        // Without gullies (coarse samples) the Jacobian is unused: it costs up
+        // to 32 noise samples where samples are far apart.
+        const glm::mat3 jacobian = erosion_octaves() > 0 ? broad_jacobian(surface, step) : glm::mat3(0.0f);
+        return erode(surface, up, broad, jacobian, result);
     }
     const float h = layered_height(surface);
     Sample result{h, localGradient ? height_gradient(surface, up, h, 0.5f) : glm::vec3(0.0f), h, glm::vec3(0.0f)};
@@ -394,7 +440,7 @@ JarTerrainSdf::Sample JarTerrainSdf::evaluate(const glm::vec3 &surface, const gl
     // fine noise detail) would be magnified into steep, rippled slopes.
     const float step = 0.25f * _erosionScale;
     const glm::vec3 broad = broad_gradient(surface, up, step);
-    const glm::mat3 broadJacobian = broad_jacobian(surface, step);
+    const glm::mat3 broadJacobian = erosion_octaves() > 0 ? broad_jacobian(surface, step) : glm::mat3(0.0f);
     return erode(surface, up, broad, broadJacobian, result);
 }
 
@@ -452,7 +498,8 @@ JarTerrainSdf::Sample JarTerrainSdf::erode(const glm::vec3 &surface, const glm::
     // the ground plane when flat (pivots there follow the sample height).
     const glm::vec3 offsetAxes = sphere ? glm::vec3(1.0f) : glm::vec3(1.0f, 0.0f, 1.0f);
 
-    for (int octave = 0; octave < _octaves; ++octave)
+    const int octaves = erosion_octaves();
+    for (int octave = 0; octave < octaves; ++octave)
     {
         const float len = glm::length(gullySlope);
         float gully = fadeTarget, sine = 0.0f;
@@ -474,8 +521,11 @@ JarTerrainSdf::Sample JarTerrainSdf::erode(const glm::vec3 &surface, const glm::
             const glm::vec3 g = surface / cellSize;
             const glm::ivec3 base = glm::ivec3(glm::floor(g));
             const glm::vec3 f = g - glm::vec3(base); // position in the cell, [0, 1)
+            // Per pivot only sums: the gradients are linear in its offset d,
+            // so they are put together once after the loop.
             float c = 0.0f, s = 0.0f, weights = 0.0f;
-            glm::vec3 cGradient(0.0f), sGradient(0.0f), weightsGradient(0.0f);
+            glm::vec3 fcd(0.0f), fsd(0.0f), fd(0.0f); // sums of falloff^2 * (cos, sin, 1) * d
+            glm::vec3 wsd(0.0f), wcd(0.0f);           // sums of w * (sin, cos) * d
             const int ySpan = sphere ? 1 : 0;
             for (int dz = -1; dz <= 1; ++dz)
                 for (int dy = -ySpan; dy <= ySpan; ++dy)
@@ -505,14 +555,21 @@ JarTerrainSdf::Sample JarTerrainSdf::erode(const glm::vec3 &surface, const glm::
                         c += w * pc;
                         s += w * ps;
                         weights += w;
-                        // Gradients (per meter): of the weight, and of the phase,
-                        // which turns with the stripes as well as moving along them.
-                        const glm::vec3 wGradient = (-6.0f * falloff * falloff / cellSize) * (offsetAxes * d);
-                        const glm::vec3 phaseGradient = Tau * (acrossSlope + acrossJacobianT * d);
-                        cGradient += wGradient * pc - (w * ps) * phaseGradient;
-                        sGradient += wGradient * ps + (w * pc) * phaseGradient;
-                        weightsGradient += wGradient;
+                        const float f2 = falloff * falloff;
+                        fcd += (f2 * pc) * d;
+                        fsd += (f2 * ps) * d;
+                        fd += f2 * d;
+                        wsd += (w * ps) * d;
+                        wcd += (w * pc) * d;
                     }
+            // Gradients (per meter): of the weights, -6 falloff^2 / cell * d
+            // (in the axes the offset moves in), and of the phase, which turns
+            // with the stripes as well as moving along them:
+            // tau * (acrossSlope + acrossJacobian^T d).
+            const float wScale = -6.0f / cellSize;
+            glm::vec3 cGradient = wScale * (offsetAxes * fcd) - Tau * (s * acrossSlope + acrossJacobianT * wsd);
+            glm::vec3 sGradient = wScale * (offsetAxes * fsd) + Tau * (c * acrossSlope + acrossJacobianT * wcd);
+            const glm::vec3 weightsGradient = wScale * (offsetAxes * fd);
             {
                 // The small constant keeps this continuous where few pivots are
                 // near: the stripes then fade to nothing instead of snapping.
