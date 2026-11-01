@@ -38,6 +38,7 @@ func _ready() -> void:
 	await _eroded_mountain("ridged peak", planet, up * (planet.radius + planet.sample_height(up * planet.radius)), 36000.0)
 	await _reported_spots()
 	await _lod_seams()
+	await _moving_seams()
 	print("Topology tests: %s" % ("ALL PASSED" if _failures == 0 else "%d FAILED" % _failures))
 	get_tree().quit(1 if _failures > 0 else 0)
 
@@ -141,6 +142,67 @@ func _lod_seams() -> void:
 			"%d open edges in %d triangles at %d spots, LODs %s" % [open, triangles, spots, lods.keys()])
 		holder.queue_free()
 		await get_tree().process_frame
+
+## While the viewer flies, LOD updates are shown in groups as they finish
+## (see MeshComputeScheduler): what is on screen at any frame must be closed
+## across every seam, old and new chunks side by side. Checked between frames
+## at spots 30-300 m from the viewer (across the LOD 0-1, 1-2 and 2-3 seams).
+func _moving_seams() -> void:
+	var sdf: JarTerrainSdf = load("res://tests/planet_terrain_4km.tres")
+	var holder := Node.new()
+	add_child(holder)
+	var volume := JarVoxelVolume.new()
+	volume.chunk_scene = TestWorld.CHUNK_SCENE
+	volume.extent = 10000.0
+	volume.sdf = sdf
+	volume.meshing_algorithm = JarVoxelVolume.MESHING_DUAL_CONTOURING
+	holder.add_child(volume)
+	var up := Vector3(0.45, 0.55, 0.7).normalized()
+	var axis := up.cross(Vector3.UP).normalized()
+	var viewer := JarVoxelViewer.new()
+	viewer.position = up * (sdf.radius + sdf.sample_height(up * sdf.radius) + 5.0)
+	holder.add_child(viewer)
+	await _settle(volume)
+	var open := 0
+	var checks := 0
+	var commits := 0
+	var worst := []
+	var angle := 0.0
+	var frame := -1
+	var start := Time.get_ticks_msec()
+	var batches := 0
+	var was_building := false
+	while Time.get_ticks_msec() - start < 12000:
+		frame += 1
+		# Like flying at ~500 m/s, but waiting for builds: headless frames
+		# are fast, and a viewer racing ahead made each build regenerate
+		# kilometres (seconds each).
+		if not volume.is_building():
+			angle += 8.0 / sdf.radius
+		var dir := up.rotated(axis, angle)
+		# Through the volume: the floating origin moves it (the surface is
+		# farther out than the origin's reach).
+		viewer.global_position = volume.to_global(dir * (sdf.radius + sdf.sample_height(dir * sdf.radius) + 5.0))
+		await get_tree().process_frame
+		commits += JarVoxelStats.get_frame().counts["chunks committed"]
+		if volume.is_building() and not was_building:
+			batches += 1
+		was_building = volume.is_building()
+		if frame % 20 != 0:
+			continue
+		var side := dir.cross(axis).normalized()
+		for d in [30.0, 80.0, 150.0, 300.0]:
+			for s in [1.0 if frame % 40 == 0 else -1.0]:
+				var spot: Vector3 = (dir * sdf.radius + side * (s * d)).normalized()
+				var r := Topology.analyze(volume, spot * (sdf.radius + sdf.sample_height(spot * sdf.radius)), 20.0)
+				open += r.open
+				checks += 1
+				if r.open > 0 and worst.size() < 4:
+					worst.append([frame, d, r.open_at.slice(0, 2)])
+	_check("moving: seams closed on every frame", open == 0 and batches >= 3,
+		"%d open edges over %d checks, %d LOD updates (%d chunks) shown meanwhile %s" % [open, checks, batches, commits, worst])
+	holder.queue_free()
+	await get_tree().process_frame
 
 func _check(name: String, ok: bool, detail := "") -> void:
 	if not ok:

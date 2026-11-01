@@ -284,6 +284,7 @@ void JarVoxelVolume::build_worker()
             // Settle averaged inner-node values now, so the mesh threads that run
             // next never lazily write to shared nodes.
             _voxelRoot->update_if_dirty();
+            _meshComputeScheduler->close_batch(*this);
             // Extensions look at the edits (debris searches 100k+ cells) on
             // the pool, while the edits' chunks are meshed: the octree only
             // changes again once they are done (is_meshing()).
@@ -592,9 +593,15 @@ void JarVoxelVolume::enqueue_chunk_collider(JarVoxelChunk *chunk)
     _pendingColliders.push_back(chunk);
 }
 
-void JarVoxelVolume::enqueue_chunk_update(VoxelOctreeNode &node)
+void JarVoxelVolume::enqueue_chunk_update(VoxelOctreeNode &node, bool urgent)
 {
-    _meshComputeScheduler->enqueue(node);
+    _meshComputeScheduler->enqueue(node, urgent);
+}
+
+void JarVoxelVolume::get_chunks_touching(const Bounds &bounds, std::vector<VoxelOctreeNode *> &result) const
+{
+    if (_voxelRoot)
+        _voxelRoot->get_chunks_touching(*this, bounds, result);
 }
 
 bool JarVoxelVolume::is_building() const
@@ -1022,13 +1029,15 @@ void JarVoxelVolume::process()
         return;
     }
 
-    // Edits and LOD builds mutate the octree (including freeing nodes), so they
-    // may only run once no mesh task holds node pointers. Edits take priority
-    // so they are not starved by a moving camera.
+    // Edits and LOD builds change the octree (including freeing nodes), so they
+    // may only run while no task reads it. Edits only wait for the few mesh
+    // tasks running (none start while one waits), so a moving camera's LOD
+    // updates do not hold them up; LOD builds wait until everything queued is
+    // shown.
     int meshWait = 0;
-    if (!is_meshing())
+    if (!_modifySettingsQueue.empty())
     {
-        if (!_modifySettingsQueue.empty())
+        if (!_meshComputeScheduler->is_running() && _extensionTasks == 0)
         {
             // A small edit takes the worker a millisecond or two, and its
             // chunks a few more to mesh: wait for both (bounded), so it is on
@@ -1038,19 +1047,21 @@ void JarVoxelVolume::process()
             const auto start = std::chrono::steady_clock::now();
             process_modify_queue();
             std::unique_lock<std::mutex> lock(_buildMutex);
-            if (_buildDoneCv.wait_for(lock, std::chrono::microseconds(EditWaitMicroseconds),
-                                      [this] { return !_isBuilding; }))
-                meshWait = EditWaitMicroseconds -
-                           int(std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - start)
-                                   .count());
-        }
-        else if ((_rebuildRequested && _voxelLod.update_viewers(*this, true)) || _voxelLod.process(*this))
-        {
-            build(); // hands off to the build worker (sets _isBuilding); resume next frame
-            return;
+            if (!_buildDoneCv.wait_for(lock, std::chrono::microseconds(EditWaitMicroseconds),
+                                       [this] { return !_isBuilding; }))
+                return; // still being applied: nothing may touch the octree
+            meshWait = EditWaitMicroseconds -
+                       int(std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - start)
+                               .count());
         }
     }
-    _meshComputeScheduler->process(*this, std::max(meshWait, 0));
+    else if (!is_meshing() &&
+             ((_rebuildRequested && _voxelLod.update_viewers(*this, true)) || _voxelLod.process(*this)))
+    {
+        build(); // hands off to the build worker (sets _isBuilding); resume next frame
+        return;
+    }
+    _meshComputeScheduler->process(*this, _modifySettingsQueue.empty(), std::max(meshWait, 0));
 
     process_chunk_queue(delta);
 }

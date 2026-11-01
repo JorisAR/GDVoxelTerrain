@@ -19,6 +19,7 @@ public:
     // Indices are handed out dynamically, so uneven work balances itself.
     // Must not be called from a pool thread (it would wait on itself).
     void parallel_for(size_t count, const std::function<void(size_t)> &fn);
+    size_t thread_count() const { return workers.size(); }
     
 private:
     std::vector<std::thread> workers;

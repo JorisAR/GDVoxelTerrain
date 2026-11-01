@@ -62,6 +62,18 @@ class VoxelOctreeNode : public OctreeNode<VoxelOctreeNode>
     std::atomic<int32_t> _enqueuedBelow{0};
     void set_enqueued(bool value);
     void set_chunk(JarVoxelChunk *chunk);
+    void get_shown_chunks_replaced_below(std::vector<VoxelOctreeNode *> &result);
+    // A chunk shown or queued among the descendants (not this node).
+    bool subtree_has_chunk_below() const
+    {
+        if (is_leaf())
+            return false;
+        for (const auto &child : *_children)
+            if (child._chunksBelow.load(std::memory_order_relaxed) > 0 ||
+                child._enqueuedBelow.load(std::memory_order_relaxed) > 0)
+                return true;
+        return false;
+    }
 
   public:
     // Mesh task, when the chunk came out empty: the LOD boundaries it was
@@ -137,7 +149,14 @@ class VoxelOctreeNode : public OctreeNode<VoxelOctreeNode>
     void build_post(JarVoxelVolume &terrain);
 
     bool has_surface(const JarVoxelVolume &terrain, const float value);
-    void queue_update(JarVoxelVolume &terrain);
+    // Asks for a new mesh of this chunk; an edit's (`urgent`) go first. Again
+    // while queued: an edit changed it, so a mesh being made is outdated.
+    void queue_update(JarVoxelVolume &terrain, bool urgent = false);
+    // The chunks (nodes the size of their LOD's chunks) touching `bounds`.
+    void get_chunks_touching(const JarVoxelVolume &terrain, const Bounds &bounds,
+                             std::vector<VoxelOctreeNode *> &result);
+    // The shown chunks this chunk replaces: coarser ones above it, finer ones below.
+    void get_shown_chunks_replaced(std::vector<VoxelOctreeNode *> &result);
     void modify_sdf_in_bounds(JarVoxelVolume &terrain, const ModifySettings &settings);
     void update_chunk(JarVoxelVolume &terrain, ChunkMeshData *chunkMeshData);
 

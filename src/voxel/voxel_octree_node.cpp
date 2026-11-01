@@ -372,7 +372,7 @@ void VoxelOctreeNode::modify_sdf_in_bounds(JarVoxelVolume &terrain, const Modify
                 child.modify_sdf_in_bounds(terrain, settings);
         _meshedEmpty = false;
         if (is_chunk(terrain))
-            queue_update(terrain);
+            queue_update(terrain, true);
         return;
     }
 
@@ -410,9 +410,8 @@ void VoxelOctreeNode::modify_sdf_in_bounds(JarVoxelVolume &terrain, const Modify
                 child.set_value(terrain.get_sdf_ptr()->distance(child._center));
             }
     }
-    else
-        if(settings.bounds.encloses(bounds))
-            prune_children();
+    else if (settings.bounds.encloses(bounds) && !subtree_has_chunk_below())
+        prune_children(); // not under chunks still shown or queued: they hold pointers to these
 
     set_value(new_value);
     set_flag(FlagGenerated, true);
@@ -436,7 +435,7 @@ void VoxelOctreeNode::modify_sdf_in_bounds(JarVoxelVolume &terrain, const Modify
 
     _meshedEmpty = false; // values changed
     if (is_chunk(terrain))
-        queue_update(terrain);
+        queue_update(terrain, true);
     else if (_chunk != nullptr)
         delete_chunk();
 }
@@ -505,12 +504,48 @@ void VoxelOctreeNode::prune_finer_than(int lod)
         n->_isMaterialized = 0;
 }
 
-void VoxelOctreeNode::queue_update(JarVoxelVolume &terrain)
+void VoxelOctreeNode::queue_update(JarVoxelVolume &terrain, bool urgent)
 {
-    if (_isEnqueued)
-        return;
     set_enqueued(true);
-    terrain.enqueue_chunk_update(*this);
+    terrain.enqueue_chunk_update(*this, urgent);
+}
+
+void VoxelOctreeNode::get_chunks_touching(const JarVoxelVolume &terrain, const Bounds &bounds,
+                                          std::vector<VoxelOctreeNode *> &result)
+{
+    if (!get_bounds(terrain.get_voxel_size()).intersects(bounds))
+        return;
+    if (is_chunk(terrain))
+    {
+        result.push_back(this);
+        return;
+    }
+    if (is_leaf() || _size <= terrain.get_min_chunk_size())
+        return; // nothing below is a chunk
+    for (auto &child : *_children)
+        child.get_chunks_touching(terrain, bounds, result);
+}
+
+void VoxelOctreeNode::get_shown_chunks_replaced(std::vector<VoxelOctreeNode *> &result)
+{
+    for (VoxelOctreeNode *ancestor = _parent; ancestor != nullptr; ancestor = ancestor->_parent)
+        if (ancestor->_chunk != nullptr)
+            result.push_back(ancestor);
+    get_shown_chunks_replaced_below(result);
+}
+
+void VoxelOctreeNode::get_shown_chunks_replaced_below(std::vector<VoxelOctreeNode *> &result)
+{
+    if (is_leaf())
+        return;
+    for (auto &child : *_children)
+    {
+        if (child._chunksBelow.load(std::memory_order_relaxed) == 0)
+            continue;
+        if (child._chunk != nullptr)
+            result.push_back(&child);
+        child.get_shown_chunks_replaced_below(result);
+    }
 }
 
 void VoxelOctreeNode::set_enqueued(bool value)

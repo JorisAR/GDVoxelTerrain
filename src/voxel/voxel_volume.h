@@ -50,14 +50,6 @@ class JarVoxelVolume : public Node3D
     Ref<JarSignedDistanceField> _sdf;
     std::unique_ptr<VoxelOctreeNode> _voxelRoot;
 
-    struct ChunkComparator
-    {
-        bool operator()(const VoxelOctreeNode *a, const VoxelOctreeNode *b) const
-        {
-            return a->get_lod() > b->get_lod();
-        }
-    };
-
     std::queue<ModifySettings> _modifySettingsQueue;
     std::vector<JarVoxelChunk *> _pendingColliders; // main thread; see process_chunk_queue()
     // std::queue<VoxelOctreeNode*> _deleteChunkQueue;
@@ -233,7 +225,9 @@ class JarVoxelVolume : public Node3D
 
     // chunks
     void enqueue_chunk_collider(JarVoxelChunk *chunk);
-    void enqueue_chunk_update(VoxelOctreeNode &node);
+    void enqueue_chunk_update(VoxelOctreeNode &node, bool urgent);
+    // The chunks touching `bounds` (volume space). Not while building.
+    void get_chunks_touching(const Bounds &bounds, std::vector<VoxelOctreeNode *> &result) const;
 
     // properties
     bool is_building() const;
