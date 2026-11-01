@@ -5,7 +5,7 @@ class_name Topology
 ## planet are millions of triangles).
 static func _near(volume: JarVoxelVolume, c: JarVoxelChunk, center: Vector3, radius: float) -> bool:
 	var half_diagonal := 0.87 * 16.0 * volume.voxel_size * pow(2.0, c.get_lod())
-	return c.position.distance_to(center) <= radius + half_diagonal
+	return c.get_center().distance_to(center) <= radius + half_diagonal
 ## Welds all chunk triangles of a volume near a point and counts open edges
 ## (holes / cracks) and edges shared by more than two triangles (non-manifold).
 

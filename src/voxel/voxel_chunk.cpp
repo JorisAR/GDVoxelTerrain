@@ -14,6 +14,7 @@ void JarVoxelChunk::_bind_methods()
     ADD_PROPERTY(PropertyInfo(Variant::OBJECT, "mesh_instance", PROPERTY_HINT_NODE_TYPE, "MeshInstance3D"),
                  "set_mesh_instance", "get_mesh_instance");
 
+    ClassDB::bind_method(D_METHOD("get_center"), &JarVoxelChunk::get_center);
     ClassDB::bind_method(D_METHOD("get_collision_shape"), &JarVoxelChunk::get_collision_shape);
     ClassDB::bind_method(D_METHOD("set_collision_shape", "collision_shape"), &JarVoxelChunk::set_collision_shape);
     ADD_PROPERTY(PropertyInfo(Variant::OBJECT, "collision_shape", PROPERTY_HINT_NODE_TYPE, "CollisionShape3D"),
@@ -170,9 +171,13 @@ void JarVoxelChunk::update_chunk(JarVoxelVolume &terrain, VoxelOctreeNode *node,
     edge_chunk = chunk_mesh_data->edge_chunk;
     auto old_bounds = bounds;
     bounds = chunk_mesh_data->bounds;
-    auto position = bounds.get_center();
-    // auto position = bounds.get_center() * 1.05f;
-    set_position({position.x, position.y, position.z});
+    // Every chunk sits at the volume's origin with its vertices in volume
+    // space: neighbors then place the vertices they share with the same model
+    // matrix, bit for bit. With a matrix per chunk (vertices relative to its
+    // center) each rounded the shared ones its own way on the GPU, a float
+    // step apart (2 mm at 16 km): pinholes along the seams.
+    const glm::vec3 position = bounds.get_center();
+    set_position(Vector3());
 
     if (chunk_mesh_data->uploaded.is_null())
         chunk_mesh_data->upload();
@@ -191,7 +196,7 @@ void JarVoxelChunk::update_chunk(JarVoxelVolume &terrain, VoxelOctreeNode *node,
         detail_inputs.normals = chunk_mesh_data->mesh_array[Mesh::ARRAY_NORMAL];
         detail_inputs.indices = chunk_mesh_data->mesh_array[Mesh::ARRAY_INDEX];
         detail_inputs.painted = chunk_mesh_data->painted;
-        detail_inputs.center = position;
+        detail_inputs.center = glm::vec3(0.0f); // vertices are in volume space
         terrain.track_details(this);
     }
     else

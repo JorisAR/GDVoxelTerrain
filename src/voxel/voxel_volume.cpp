@@ -1039,7 +1039,7 @@ void JarVoxelVolume::process_chunk_queue(float delta)
     byDistance.reserve(_pendingColliders.size());
     for (JarVoxelChunk *chunk : _pendingColliders)
     {
-        const Vector3 p = chunk->get_position();
+        const Vector3 p = chunk->get_center();
         byDistance.emplace_back(_voxelLod.distance_to_nearest_viewer(glm::vec3(p.x, p.y, p.z)), chunk);
     }
     std::sort(byDistance.begin(), byDistance.end(),

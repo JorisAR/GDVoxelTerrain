@@ -130,7 +130,7 @@ void DetailScheduler::process()
     std::vector<std::pair<float, JarVoxelChunk *>> wanted;
     for (JarVoxelChunk *chunk : _chunks)
     {
-        const Vector3 p = chunk->get_position();
+        const Vector3 p = chunk->get_center();
         const float distance = _volume.distance_to_nearest_viewer(glm::vec3(p.x, p.y, p.z));
         if (_details->empty() || distance > far)
         {
