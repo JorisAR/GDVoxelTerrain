@@ -17,8 +17,8 @@ extends CharacterBody3D
 @export var ground_acceleration := 14.0
 @export var air_acceleration := 3.0
 @export var fly_speed := 20.0
-## Upper limit of Ctrl + scroll (the moon is 60 km away).
-@export var max_fly_speed := 20000.0
+## Upper limit of Ctrl + scroll (on the giant planet the moon is 1500 km away).
+@export var max_fly_speed := 1000000.0
 @export var mouse_sensitivity := 0.0025
 ## How quickly the body turns to match a new gravity direction (1/s).
 @export var align_speed := 8.0
