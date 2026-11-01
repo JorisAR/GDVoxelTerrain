@@ -161,6 +161,7 @@ void JarVoxelChunk::set_material(Ref<ShaderMaterial> p_material)
 void JarVoxelChunk::update_chunk(JarVoxelVolume &terrain, VoxelOctreeNode *node, ChunkMeshData *chunk_mesh_data)
 {
     _chunk_mesh_data.reset(chunk_mesh_data);
+    sample_gradients = chunk_mesh_data->gradients;
     array_mesh = Ref<ArrayMesh>(Object::cast_to<ArrayMesh>(*mesh_instance->get_mesh()));
     concave_polygon_shape =
         Ref<ConcavePolygonShape3D>(Object::cast_to<ConcavePolygonShape3D>(*collision_shape->get_shape()));

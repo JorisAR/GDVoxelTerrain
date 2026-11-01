@@ -6,6 +6,8 @@
 #include <godot_cpp/variant/array.hpp>
 #include <godot_cpp/variant/packed_float32_array.hpp>
 #include <godot_cpp/variant/vector3.hpp>
+#include <algorithm>
+#include <memory>
 #include <vector>
 #include <unordered_map>
 #include "bounds.h"
@@ -14,6 +16,48 @@
 #include <glm/gtx/hash.hpp>
 
 using namespace godot;
+
+// The volume SDF's gradients at the samples a chunk was meshed from, kept for
+// its next mesh: an edit changes a few samples (and stores their normals), the
+// rest are the same, and the terrain's gradient is the costliest part of
+// meshing (~17 us each, 10 ms for a chunk of ground). Likewise the
+// projections onto the SDF's surface where an edit meets untouched ground. Keyed by the sample's
+// center and size, and valid for the SDF and mesh version it was made with.
+struct SampleGradients
+{
+    struct Entry
+    {
+        glm::vec3 center;
+        int size;
+        glm::vec3 gradient; // normalized
+        float distanceScale;
+        // Where an edit meets it: its plane projected onto the SDF's surface
+        // (see StitchedSurfaceNets::place_dual_contouring_vertex), if done.
+        bool projected;
+        glm::vec3 surface;       // volume space
+        glm::vec3 surfaceNormal;
+        bool operator<(const Entry &o) const
+        {
+            if (center.x != o.center.x)
+                return center.x < o.center.x;
+            if (center.y != o.center.y)
+                return center.y < o.center.y;
+            if (center.z != o.center.z)
+                return center.z < o.center.z;
+            return size < o.size;
+        }
+    };
+    const void *sdf = nullptr;
+    int meshVersion = 0;
+    std::vector<Entry> entries; // sorted
+
+    const Entry *find(const glm::vec3 &center, int size) const
+    {
+        Entry key{center, size};
+        const auto it = std::lower_bound(entries.begin(), entries.end(), key);
+        return it != entries.end() && !(key < *it) ? &*it : nullptr;
+    }
+};
 
 class ChunkMeshData
 {
@@ -42,6 +86,7 @@ class ChunkMeshData
     Bounds bounds;
     // Painted amount per vertex (0 = ground): details avoid painted ground.
     PackedFloat32Array painted;
+    std::shared_ptr<const SampleGradients> gradients; // for the next mesh, if kept
     // ChunkDetailData chunk_detail_data;
 
     bool has_collision_mesh() const

@@ -118,6 +118,10 @@ class JarVoxelChunk : public Node3D
     Ref<ShaderMaterial> get_material() const;
     void set_material(Ref<ShaderMaterial> p_material);
 
+    // The SDF gradients its mesh was made with (see SampleGradients); read by
+    // mesh tasks, set only while none runs (update_chunk).
+    std::shared_ptr<const SampleGradients> sample_gradients;
+
     // Takes ownership of chunk_mesh_data.
     void update_chunk(JarVoxelVolume &terrain, VoxelOctreeNode *node, ChunkMeshData *chunk_mesh_data);
     void update_collision_mesh();

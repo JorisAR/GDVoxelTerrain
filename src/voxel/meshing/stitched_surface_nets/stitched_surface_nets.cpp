@@ -27,6 +27,16 @@ StitchedSurfaceNets::StitchedSurfaceNets(const JarVoxelVolume &terrain, const Vo
     : StitchedSurfaceNets(MesherSettings::from(terrain), StitchedMeshChunk(terrain, chunk), chunk._center)
 {
     _chunk = &chunk;
+    if (_dualContouring && _sdf != nullptr && chunk.get_lod() <= MaxGradientLod)
+    {
+        _newGradients = std::make_shared<SampleGradients>();
+        _newGradients->sdf = _sdf;
+        _newGradients->meshVersion = terrain.get_mesh_version();
+        const JarVoxelChunk *shown = chunk.get_chunk();
+        if (shown != nullptr && shown->sample_gradients && shown->sample_gradients->sdf == _sdf &&
+            shown->sample_gradients->meshVersion == _newGradients->meshVersion)
+            _previousGradients = shown->sample_gradients;
+    }
 }
 
 StitchedSurfaceNets::StitchedSurfaceNets(const MesherSettings &settings, StitchedMeshChunk &&input,
@@ -41,6 +51,9 @@ StitchedSurfaceNets::StitchedSurfaceNets(const MesherSettings &settings, Stitche
         _gradients.resize(_meshChunk.nodes.size());
         _distanceScale.resize(_meshChunk.nodes.size(), 1.0f);
         _hasGradient.resize(_meshChunk.nodes.size(), false);
+        _projected.resize(_meshChunk.nodes.size(), 0);
+        _surface.resize(_meshChunk.nodes.size());
+        _surfaceNormal.resize(_meshChunk.nodes.size());
     }
 }
 
@@ -58,14 +71,48 @@ glm::vec3 StitchedSurfaceNets::gradient_at(int node_id)
         // distance locally. Otherwise sample planes land at the wrong height and
         // slopes come out terraced.
         // At the node's own spacing, like its value (see DetailScope).
-        const JarSignedDistanceField::DetailScope detail(_voxelSize > 0.0f ? node->edge_length(_voxelSize) : 0.0f);
-        const glm::vec3 g = _sdf->gradient(node->_center);
-        const float len = glm::length(g);
-        _gradients[node_id] = len > 0.0f ? g / len : glm::vec3(0.0f, 1.0f, 0.0f);
-        _distanceScale[node_id] = 1.0f / std::clamp(len, 0.2f, 5.0f);
+        const SampleGradients::Entry *known =
+            _previousGradients ? _previousGradients->find(node->_center, node->_size) : nullptr;
+        if (known != nullptr)
+        {
+            _gradients[node_id] = known->gradient;
+            _distanceScale[node_id] = known->distanceScale;
+            if (known->projected)
+            {
+                _projected[node_id] = 1;
+                _surface[node_id] = known->surface;
+                _surfaceNormal[node_id] = known->surfaceNormal;
+            }
+        }
+        else
+        {
+            const JarSignedDistanceField::DetailScope detail(_voxelSize > 0.0f ? node->edge_length(_voxelSize) : 0.0f);
+            const glm::vec3 g = _sdf->gradient(node->_center);
+            const float len = glm::length(g);
+            _gradients[node_id] = len > 0.0f ? g / len : glm::vec3(0.0f, 1.0f, 0.0f);
+            _distanceScale[node_id] = 1.0f / std::clamp(len, 0.2f, 5.0f);
+        }
     }
     _hasGradient[node_id] = true;
     return _gradients[node_id];
+}
+
+// The volume SDF's surface point nearest node `node_id`'s plane (its center
+// moved its distance along its normal), and the normal there; the same in
+// every cell that has the node, so made once.
+glm::vec3 StitchedSurfaceNets::projected_sample(int node_id, glm::vec3 &normal)
+{
+    if (!_projected[node_id])
+    {
+        VoxelOctreeNode *n = _meshChunk.nodes[node_id];
+        glm::vec3 surfaceNormal = gradient_at(node_id);
+        const float d = n->get_value() * _distanceScale[node_id];
+        _surface[node_id] = project_to_volume_sdf(n->_center - d * surfaceNormal, surfaceNormal);
+        _surfaceNormal[node_id] = surfaceNormal;
+        _projected[node_id] = 1;
+    }
+    normal = _surfaceNormal[node_id];
+    return _surface[node_id];
 }
 
 // The volume SDF's surface point nearest `point` (a few Newton steps from it),
@@ -141,7 +188,7 @@ glm::vec3 StitchedSurfaceNets::place_dual_contouring_vertex(const std::vector<in
             continue; // too far for its closest feature to be in this cell
         glm::vec3 point = rel(n) - d * normal;
         if (editedCell && !n->has_normal())
-            point = project_to_volume_sdf(point + base, normal) - base; // the SDF is in volume space
+            point = projected_sample(neighbours[i], normal) - base; // the SDF is in volume space
         if (qef.count() == 0)
             firstNormal = normal;
         minAgreement = std::min(minAgreement, glm::dot(firstNormal, normal));
@@ -411,6 +458,16 @@ ChunkMeshData *StitchedSurfaceNets::generate_mesh_data(const JarVoxelVolume &ter
     output->boundaries = _meshChunk.boundaries;
     output->mesh_version = terrain.get_mesh_version();
     output->painted = painted;
+    if (_newGradients)
+    {
+        for (int i = 0; i < int(_meshChunk.nodes.size()); ++i)
+            if (_hasGradient[i] && !_meshChunk.nodes[i]->has_normal())
+                _newGradients->entries.push_back({_meshChunk.nodes[i]->_center, _meshChunk.nodes[i]->_size,
+                                                  _gradients[i], _distanceScale[i], _projected[i] != 0, _surface[i],
+                                                  _surfaceNormal[i]});
+        std::sort(_newGradients->entries.begin(), _newGradients->entries.end());
+        output->gradients = std::move(_newGradients);
+    }
     return output;
 }
 

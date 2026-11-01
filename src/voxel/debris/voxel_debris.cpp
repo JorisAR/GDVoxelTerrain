@@ -83,7 +83,7 @@ void JarVoxelDebris::detach()
     _volume = nullptr;
 }
 
-// Build worker.
+// A pool thread (see VolumeExtension::edit_applied).
 void JarVoxelDebris::edit_applied(JarVoxelVolume &volume, const ModifySettings &edit)
 {
     const std::shared_ptr<Shared> shared = _shared;
@@ -114,11 +114,16 @@ void JarVoxelDebris::edit_applied(JarVoxelVolume &volume, const ModifySettings &
     const glm::vec3 cells = region.get_size() / voxel;
     if (cells.x * cells.y * cells.z > float(MaxRegionCells))
         return;
+    // Without normals: finding pieces needs none, and the SDF's for every cell
+    // near the surface took 100+ ms (the edit waited for it). Only pieces
+    // that break off get them, for their meshes.
     VoxelBlock block;
-    volume.sample_region(region, block);
+    volume.sample_region(region, block, false);
     std::vector<IslandFinder::Island> islands = IslandFinder::find(block, _maxSize);
     if (islands.empty())
         return;
+    for (IslandFinder::Island &island : islands)
+        volume.add_sdf_normals(*island.block);
     std::lock_guard<std::mutex> lock(shared->mutex);
     for (IslandFinder::Island &island : islands)
     {

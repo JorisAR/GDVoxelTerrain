@@ -87,7 +87,21 @@ func _run(camera: Node3D) -> void:
 	volume.material_mode = JarVoxelVolume.MATERIAL_MODE_WEIGHTS
 	await _settle()
 
-	# 5. Unbounded SDFs are rejected by edit() instead of editing the whole world.
+	# 5. A small edit on an idle volume is applied, meshed and collidable by
+	# the next frame (the volume waits a few ms for it instead of handing it
+	# along over frames; it took 9 frames when debris searched with normals).
+	var dig := at + Vector3(0, 0, 12)
+	var dig_ground := _ground_height(dig)
+	volume.sphere_edit(Vector3(dig.x, dig_ground, dig.z), 1.5, false)
+	# In physics ticks: headless frames run uncapped, colliders change on ticks.
+	var ticks := 0
+	while ticks < 60 and _ground_height(dig) > dig_ground - 0.5:
+		await get_tree().physics_frame
+		ticks += 1
+	_check("small edit shows next frame", ticks <= 1, "%d physics ticks" % ticks)
+	await _settle()
+
+	# 6. Unbounded SDFs are rejected by edit() instead of editing the whole world.
 	volume.edit(JarPlaneSdf.new(), JarVoxelVolume.SDF_OPERATION_UNION, Transform3D())
 	_check("unbounded edit rejected", not volume.is_building())
 	_finish()

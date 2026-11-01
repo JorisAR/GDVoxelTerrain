@@ -86,6 +86,9 @@ class JarVoxelVolume : public Node3D
     Vector4 _shaderUpCenter, _shaderUpAxis;
 
     std::atomic<bool> _isBuilding{false};
+    // How long a frame may wait for an edit to be applied and meshed, so small
+    // edits show the frame they are made.
+    static constexpr int EditWaitMicroseconds = 4000;
     bool _initialBuildRequested = false; // first build waits for process(), when the player is in the tree
     bool _cubicVoxels = false;
     std::atomic<int> _meshingAlgorithm{0}; // MeshingAlgorithm; read by mesh threads
@@ -102,6 +105,8 @@ class JarVoxelVolume : public Node3D
     std::thread _buildThread;
     std::mutex _buildMutex;
     std::condition_variable _buildCv;
+    std::condition_variable _buildDoneCv; // _isBuilding went false
+    std::atomic<int> _extensionTasks{0};  // edit_applied hooks running on the pool (read the octree)
     bool _buildRequested = false;             // guarded by _buildMutex
     std::vector<ModifySettings> _workerEdits; // guarded by _buildMutex; applied before any build
     bool _buildShutdown = false;              // guarded by _buildMutex
@@ -348,10 +353,14 @@ class JarVoxelVolume : public Node3D
 
     void get_voxel_leaves_in_bounds(const Bounds &bounds, std::vector<VoxelOctreeNode *> &nodes) const;
     // Copies the voxels in `region` (volume space) into `block`, on the finest
-    // voxel grid. Build worker only (VolumeExtension::edit_applied): the octree
-    // must not change meanwhile. Untouched cells near the surface get the
-    // volume SDF's normal.
-    void sample_region(const Bounds &region, VoxelBlock &block) const;
+    // voxel grid. Only in VolumeExtension::edit_applied or the like: the octree
+    // must not change meanwhile. With `normals`, untouched cells near the
+    // surface get the volume SDF's normal (see add_sdf_normals).
+    void sample_region(const Bounds &region, VoxelBlock &block, bool normals = true) const;
+    // Gives the cells of `block` near the surface that have no normal (never
+    // edited) the volume SDF's. Costly (several SDF samples per cell): only
+    // for blocks that will be meshed.
+    void add_sdf_normals(VoxelBlock &block) const;
     // Edits from C++ (e.g. extensions): like edit(), with per-voxel materials,
     // or the existing materials left as they are (`keepMaterials`).
     void edit_with(const Ref<JarSignedDistanceField> &sdf, SDF::Operation operation, const Transform3D &transform,

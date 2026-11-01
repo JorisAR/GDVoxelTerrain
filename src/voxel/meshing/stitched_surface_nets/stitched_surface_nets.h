@@ -109,6 +109,16 @@ class StitchedSurfaceNets
     std::vector<glm::vec3> _gradients;
     std::vector<float> _distanceScale; // 1 / |gradient|: turns sample values into true distances
     std::vector<bool> _hasGradient;
+    // Per node, the projection of its plane onto the volume SDF's surface
+    // (where an edit meets untouched ground), made once per node.
+    std::vector<uint8_t> _projected;
+    std::vector<glm::vec3> _surface, _surfaceNormal;
+    glm::vec3 projected_sample(int node_id, glm::vec3 &normal);
+    // Gradients from the chunk's last mesh (reused), and those of this one
+    // (kept for the next), for chunks at most MaxGradientLod.
+    static constexpr int MaxGradientLod = 1;
+    std::shared_ptr<const SampleGradients> _previousGradients;
+    std::shared_ptr<SampleGradients> _newGradients;
     glm::vec3 gradient_at(int node_id);
     glm::vec3 project_to_volume_sdf(glm::vec3 point, glm::vec3 &normal) const;
     // Returns NaN if no dual contouring position fits the cell. `normal` gets the

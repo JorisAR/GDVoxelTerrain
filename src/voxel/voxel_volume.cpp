@@ -279,16 +279,29 @@ void JarVoxelVolume::build_worker()
             // Settle averaged inner-node values now, so the mesh threads that run
             // next never lazily write to shared nodes.
             _voxelRoot->update_if_dirty();
+            // Extensions look at the edits (debris searches 100k+ cells) on
+            // the pool, while the edits' chunks are meshed: the octree only
+            // changes again once they are done (is_meshing()).
             if (!edits.empty())
             {
-                std::shared_lock<std::shared_mutex> lock(_extensionsMutex);
-                for (const ModifySettings &settings : edits)
-                    for (VolumeExtension *extension : _extensions)
-                        extension->edit_applied(*this, settings);
+                _extensionTasks++;
+                JobSystem::get_pool().enqueue([this, applied = std::move(edits)]() {
+                    {
+                        std::shared_lock<std::shared_mutex> lock(_extensionsMutex);
+                        for (const ModifySettings &settings : applied)
+                            for (VolumeExtension *extension : _extensions)
+                                extension->edit_applied(*this, settings);
+                    }
+                    _extensionTasks--;
+                });
             }
         }
         edits.clear();
-        _isBuilding = false;
+        {
+            std::lock_guard<std::mutex> lock(_buildMutex);
+            _isBuilding = false;
+        }
+        _buildDoneCv.notify_all();
     }
 }
 
@@ -351,6 +364,8 @@ void JarVoxelVolume::stop_build_worker()
     _buildCv.notify_all();
     if (_buildThread.joinable())
         _buildThread.join();
+    while (_extensionTasks > 0) // they read the octree
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
 }
 
 // --- chunk object pool ------------------------------------------------------
@@ -565,7 +580,7 @@ bool JarVoxelVolume::is_generating_details() const
 
 bool JarVoxelVolume::is_meshing() const
 {
-    return _meshComputeScheduler && _meshComputeScheduler->is_meshing();
+    return (_meshComputeScheduler && _meshComputeScheduler->is_meshing()) || _extensionTasks > 0;
 }
 
 Ref<JarSignedDistanceField> JarVoxelVolume::get_sdf() const
@@ -968,17 +983,31 @@ void JarVoxelVolume::process()
     // Edits and LOD builds mutate the octree (including freeing nodes), so they
     // may only run once no mesh task holds node pointers. Edits take priority
     // so they are not starved by a moving camera.
-    if (!_meshComputeScheduler->is_meshing())
+    int meshWait = 0;
+    if (!is_meshing())
     {
         if (!_modifySettingsQueue.empty())
+        {
+            // A small edit takes the worker a millisecond or two, and its
+            // chunks a few more to mesh: wait for both (bounded), so it is on
+            // screen this frame instead of two frames later. Larger ones go
+            // on as usual when the time is up.
+            const auto start = std::chrono::steady_clock::now();
             process_modify_queue();
+            std::unique_lock<std::mutex> lock(_buildMutex);
+            if (_buildDoneCv.wait_for(lock, std::chrono::microseconds(EditWaitMicroseconds),
+                                      [this] { return !_isBuilding; }))
+                meshWait = EditWaitMicroseconds -
+                           int(std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - start)
+                                   .count());
+        }
         else if ((_rebuildRequested && _voxelLod.update_viewers(*this, true)) || _voxelLod.process(*this))
         {
             build(); // hands off to the build worker (sets _isBuilding); resume next frame
             return;
         }
     }
-    _meshComputeScheduler->process(*this);
+    _meshComputeScheduler->process(*this, std::max(meshWait, 0));
 
     process_chunk_queue(delta);
 }
@@ -1007,7 +1036,7 @@ void JarVoxelVolume::build()
     //        (was set inside the thread => TOCTOU window => 2nd racing build).
     //  - (b) is prevented by gating _meshComputeScheduler->process() on
     //        !_isBuilding in process(), so meshing only runs once a build is done.
-    if (!_meshComputeScheduler || !_voxelRoot || _meshComputeScheduler->is_meshing())
+    if (!_meshComputeScheduler || !_voxelRoot || is_meshing())
         return;
     bool expected = false;
     if (!_isBuilding.compare_exchange_strong(expected, true))
@@ -1135,7 +1164,7 @@ Ref<ArrayMesh> JarVoxelVolume::get_region_mesh(const AABB &region) const
     return mesh;
 }
 
-void JarVoxelVolume::sample_region(const Bounds &region, VoxelBlock &block) const
+void JarVoxelVolume::sample_region(const Bounds &region, VoxelBlock &block, bool normals) const
 {
     // Finest voxels are centered at (k + 0.5) * voxel size.
     const glm::ivec3 first = glm::ivec3(glm::floor(region.min / _voxelSize - 0.5f));
@@ -1146,6 +1175,12 @@ void JarVoxelVolume::sample_region(const Bounds &region, VoxelBlock &block) cons
     if (!_voxelRoot)
         return;
     _voxelRoot->sample_into(*this, block);
+    if (normals)
+        add_sdf_normals(block);
+}
+
+void JarVoxelVolume::add_sdf_normals(VoxelBlock &block) const
+{
     const JarSignedDistanceField *sdf = get_sdf_ptr();
     if (sdf == nullptr)
         return;

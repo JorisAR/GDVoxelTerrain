@@ -26,12 +26,18 @@ void MeshComputeScheduler::enqueue(VoxelOctreeNode &node)
     ChunksToAdd.push(&node);
 }
 
-void MeshComputeScheduler::process(JarVoxelVolume &terrain)
+void MeshComputeScheduler::process(JarVoxelVolume &terrain, int waitMicroseconds)
 {
     _prevTris = _totalTris;
     if (!terrain.is_building())
     {
         process_queue(terrain);
+    }
+    if (waitMicroseconds > 0)
+    {
+        const auto until = std::chrono::steady_clock::now() + std::chrono::microseconds(waitMicroseconds);
+        while (_activeTasks > 0 && std::chrono::steady_clock::now() < until)
+            std::this_thread::yield();
     }
     // Uploading a mesh to the GPU runs on the main thread. Spread it over
     // frames: uploading thousands at once after a build stalled a frame for

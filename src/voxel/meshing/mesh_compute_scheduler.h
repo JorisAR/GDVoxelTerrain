@@ -51,7 +51,10 @@ class MeshComputeScheduler
     // Waits for this volume's tasks on the shared pool, then frees unapplied results.
     ~MeshComputeScheduler();
     void enqueue(VoxelOctreeNode &node);
-    void process(JarVoxelVolume &terrain);
+    // Starts queued mesh tasks and applies finished ones. `waitMicroseconds`:
+    // how long to wait for the tasks just started (an edit's) to finish, so
+    // they are applied this frame.
+    void process(JarVoxelVolume &terrain, int waitMicroseconds = 0);
     void clear_queue();
 
     // True while any mesh task holds octree node pointers: queued, running on

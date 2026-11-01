@@ -18,9 +18,10 @@ class VolumeExtension
     {
     }
 
-    // Build worker, right after an edit changed the octree (values settled).
-    // The octree is safe to read here (e.g. JarVoxelVolume::sample_region) and
-    // must not be changed; hand results to the main thread.
+    // A pool thread, right after an edit changed the octree (values settled),
+    // while its chunks are meshed. The octree is safe to read here (e.g.
+    // JarVoxelVolume::sample_region) and must not be changed; hand results to
+    // the main thread. Edits are passed one at a time, in order.
     virtual void edit_applied(JarVoxelVolume &volume, const ModifySettings &edit)
     {
     }
