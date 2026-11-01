@@ -73,6 +73,9 @@ class JarVoxelUniverse : public Object
     // Floating origin (see floating_origin.h): moves the view (and everything
     // else in the scene) back near the origin once the viewer is far from it.
     void shift_origin_if_far(Node *context, double time);
+    // Clip planes that follow the camera's altitude (see adapt_camera).
+    std::unordered_map<uint64_t, float> _cameraNear; // each camera's own near plane (instance id)
+    void adapt_camera(Node *context);
     bool _alignPending = false; // a new turning frame: its anchor still to be aligned
     void place(double time);
     bool place_node(Node3D *node, const Transform3D &transform); // whether it moved it

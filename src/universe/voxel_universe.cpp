@@ -32,6 +32,7 @@ const char *PhysicalStrength = "jar_voxel_terrain/gravity/physical_strength";
 const char *UpSharpness = "jar_voxel_terrain/gravity/up_sharpness";
 const char *SpaceGravity = "jar_voxel_terrain/gravity/drive_space_gravity";
 const char *FrameSwitching = "jar_voxel_terrain/universe/frame_switching";
+const char *AdaptCamera = "jar_voxel_terrain/universe/adapt_camera_clip";
 
 Variant setting(const char *name, const Variant &fallback)
 {
@@ -72,6 +73,7 @@ void JarVoxelUniverse::register_settings()
     add_setting(UpSharpness, 4.0, Variant::FLOAT, PROPERTY_HINT_RANGE, "0,16,0.1");
     add_setting(SpaceGravity, true, Variant::BOOL);
     add_setting(FrameSwitching, true, Variant::BOOL);
+    add_setting(AdaptCamera, true, Variant::BOOL);
     FloatingOrigin::register_settings();
 }
 
@@ -250,6 +252,8 @@ void JarVoxelUniverse::step(Node *context)
         }
     }
     shift_origin_if_far(context, time);
+    if (bool(setting(AdaptCamera, true)))
+        adapt_camera(context);
     if (!_skyFound)
         find_sky(context);
     place_sky(context, _lastView);
@@ -317,6 +321,31 @@ void JarVoxelUniverse::shift_origin_if_far(Node *context, double time)
     FloatingOrigin::apply(context->get_tree()->get_root(), shift.to(), placed);
     _placed.clear();
     place(time);
+}
+
+// A planet seen from orbit needs a far plane of thousands of kilometers, but
+// Godot's culling breaks down (everything is culled) once far / near passes
+// about 2e7. So near grows with the camera's altitude above the nearest body
+// (from the camera's own near plane on the ground) and far is 1e7 times
+// near: 5 cm / 500 km on the ground, 2 m / 20000 km 1000 km up.
+void JarVoxelUniverse::adapt_camera(Node *context)
+{
+    Viewport *viewport = context->is_inside_tree() ? context->get_viewport() : nullptr;
+    Camera3D *camera = viewport ? viewport->get_camera_3d() : nullptr;
+    if (camera == nullptr)
+        return;
+    const float ownNear = _cameraNear.try_emplace(camera->get_instance_id(), camera->get_near()).first->second;
+    const Vector3 at = camera->get_global_position();
+    float altitude = std::numeric_limits<float>::infinity();
+    for (const JarCelestialBody *body : _bodies)
+        altitude = std::min(altitude, body->get_altitude(at));
+    if (!std::isfinite(altitude))
+        return;
+    const float near = std::clamp(altitude * 0.002f, ownNear, 1.0e4f);
+    if (camera->get_near() != near)
+        camera->set_near(near);
+    if (camera->get_far() != near * 1.0e7f)
+        camera->set_far(near * 1.0e7f);
 }
 
 double JarVoxelUniverse::tick_time() const
