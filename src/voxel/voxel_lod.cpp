@@ -67,8 +67,20 @@ bool JarVoxelLoD::update_viewers(const JarVoxelVolume &volume, const bool force)
 
     std::vector<glm::vec3> positions = gather_viewers(volume);
     bool changed = force || positions.size() != _viewerPositions.size();
+    // A viewer outside the volume's cube only reaches it with coarser levels,
+    // whose shells move in steps of their grid: it may move up to half a cell
+    // of the finest one it reaches before anything changes much. Without this
+    // a moon seen from its planet (or the planet from the moon) rebuilt every
+    // few frames from its orbital motion alone, even 60 km away.
+    const float half = 0.5f * volume.get_extent();
     for (size_t i = 0; !changed && i < positions.size(); ++i)
-        changed = glm::distance(positions[i], _viewerPositions[i]) > _automaticUpdateDistance;
+    {
+        float threshold = _automaticUpdateDistance;
+        const glm::vec3 nearest = glm::clamp(positions[i], glm::vec3(-half), glm::vec3(half));
+        if (nearest != positions[i])
+            threshold = std::max(threshold, 0.5f * float(1 << (lod_for_viewer(nearest, positions[i]) + 2)) * _chunkMeters);
+        changed = glm::distance(positions[i], _viewerPositions[i]) > threshold;
+    }
 
     if (changed)
         _viewerPositions = std::move(positions);
