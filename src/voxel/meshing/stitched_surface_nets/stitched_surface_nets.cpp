@@ -108,12 +108,17 @@ glm::vec3 StitchedSurfaceNets::place_dual_contouring_vertex(const int node_id, c
     // plane per corner. Their least-squares intersection recovers edges and
     // corners that lie between the samples.
     Qef qef;
+    // In the cell's frame (see from_cell): its corner is the origin.
+    glm::vec3 base(std::numeric_limits<float>::max());
+    for (int i = 0; i < 8; ++i)
+        base = glm::min(base, _meshChunk.nodes[neighbours[i]]->_center);
+    auto rel = [&](const VoxelOctreeNode *n) { return n->_center - base; };
     glm::vec3 cellMin(std::numeric_limits<float>::max()), cellMax(std::numeric_limits<float>::lowest());
     for (int i = 0; i < 8; ++i)
     {
         const VoxelOctreeNode *n = _meshChunk.nodes[neighbours[i]];
-        cellMin = glm::min(cellMin, n->_center);
-        cellMax = glm::max(cellMax, n->_center);
+        cellMin = glm::min(cellMin, rel(n));
+        cellMax = glm::max(cellMax, rel(n));
     }
     const float cellSize = cellMax.x - cellMin.x;
     // Where an edit meets untouched ground (edited corners carry exact normals
@@ -140,9 +145,9 @@ glm::vec3 StitchedSurfaceNets::place_dual_contouring_vertex(const int node_id, c
         const float d = n->get_value() * _distanceScale[neighbours[i]];
         if (std::abs(d) > 1.5f * cellSize)
             continue; // too far for its closest feature to be in this cell
-        glm::vec3 point = n->_center - d * normal;
+        glm::vec3 point = rel(n) - d * normal;
         if (editedCell && !n->has_normal())
-            point = project_to_volume_sdf(point, normal);
+            point = project_to_volume_sdf(point + base, normal) - base; // the SDF is in volume space
         if (qef.count() == 0)
             firstNormal = normal;
         minAgreement = std::min(minAgreement, glm::dot(firstNormal, normal));
@@ -180,7 +185,7 @@ glm::vec3 StitchedSurfaceNets::place_dual_contouring_vertex(const int node_id, c
         const float vb = const_cast<VoxelOctreeNode *>(nb)->get_value();
         if (glm::sign(va) == glm::sign(vb))
             continue;
-        crossings += glm::mix(na->_center, nb->_center, std::abs(va) / (std::abs(va) + std::abs(vb)));
+        crossings += glm::mix(rel(na), rel(nb), std::abs(va) / (std::abs(va) + std::abs(vb)));
         crossingCount++;
     }
     const glm::vec3 target = crossingCount > 0 ? crossings / float(crossingCount) : qef.mass_point();
@@ -213,7 +218,7 @@ glm::vec3 StitchedSurfaceNets::place_dual_contouring_vertex(const int node_id, c
                 }
             }
             if (best < std::numeric_limits<float>::max())
-                return glm::clamp(bestPoint, cellMin, cellMax);
+                return from_cell(glm::clamp(bestPoint, cellMin, cellMax), base);
         }
         Qef::Solution solution = qef.solve_rank(rank, _featureThreshold);
         if (Qef::fit_into(solution, target, cellMin - tolerance, cellMax + tolerance))
@@ -229,7 +234,7 @@ glm::vec3 StitchedSurfaceNets::place_dual_contouring_vertex(const int node_id, c
                 for (int c = 0; c < planes.count; ++c)
                     _lastPlanes.normals[c] = glm::normalize(planes.normals[c]);
             }
-            return glm::clamp(solution.point, cellMin, cellMax);
+            return from_cell(glm::clamp(solution.point, cellMin, cellMax), base);
         }
     }
     return glm::vec3(std::numeric_limits<float>::quiet_NaN());
@@ -241,6 +246,9 @@ void StitchedSurfaceNets::create_vertex(const int node_id, const std::vector<int
     MaterialAccumulator materials;
     glm::vec3 normal(0.0f);
     int duplicates = 0, edge_crossings = 0;
+    glm::vec3 base(std::numeric_limits<float>::max()); // the cell's frame (see from_cell)
+    for (int i = 0; i < 8; ++i)
+        base = glm::min(base, _meshChunk.nodes[neighbours[i]]->_center);
     for (auto &edge : StitchedMeshChunk::Edges)
     {
         auto ai = neighbours[edge.x];
@@ -249,8 +257,8 @@ void StitchedSurfaceNets::create_vertex(const int node_id, const std::vector<int
         auto nb = _meshChunk.nodes[bi];
         float valueA = na->get_value();
         float valueB = nb->get_value();
-        glm::vec3 posA = na->_center;
-        glm::vec3 posB = nb->_center;
+        glm::vec3 posA = na->_center - base;
+        glm::vec3 posB = nb->_center - base;
 
         normal += (valueB - valueA) * (posB - posA);
 
@@ -289,11 +297,11 @@ void StitchedSurfaceNets::create_vertex(const int node_id, const std::vector<int
         return;
     }
 
-    vertexPosition /= static_cast<float>(edge_crossings);
+    vertexPosition = from_cell(vertexPosition / static_cast<float>(edge_crossings), base);
     materials.scale(1.0f / static_cast<float>(edge_crossings));
     normal = glm::normalize(normal);
     if (_cubicVoxels)
-        vertexPosition = _meshChunk.nodes[node_id]->_center;
+        vertexPosition = local(_meshChunk.nodes[node_id]);
     else if (_dualContouring)
     {
         // Ring (LOD seam) vertices are copies of the neighbouring coarser
@@ -308,7 +316,6 @@ void StitchedSurfaceNets::create_vertex(const int node_id, const std::vector<int
             normal = exactNormal; // exact surface normal instead of the value-difference estimate
     }
 
-    vertexPosition -= _origin;
     int vertexIndex = _verts.size();
     register_edge_node(node_id, neighbours, on_ring);
 
@@ -740,6 +747,9 @@ void StitchedSurfaceNets::create_component_vertices(const int node_id, const std
         glm::vec3 position(0.0f), normal(0.0f);
         MaterialAccumulator materials;
         int crossings = 0;
+        glm::vec3 base(std::numeric_limits<float>::max()); // the cell's frame (see from_cell)
+        for (int i = 0; i < 8; ++i)
+            base = glm::min(base, _meshChunk.nodes[neighbours[i]]->_center);
         for (int e = 0; e < 12; ++e)
         {
             if (edgeComponent[e] != c)
@@ -749,13 +759,13 @@ void StitchedSurfaceNets::create_component_vertices(const int node_id, const std
             VoxelOctreeNode *nb = _meshChunk.nodes[neighbours[StitchedMeshChunk::Edges[e].y]];
             const float va = na->get_value(), vb = nb->get_value();
             const float t = std::abs(va) / (std::abs(va) + std::abs(vb));
-            position += glm::mix(na->_center, nb->_center, t);
+            position += glm::mix(na->_center - base, nb->_center - base, t);
             materials.add(na->get_materials(), 1.0f - t);
             materials.add(nb->get_materials(), t);
             normal += (vb - va) * (nb->_center - na->_center);
             crossings++;
         }
-        position /= float(crossings);
+        position = from_cell(position / float(crossings), base);
         materials.scale(1.0f / float(crossings));
         normal = glm::length(normal) > 0.0f ? glm::normalize(normal) : glm::vec3(0.0f, 1.0f, 0.0f);
         if (_dualContouring)
@@ -767,7 +777,6 @@ void StitchedSurfaceNets::create_component_vertices(const int node_id, const std
             if (glm::dot(exactNormal, exactNormal) > 0.5f)
                 normal = exactNormal;
         }
-        position -= _origin;
         _sharp.push_back(_dualContouring && _lastVertexSharp ? 1 : 0);
         _sharpPlanes.push_back(_dualContouring && _lastVertexSharp ? _lastPlanes : SharpPlanes());
         _verts.push_back({position.x, position.y, position.z});
@@ -860,7 +869,8 @@ int StitchedSurfaceNets::add_crossing_vertex(int a, int b)
     VoxelOctreeNode *nb = _meshChunk.nodes[b];
     const float va = na->get_value(), vb = nb->get_value();
     const float t = std::abs(va) / std::max(std::abs(va) + std::abs(vb), 1e-12f);
-    const glm::vec3 position = glm::mix(na->_center, nb->_center, t) - _origin;
+    const glm::vec3 base = cell_base(na, nb); // the edge's frame (see from_cell)
+    const glm::vec3 position = from_cell(glm::mix(na->_center - base, nb->_center - base, t), base);
     glm::vec3 normal = (vb - va) * (nb->_center - na->_center);
     if (_dualContouring)
         normal = glm::mix(gradient_at(a), gradient_at(b), t);

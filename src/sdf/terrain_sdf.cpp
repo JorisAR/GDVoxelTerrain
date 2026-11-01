@@ -75,10 +75,14 @@ void JarTerrainSdf::frame(const glm::vec3 &pos, glm::vec3 &surface, glm::vec3 &u
 {
     if (_shape == SHAPE_SPHERE)
     {
-        const float len = glm::length(pos);
-        up = len > 1e-6f ? pos / len : glm::vec3(0.0f, 1.0f, 0.0f);
-        surface = up * _radius;
-        above = len - _radius;
+        // In doubles: |pos| - radius in floats lost the height to rounding on
+        // large planets (a float step is 6 cm at 600 km, random per sample).
+        const glm::dvec3 p(pos);
+        const double len = glm::length(p);
+        const glm::dvec3 u = len > 1e-6 ? p / len : glm::dvec3(0.0, 1.0, 0.0);
+        up = glm::vec3(u);
+        surface = glm::vec3(u * double(_radius));
+        above = float(len - double(_radius));
     }
     else
     {

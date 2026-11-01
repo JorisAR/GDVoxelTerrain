@@ -56,6 +56,22 @@ class StitchedSurfaceNets
 
     const VoxelOctreeNode *_chunk = nullptr; // the octree chunk, if meshing one
     const glm::vec3 _origin;                  // vertices are relative to it
+    // A sample's place relative to _origin (exact: both are on the voxel grid).
+    glm::vec3 local(const VoxelOctreeNode *node) const { return node->_center - _origin; }
+    // Vertices are computed relative to their cell's corner `base` (the
+    // smallest sample position, the same in every chunk that has the cell),
+    // so neighboring chunks compute their shared vertices from the same small
+    // numbers, to the same floats. Snapped to 1/4096 m, they then add to the
+    // chunk's offset, and on the GPU to the chunk's position, exactly within
+    // 2 km of the scene origin (24 bits), which the floating origin keeps the
+    // camera in: the seams there are watertight bit for bit. In volume
+    // coordinates the vertex fit lost centimeters on large planets (a float
+    // step is 6 cm at 600 km) and cracked the seams.
+    static glm::vec3 cell_base(const VoxelOctreeNode *a, const VoxelOctreeNode *b) { return glm::min(a->_center, b->_center); }
+    glm::vec3 from_cell(const glm::vec3 &position, const glm::vec3 &base) const
+    {
+        return glm::round(position * 4096.0f) * (1.0f / 4096.0f) + (base - _origin);
+    }
     const bool _cubicVoxels;
     const bool _dualContouring;
     const bool _manifold;
