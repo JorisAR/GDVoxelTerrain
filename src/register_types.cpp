@@ -30,6 +30,7 @@
 #include "body_orbit.h"
 #include "body_layer.h"
 #include "lens_flare.h"
+#include "voxel_stats.h"
 #include <godot_cpp/classes/engine.hpp>
 using namespace godot;
 
@@ -73,6 +74,7 @@ void initialize_jar_voxel_terrain_module(ModuleInitializationLevel p_level)
         GDREGISTER_CLASS(JarVoxelViewer);
         GDREGISTER_CLASS(JarVoxelDebrisBody);
         GDREGISTER_CLASS(JarVoxelDebris);
+        GDREGISTER_ABSTRACT_CLASS(JarVoxelStats);
 
         // UNIVERSE
         GDREGISTER_CLASS(JarVoxelUniverse);
@@ -94,6 +96,7 @@ void uninitialize_jar_voxel_terrain_module(ModuleInitializationLevel p_level)
 {
     if (p_level == MODULE_INITIALIZATION_LEVEL_SCENE)
     {
+        VoxelStats::unregister_monitors();
         Engine::get_singleton()->unregister_singleton("JarVoxelUniverse");
         memdelete(JarVoxelUniverse::get_singleton());
         JobSystem::shutdown();

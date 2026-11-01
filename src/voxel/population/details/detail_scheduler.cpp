@@ -3,6 +3,7 @@
 #include "voxel_volume.h"
 #include <algorithm>
 #include <chrono>
+#include "voxel_stats.h"
 #include <limits>
 
 namespace
@@ -44,9 +45,13 @@ void DetailScheduler::worker()
             job = std::move(_jobs.front());
             _jobs.pop_front();
         }
-        ChunkDetailGenerator generator(job.up);
-        std::vector<PackedFloat32Array> buffers =
-            generator.generate_detail_buffers(*job.details, *job.biomes, job.biomeMap, job.ground, job.inputs);
+        std::vector<PackedFloat32Array> buffers;
+        {
+            const VoxelStats::Scope stage(VoxelStats::WorkerDetails);
+            ChunkDetailGenerator generator(job.up);
+            buffers =
+                generator.generate_detail_buffers(*job.details, *job.biomes, job.biomeMap, job.ground, job.inputs);
+        }
         std::lock_guard<std::mutex> lock(_mutex);
         _results.push_back({job.chunk, job.token, job.details, std::move(buffers)});
     }

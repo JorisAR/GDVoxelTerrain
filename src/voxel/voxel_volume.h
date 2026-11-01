@@ -120,6 +120,16 @@ class JarVoxelVolume : public Node3D
     std::vector<JarVoxelChunk *> _freeChunks;     // main-thread pool of reusable chunks
     std::vector<JarVoxelChunk *> _releasedChunks; // worker pushes here; main drains
     std::mutex _poolMutex;                        // guards _releasedChunks
+    // Spare chunks are made a few per frame ahead of time, as many as one
+    // commit has needed so far: creating hundreds inside a commit stalled it
+    // for 30-75 ms while flying.
+    static constexpr int MinPoolReserve = 128;
+    static constexpr int MaxPoolReserve = 4096;
+    static constexpr int PoolRefillMicroseconds = 500;
+    int _poolReserve = MinPoolReserve;
+    int _acquiredSinceCommit = 0;
+    JarVoxelChunk *create_chunk();
+    void refill_pool(); // main thread, every frame
 
     // PERFORMANCE
     int _updatedCollidersPerSecond = 0; // 0 = uncapped (time budget only)

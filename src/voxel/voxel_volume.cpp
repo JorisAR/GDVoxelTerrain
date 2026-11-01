@@ -11,6 +11,7 @@
 #include "floating_origin.h"
 #include "voxel_universe.h"
 #include "job_system.h"
+#include "voxel_stats.h"
 #include <chrono>
 #include <limits>
 
@@ -272,8 +273,12 @@ void JarVoxelVolume::build_worker()
         }
         if (_voxelRoot)
         {
-            for (const ModifySettings &settings : edits)
-                _voxelRoot->modify_sdf_in_bounds(*this, settings);
+            {
+                const VoxelStats::Scope stage(VoxelStats::WorkerEdit);
+                for (const ModifySettings &settings : edits)
+                    _voxelRoot->modify_sdf_in_bounds(*this, settings);
+            }
+            const VoxelStats::Scope stage(rebuild ? VoxelStats::WorkerBuild : VoxelStats::WorkerEdit);
             if (rebuild)
                 build_octree();
             // Settle averaged inner-node values now, so the mesh threads that run
@@ -287,6 +292,7 @@ void JarVoxelVolume::build_worker()
                 _extensionTasks++;
                 JobSystem::get_pool().enqueue([this, applied = std::move(edits)]() {
                     {
+                        const VoxelStats::Scope stage(VoxelStats::WorkerExtension);
                         std::shared_lock<std::shared_mutex> lock(_extensionsMutex);
                         for (const ModifySettings &settings : applied)
                             for (VolumeExtension *extension : _extensions)
@@ -372,6 +378,7 @@ void JarVoxelVolume::stop_build_worker()
 // Main thread: reuse a parked chunk if one is free, else instantiate a new one.
 JarVoxelChunk *JarVoxelVolume::pool_acquire()
 {
+    _acquiredSinceCommit++;
     if (!_freeChunks.empty())
     {
         JarVoxelChunk *c = _freeChunks.back();
@@ -379,6 +386,26 @@ JarVoxelChunk *JarVoxelVolume::pool_acquire()
         c->reactivate();
         return c;
     }
+    return create_chunk();
+}
+
+void JarVoxelVolume::refill_pool()
+{
+    if (_chunkScene.is_null() || int(_freeChunks.size()) >= _poolReserve)
+        return;
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::microseconds(PoolRefillMicroseconds);
+    while (int(_freeChunks.size()) < _poolReserve && std::chrono::steady_clock::now() < deadline)
+    {
+        JarVoxelChunk *c = create_chunk();
+        c->deactivate();
+        _freeChunks.push_back(c);
+    }
+}
+
+JarVoxelChunk *JarVoxelVolume::create_chunk()
+{
+    const VoxelStats::Scope stage(VoxelStats::MainChunkCreate);
+    VoxelStats::add_count(VoxelStats::ChunksCreated);
     JarVoxelChunk *c = static_cast<JarVoxelChunk *>(_chunkScene->instantiate());
     if (StaticBody3D *body = c->get_static_body())
     {
@@ -545,6 +572,8 @@ void JarVoxelVolume::remove_extension(VolumeExtension *extension)
 
 void JarVoxelVolume::notify_meshes_committed()
 {
+    _poolReserve = std::clamp(std::max(_poolReserve, _acquiredSinceCommit), MinPoolReserve, MaxPoolReserve);
+    _acquiredSinceCommit = 0;
     std::shared_lock<std::shared_mutex> lock(_extensionsMutex);
     for (VolumeExtension *extension : _extensions)
         extension->meshes_committed(*this);
@@ -890,6 +919,7 @@ void JarVoxelVolume::_notification(int p_what)
     switch (p_what)
     {
     case NOTIFICATION_ENTER_TREE: {
+        VoxelStats::register_monitors();
         initialize();
         set_process_internal(true);
         break;
@@ -946,6 +976,8 @@ void JarVoxelVolume::initialize()
 
 void JarVoxelVolume::process()
 {
+    VoxelStats::tick(Engine::get_singleton()->get_process_frames());
+    const VoxelStats::Scope stage(VoxelStats::MainVolume);
     // While a build thread owns the octree (_isBuilding), NO main-thread tree
     // access may run - meshing dispatch, modify queue, and chunk queue all touch
     // the same nodes the worker is mutating. Letting any of them run concurrently
@@ -959,16 +991,26 @@ void JarVoxelVolume::process()
         rebuild_materials();
     update_shader_frame();
     if (_featureManager)
-        _featureManager->process(); // independent of the octree: runs during builds too
-    if (_detailScheduler)
-        _detailScheduler->process(); // likewise (only touches chunks)
     {
+        const VoxelStats::Scope features(VoxelStats::MainFeatures);
+        _featureManager->process(); // independent of the octree: runs during builds too
+    }
+    if (_detailScheduler)
+    {
+        const VoxelStats::Scope details(VoxelStats::MainDetails);
+        _detailScheduler->process(); // likewise (only touches chunks)
+    }
+    {
+        const VoxelStats::Scope extensions(VoxelStats::MainExtensions);
         std::shared_lock<std::shared_mutex> lock(_extensionsMutex);
         for (VolumeExtension *extension : _extensions)
             extension->process(*this, get_process_delta_time());
     }
-    if (_isBuilding || !_meshComputeScheduler)
-        return; // building, or initialize() failed (missing chunk scene / sdf)
+    if (!_meshComputeScheduler)
+        return; // initialize() failed (missing chunk scene / sdf)
+    refill_pool(); // also while building: the next commit needs them
+    if (_isBuilding)
+        return;
     process_pool(); // reclaim chunks the last build released, ready for reuse
     float delta = get_process_delta_time();
 
@@ -992,6 +1034,7 @@ void JarVoxelVolume::process()
             // chunks a few more to mesh: wait for both (bounded), so it is on
             // screen this frame instead of two frames later. Larger ones go
             // on as usual when the time is up.
+            const VoxelStats::Scope wait(VoxelStats::MainEditWait);
             const auto start = std::chrono::steady_clock::now();
             process_modify_queue();
             std::unique_lock<std::mutex> lock(_buildMutex);
@@ -1063,6 +1106,7 @@ void JarVoxelVolume::build()
 
 void JarVoxelVolume::process_chunk_queue(float delta)
 {
+    VoxelStats::set_gauge(VoxelStats::ColliderQueue, int64_t(_pendingColliders.size()));
     if (_pendingColliders.empty())
         return;
 

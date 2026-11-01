@@ -4,6 +4,7 @@
 #include "celestial_body.h"
 #include "floating_origin.h"
 #include "voxel_viewer.h"
+#include "voxel_stats.h"
 #include <algorithm>
 #include <climits>
 #include <cmath>
@@ -860,6 +861,7 @@ void JarVoxelUniverseUpdater::_notification(int what)
     }
     else if (what == NOTIFICATION_INTERNAL_PHYSICS_PROCESS)
     {
+        const VoxelStats::Scope stage(VoxelStats::MainUniverse);
         if (JarVoxelUniverse *universe = JarVoxelUniverse::get_singleton())
             universe->step(this);
     }

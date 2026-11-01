@@ -171,7 +171,7 @@ bool VoxelOctreeNode::is_enqueued() const
 // another chance to go now.
 void VoxelOctreeNode::cancel_enqueue()
 {
-    _isEnqueued = false;
+    set_enqueued(false);
     finished_meshing_notify_related();
 }
 
@@ -192,6 +192,8 @@ void VoxelOctreeNode::delete_chunks_below() const
         return; // nothing below can be a chunk
     for (auto &child : *_children)
     {
+        if (child._chunksBelow.load(std::memory_order_relaxed) == 0)
+            continue;
         child.delete_chunk();
         child.delete_chunks_below();
     }
@@ -210,7 +212,8 @@ bool VoxelOctreeNode::is_any_descendant_enqueued() const
     if (is_leaf() || _size <= JarVoxelVolume::ChunkSizeLog2)
         return false;
     for (const auto &child : *_children)
-        if (child._isEnqueued || child.is_any_descendant_enqueued())
+        if (child._enqueuedBelow.load(std::memory_order_relaxed) > 0 &&
+            (child._isEnqueued || child.is_any_descendant_enqueued()))
             return true;
     return false;
 }
@@ -440,11 +443,11 @@ void VoxelOctreeNode::modify_sdf_in_bounds(JarVoxelVolume &terrain, const Modify
 
 void VoxelOctreeNode::update_chunk(JarVoxelVolume &terrain, ChunkMeshData *chunkMeshData)
 {
-    _isEnqueued = false;
+    set_enqueued(false);
     finished_meshing_notify_related();
+    // An empty result's boundaries were computed by its mesh task
+    // (set_empty_boundaries): 26 LOD lookups each, thousands per commit.
     _meshedEmpty = chunkMeshData == nullptr && is_chunk(terrain);
-    if (_meshedEmpty)
-        _meshedEmptyBoundaries = compute_boundaries(terrain);
     if (chunkMeshData == nullptr || !is_chunk(terrain))
     {
         delete chunkMeshData; // owned by us until handed to a chunk
@@ -454,7 +457,7 @@ void VoxelOctreeNode::update_chunk(JarVoxelVolume &terrain, ChunkMeshData *chunk
 
     if (_chunk == nullptr)
     {
-        _chunk = terrain.pool_acquire(); // reuse a pooled chunk, or instantiate one
+        set_chunk(terrain.pool_acquire()); // reuse a pooled chunk, or instantiate one
     }
 
     _chunk->update_chunk(terrain, this, chunkMeshData);
@@ -506,8 +509,25 @@ void VoxelOctreeNode::queue_update(JarVoxelVolume &terrain)
 {
     if (_isEnqueued)
         return;
-    _isEnqueued = true;
+    set_enqueued(true);
     terrain.enqueue_chunk_update(*this);
+}
+
+void VoxelOctreeNode::set_enqueued(bool value)
+{
+    if (_isEnqueued == value)
+        return;
+    _isEnqueued = value;
+    for (VoxelOctreeNode *n = this; n != nullptr; n = n->_parent)
+        n->_enqueuedBelow.fetch_add(value ? 1 : -1, std::memory_order_relaxed);
+}
+
+void VoxelOctreeNode::set_chunk(JarVoxelChunk *chunk)
+{
+    if ((_chunk != nullptr) != (chunk != nullptr))
+        for (VoxelOctreeNode *n = this; n != nullptr; n = n->_parent)
+            n->_chunksBelow.fetch_add(chunk != nullptr ? 1 : -1, std::memory_order_relaxed);
+    _chunk = chunk;
 }
 
 void VoxelOctreeNode::delete_chunk()
@@ -526,7 +546,7 @@ void VoxelOctreeNode::delete_chunk()
         else
             _chunk->queue_free();
     }
-    _chunk = nullptr;
+    set_chunk(nullptr);
 }
 
 void VoxelOctreeNode::get_voxel_leaves_in_bounds(const JarVoxelVolume &terrain, const Bounds &bounds,

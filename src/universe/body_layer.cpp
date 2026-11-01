@@ -1,4 +1,5 @@
 #include "body_layer.h"
+#include "voxel_stats.h"
 #include <godot_cpp/classes/camera3d.hpp>
 #include <godot_cpp/classes/engine.hpp>
 #include <godot_cpp/classes/environment.hpp>
@@ -94,6 +95,7 @@ void JarBodyLayer::_notification(int what)
     }
     else if (what == NOTIFICATION_INTERNAL_PROCESS)
     {
+        const VoxelStats::Scope stage(VoxelStats::MainLayers);
         if (const JarCelestialBody *body = get_body())
             update(*body);
     }

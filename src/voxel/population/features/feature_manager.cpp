@@ -1,4 +1,5 @@
 #include "feature_manager.h"
+#include "voxel_stats.h"
 #include "job_system.h"
 #include "voxel_lod.h"
 #include "voxel_volume.h"
@@ -225,7 +226,11 @@ void FeatureManager::start_scan(const std::vector<glm::vec3> &viewers)
     shared->activeJobs++;
     const float range = _range, cellSize = _cellSize;
     JobSystem::get_pool().enqueue_background([shared, viewers, range, cellSize, sdf]() {
-        std::vector<glm::ivec3> keys = scan_cells(viewers, range, cellSize, sdf);
+        std::vector<glm::ivec3> keys;
+        {
+            const VoxelStats::Scope stage(VoxelStats::WorkerFeatures);
+            keys = scan_cells(viewers, range, cellSize, sdf);
+        }
         {
             std::lock_guard<std::mutex> lock(shared->mutex);
             shared->scanned = std::move(keys);
@@ -249,8 +254,11 @@ void FeatureManager::start_generation(const glm::ivec3 &key)
     const UpField up = _volume.get_up_field();
     const std::shared_ptr<const GroundPalette> ground = _volume.get_ground_palette();
     JobSystem::get_pool().enqueue_background([shared, key, cellSize, features, featureBiomes, biomes, sdf, up, ground]() {
-        std::vector<Instance> instances =
-            generate_cell(key, cellSize, features, featureBiomes, biomes, sdf, up, ground);
+        std::vector<Instance> instances;
+        {
+            const VoxelStats::Scope stage(VoxelStats::WorkerFeatures);
+            instances = generate_cell(key, cellSize, features, featureBiomes, biomes, sdf, up, ground);
+        }
         {
             std::lock_guard<std::mutex> lock(shared->mutex);
             shared->generated.emplace_back(key, std::move(instances));

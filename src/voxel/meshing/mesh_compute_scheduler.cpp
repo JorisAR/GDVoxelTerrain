@@ -4,6 +4,7 @@
 #include "stitched_surface_nets/stitched_surface_nets.h"
 #include "voxel_octree_node.h"
 #include <chrono>
+#include "voxel_stats.h"
 
 MeshComputeScheduler::MeshComputeScheduler() : _totalTris(0), _prevTris(0)
 {
@@ -33,8 +34,10 @@ void MeshComputeScheduler::process(JarVoxelVolume &terrain, int waitMicroseconds
     {
         process_queue(terrain);
     }
+    VoxelStats::set_gauge(VoxelStats::MeshQueue, _activeTasks.load());
     if (waitMicroseconds > 0)
     {
+        const VoxelStats::Scope wait(VoxelStats::MainEditWait);
         const auto until = std::chrono::steady_clock::now() + std::chrono::microseconds(waitMicroseconds);
         while (_activeTasks > 0 && std::chrono::steady_clock::now() < until)
             std::this_thread::yield();
@@ -44,11 +47,14 @@ void MeshComputeScheduler::process(JarVoxelVolume &terrain, int waitMicroseconds
     // 200+ ms.
     const auto deadline = std::chrono::steady_clock::now() + std::chrono::microseconds(ApplyBudgetMicroseconds);
     std::pair<VoxelOctreeNode *, ChunkMeshData *> tuple;
-    while (std::chrono::steady_clock::now() < deadline && ChunksToProcess.try_pop(tuple))
     {
-        if (tuple.second != nullptr)
-            tuple.second->upload();
-        _uploaded.push_back(tuple);
+        const VoxelStats::Scope upload(VoxelStats::MainUpload);
+        while (std::chrono::steady_clock::now() < deadline && ChunksToProcess.try_pop(tuple))
+        {
+            if (tuple.second != nullptr)
+                tuple.second->upload();
+            _uploaded.push_back(tuple);
+        }
     }
     // Show them all at once when the last one is in: a chunk that changes LOD
     // changes its neighbors' seams, and shown one by one, chunks next to a
@@ -56,6 +62,8 @@ void MeshComputeScheduler::process(JarVoxelVolume &terrain, int waitMicroseconds
     // Each swap is cheap (the mesh is uploaded already).
     if (!_uploaded.empty() && _activeTasks == 0 && ChunksToAdd.empty() && ChunksToProcess.empty())
     {
+        const VoxelStats::Scope commit(VoxelStats::MainCommit);
+        VoxelStats::add_count(VoxelStats::ChunksCommitted, int64_t(_uploaded.size()));
         for (auto &[node, chunkMeshData] : _uploaded)
             node->update_chunk(terrain, chunkMeshData);
         _uploaded.clear();
@@ -85,11 +93,21 @@ void MeshComputeScheduler::run_task(const JarVoxelVolume &terrain, VoxelOctreeNo
 {
     _activeTasks++;
     JobSystem::get_pool().enqueue([this, &terrain, &chunk]() {
-        auto meshCompute = StitchedSurfaceNets(terrain, chunk);
-        ChunkMeshData *chunkMeshData = meshCompute.generate_mesh_data(terrain);
-        if (chunkMeshData != nullptr && chunkMeshData->lod <= ChunkMeshData::MaxCollisionLod &&
-            terrain.colliders_enabled())
-            chunkMeshData->build_collision_mesh();
+        ChunkMeshData *chunkMeshData;
+        {
+            const VoxelStats::Scope stage(VoxelStats::WorkerMesh);
+            auto meshCompute = StitchedSurfaceNets(terrain, chunk);
+            chunkMeshData = meshCompute.generate_mesh_data(terrain);
+            if (chunkMeshData != nullptr && chunkMeshData->lod <= ChunkMeshData::MaxCollisionLod &&
+                terrain.colliders_enabled())
+            {
+                const VoxelStats::Scope collider(VoxelStats::WorkerCollider);
+                chunkMeshData->build_collision_mesh();
+            }
+        }
+        if (chunkMeshData == nullptr)
+            chunk.set_empty_boundaries(chunk.compute_boundaries(terrain));
+        VoxelStats::add_count(VoxelStats::ChunksMeshed);
         ChunksToProcess.push(std::make_pair(&(chunk), chunkMeshData));
         _activeTasks--; // after the push, so is_meshing() never sees a gap
     });

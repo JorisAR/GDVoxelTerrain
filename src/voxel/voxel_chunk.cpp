@@ -3,6 +3,7 @@
 #include "population_rendering.h"
 #include "voxel_volume.h"
 #include "voxel_octree_node.h"
+#include "voxel_stats.h"
 #include <godot_cpp/classes/multi_mesh.hpp>
 #include <godot_cpp/classes/sphere_mesh.hpp>
 #include <godot_cpp/classes/standard_material3d.hpp>
@@ -344,6 +345,7 @@ JarVoxelVolume *JarVoxelChunk::get_volume() const
 
 void JarVoxelChunk::update_collision_mesh()
 {
+    const VoxelStats::Scope stage(VoxelStats::MainColliders);
     // if(is_queued_for_deletion()) return;
     if (!_chunk_mesh_data)
         return;
@@ -351,6 +353,7 @@ void JarVoxelChunk::update_collision_mesh()
         _chunk_mesh_data->build_collision_mesh(); // LOD above MaxCollisionLod: not prebuilt
     set_collider_active(true);
     concave_polygon_shape->set_faces(_chunk_mesh_data->collision_mesh);
+    VoxelStats::add_count(VoxelStats::CollidersBuilt);
     _chunk_mesh_data.reset(); // physics has its own copy now
 }
 

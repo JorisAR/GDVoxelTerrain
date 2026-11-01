@@ -51,6 +51,24 @@ class VoxelOctreeNode : public OctreeNode<VoxelOctreeNode>
     bool _meshedEmpty = false;
     std::atomic<uint8_t> _isMaterialized{0};
     uint64_t _meshedEmptyBoundaries = 0;
+    // Chunks shown (_chunk) and queued (_isEnqueued) in this subtree, this
+    // node included, so walks for them skip subtrees without any: committing
+    // a coarse chunk walked its whole subtree (up to ~300k nodes) to find the
+    // finer chunks it replaces, 25-60 ms per commit. Updated along the
+    // ancestors whenever either changes (builds queue from parallel threads).
+    // Only ever too high (a node freed with a chunk), which costs a longer
+    // walk, never a missed chunk: the walks still check the nodes themselves.
+    std::atomic<int32_t> _chunksBelow{0};
+    std::atomic<int32_t> _enqueuedBelow{0};
+    void set_enqueued(bool value);
+    void set_chunk(JarVoxelChunk *chunk);
+
+  public:
+    // Mesh task, when the chunk came out empty: the LOD boundaries it was
+    // meshed for (see _meshedEmpty), read when the result is applied.
+    void set_empty_boundaries(uint64_t boundaries) { _meshedEmptyBoundaries = boundaries; }
+
+  private:
 
     bool is_dirty() const;
     void set_dirty(bool value);

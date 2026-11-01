@@ -30,9 +30,15 @@ class JarVoxelLoD
     int _maxLod = 6;
     int _minLod = 0;
     std::vector<glm::vec3> _viewerPositions; // local space, as of the last (re)build
+    std::vector<glm::ivec4> _viewerCells;    // shell_cell() of each, as of the last (re)build
 
     bool is_in_lod_shell(int lod, const glm::vec3 &pos, const glm::vec3 &viewer) const;
     int lod_for_viewer(const glm::vec3 &position, const glm::vec3 &viewer) const;
+    // The viewer's cell on the grid of the finest level that reaches the
+    // volume (xyz), and that level (w). Every level's shell is snapped to its
+    // grid, a multiple of the finest one's, so desired LODs only change when
+    // this does.
+    glm::ivec4 shell_cell(const glm::vec3 &viewer, float halfExtent) const;
 
   public:
     // Chunks are never finer than this level (editor preview).

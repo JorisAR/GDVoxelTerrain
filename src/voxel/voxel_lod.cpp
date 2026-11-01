@@ -66,25 +66,38 @@ bool JarVoxelLoD::update_viewers(const JarVoxelVolume &volume, const bool force)
         return false;
 
     std::vector<glm::vec3> positions = gather_viewers(volume);
-    bool changed = force || positions.size() != _viewerPositions.size();
-    // A viewer outside the volume's cube only reaches it with coarser levels,
-    // whose shells move in steps of their grid: it may move up to half a cell
-    // of the finest one it reaches before anything changes much. Without this
-    // a moon seen from its planet (or the planet from the moon) rebuilt every
-    // few frames from its orbital motion alone, even 60 km away.
     const float half = 0.5f * volume.get_extent();
-    for (size_t i = 0; !changed && i < positions.size(); ++i)
-    {
-        float threshold = _automaticUpdateDistance;
-        const glm::vec3 nearest = glm::clamp(positions[i], glm::vec3(-half), glm::vec3(half));
-        if (nearest != positions[i])
-            threshold = std::max(threshold, 0.5f * float(1 << (lod_for_viewer(nearest, positions[i]) + 2)) * _chunkMeters);
-        changed = glm::distance(positions[i], _viewerPositions[i]) > threshold;
-    }
+    std::vector<glm::ivec4> cells;
+    cells.reserve(positions.size());
+    for (const glm::vec3 &p : positions)
+        cells.push_back(shell_cell(p, half));
+    // Rebuild only when a shell moves: a build that changes no LOD still
+    // walked the octree (~70 ms) and held up edits meanwhile; half of them
+    // did, moving at walking speed. And not before the viewer moved the
+    // update distance, so going back and forth over a grid line does not
+    // rebuild each time.
+    bool changed = force || positions.size() != _viewerPositions.size();
+    if (!changed && cells != _viewerCells)
+        for (size_t i = 0; !changed && i < positions.size(); ++i)
+            changed = glm::distance(positions[i], _viewerPositions[i]) > _automaticUpdateDistance;
 
     if (changed)
+    {
         _viewerPositions = std::move(positions);
+        _viewerCells = std::move(cells);
+    }
     return changed;
+}
+
+glm::ivec4 JarVoxelLoD::shell_cell(const glm::vec3 &viewer, float halfExtent) const
+{
+    // A viewer outside the volume's cube only reaches it with coarser levels
+    // (a moon seen from its planet): their grids, not the finest, decide when
+    // its shells move. One level finer than the estimate, to be safe.
+    const glm::vec3 nearest = glm::clamp(viewer, glm::vec3(-halfExtent), glm::vec3(halfExtent));
+    const int lod = nearest == viewer ? 0 : std::clamp(lod_for_viewer(nearest, viewer) - 1, 0, _maxLod);
+    const float grid = float(1 << (lod + 2)) * _chunkMeters;
+    return glm::ivec4(glm::ivec3(glm::floor(viewer / grid)), lod);
 }
 
 float JarVoxelLoD::distance_to_nearest_viewer(const glm::vec3 &position) const
