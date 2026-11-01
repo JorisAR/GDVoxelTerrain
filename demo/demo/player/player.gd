@@ -49,6 +49,14 @@ func _ready() -> void:
 	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 	_add_population_buttons()
 	JarVoxelUniverse.frame_changed.connect(func(_anchor, _rotating): _frame_switched = true)
+	JarVoxelUniverse.origin_shifted.connect(_on_origin_shifted)
+
+## Floating origin: the scene (this body included, its velocity turned along)
+## moved by `shift`; so did the frame it follows, which is no motion of its own.
+func _on_origin_shifted(shift: Transform3D) -> void:
+	_frame_transform = shift * _frame_transform
+	_fly_offset = shift.basis * _fly_offset
+	_last_velocity = shift.basis * _last_velocity
 
 var _features_button: CheckButton
 var _details_button: CheckButton

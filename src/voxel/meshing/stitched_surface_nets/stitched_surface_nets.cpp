@@ -24,8 +24,7 @@ MesherSettings MesherSettings::from(const JarVoxelVolume &terrain)
 }
 
 StitchedSurfaceNets::StitchedSurfaceNets(const JarVoxelVolume &terrain, const VoxelOctreeNode &chunk)
-    // Vertices in volume space, not relative to the chunk: see JarVoxelChunk::update_chunk.
-    : StitchedSurfaceNets(MesherSettings::from(terrain), StitchedMeshChunk(terrain, chunk), glm::vec3(0.0f))
+    : StitchedSurfaceNets(MesherSettings::from(terrain), StitchedMeshChunk(terrain, chunk), chunk._center)
 {
     _chunk = &chunk;
 }

@@ -8,6 +8,8 @@
 #include "plane_sdf.h"
 #include "sphere_sdf.h"
 #include "voxel_chunk.h"
+#include "floating_origin.h"
+#include "voxel_universe.h"
 #include "job_system.h"
 #include <chrono>
 #include <limits>
@@ -934,6 +936,10 @@ void JarVoxelVolume::process()
     // the same nodes the worker is mutating. Letting any of them run concurrently
     // was the heap-corruption / nondeterministic-SIGSEGV race. So bail the whole
     // frame until the build finishes.
+    // Floating origin without celestial bodies (with them, the universe does it).
+    if (!is_previewing())
+        if (const JarVoxelUniverse *universe = JarVoxelUniverse::get_singleton(); !universe || !universe->has_bodies())
+            FloatingOrigin::update_without_universe(this);
     if (_materialsDirty && _voxelRoot)
         rebuild_materials();
     update_shader_frame();

@@ -171,13 +171,16 @@ void JarVoxelChunk::update_chunk(JarVoxelVolume &terrain, VoxelOctreeNode *node,
     edge_chunk = chunk_mesh_data->edge_chunk;
     auto old_bounds = bounds;
     bounds = chunk_mesh_data->bounds;
-    // Every chunk sits at the volume's origin with its vertices in volume
-    // space: neighbors then place the vertices they share with the same model
-    // matrix, bit for bit. With a matrix per chunk (vertices relative to its
-    // center) each rounded the shared ones its own way on the GPU, a float
-    // step apart (2 mm at 16 km): pinholes along the seams.
+    // Vertices are relative to the chunk's center (on a half-meter grid), so
+    // they keep their precision near the camera. Neighbors still place the
+    // vertices they share bit for bit: with the floating origin the volume's
+    // global transform is a plain translation on a fine grid (see
+    // JarVoxelUniverse::shift_origin_if_far), so Godot adds the chunk centers
+    // to it exactly. Turned or far from the origin, each chunk rounded its
+    // place on its own: pinholes along the seams (a float step is 2 mm at
+    // 16 km), which only show near the camera, where this holds.
     const glm::vec3 position = bounds.get_center();
-    set_position(Vector3());
+    set_position(Vector3(position.x, position.y, position.z));
 
     if (chunk_mesh_data->uploaded.is_null())
         chunk_mesh_data->upload();
@@ -196,7 +199,7 @@ void JarVoxelChunk::update_chunk(JarVoxelVolume &terrain, VoxelOctreeNode *node,
         detail_inputs.normals = chunk_mesh_data->mesh_array[Mesh::ARRAY_NORMAL];
         detail_inputs.indices = chunk_mesh_data->mesh_array[Mesh::ARRAY_INDEX];
         detail_inputs.painted = chunk_mesh_data->painted;
-        detail_inputs.center = glm::vec3(0.0f); // vertices are in volume space
+        detail_inputs.center = position;
         terrain.track_details(this);
     }
     else

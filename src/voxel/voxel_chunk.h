@@ -80,8 +80,7 @@ class JarVoxelChunk : public Node3D
     ~JarVoxelChunk();
 
     int get_lod() const;
-    // Center of the chunk's bounds, in volume space (chunks themselves all sit
-    // at the volume's origin: see update_chunk).
+    // Center of the chunk's bounds, in volume space (its position).
     Vector3 get_center() const
     {
         const glm::vec3 c = bounds.get_center();

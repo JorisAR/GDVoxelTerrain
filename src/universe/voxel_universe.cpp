@@ -2,6 +2,7 @@
 #include "body_layer.h"
 #include "body_orbit.h"
 #include "celestial_body.h"
+#include "floating_origin.h"
 #include "voxel_viewer.h"
 #include <algorithm>
 #include <climits>
@@ -71,6 +72,7 @@ void JarVoxelUniverse::register_settings()
     add_setting(UpSharpness, 4.0, Variant::FLOAT, PROPERTY_HINT_RANGE, "0,16,0.1");
     add_setting(SpaceGravity, true, Variant::BOOL);
     add_setting(FrameSwitching, true, Variant::BOOL);
+    FloatingOrigin::register_settings();
 }
 
 JarVoxelUniverse::JarVoxelUniverse()
@@ -107,6 +109,9 @@ void JarVoxelUniverse::_bind_methods()
     ADD_SIGNAL(MethodInfo("anchor_changed",
                           PropertyInfo(Variant::OBJECT, "previous", PROPERTY_HINT_NODE_TYPE, "JarCelestialBody"),
                           PropertyInfo(Variant::OBJECT, "current", PROPERTY_HINT_NODE_TYPE, "JarCelestialBody")));
+    // The scene was moved by `shift` (floating origin): apply it to any scene
+    // positions or directions a script keeps.
+    ADD_SIGNAL(MethodInfo("origin_shifted", PropertyInfo(Variant::TRANSFORM3D, "shift")));
     ADD_SIGNAL(MethodInfo("frame_changed",
                           PropertyInfo(Variant::OBJECT, "anchor", PROPERTY_HINT_NODE_TYPE, "JarCelestialBody"),
                           PropertyInfo(Variant::BOOL, "rotating")));
@@ -244,11 +249,74 @@ void JarVoxelUniverse::step(Node *context)
             place(time); // unchanged, except at the very first anchor
         }
     }
+    shift_origin_if_far(context, time);
     if (!_skyFound)
         find_sky(context);
     place_sky(context, _lastView);
     if (bool(setting(SpaceGravity, true)))
         apply_space_gravity(context, anchor);
+}
+
+void JarVoxelUniverse::shift_origin_if_far(Node *context, double time)
+{
+    const double limit = FloatingOrigin::distance();
+    if (limit <= 0.0 || context == nullptr || !context->is_inside_tree())
+        return;
+    if (!_viewStarted && bool(setting(FrameSwitching, true)))
+        return; // the scene is still as placed (see step)
+    Vector3 at;
+    if (!viewer_position(at))
+        return;
+    // A new frame that turns with its anchor keeps the anchor wherever it
+    // was (turned, off the grid): align it once, however near the origin.
+    const bool standing = get_frame_anchor() != nullptr && _frameRotating;
+    const bool align = standing && _alignPending;
+    _alignPending = false;
+    if (at.length() < limit && !align)
+        return;
+    const glm::dvec3 viewer = DTransform::from(at);
+    // Whole meters by default: positions whole meters apart stay exactly so.
+    DTransform shift = DTransform::translation(glm::round(-viewer));
+    glm::dvec3 snapped(0.0);
+    if (standing)
+    {
+        // On the anchor (it stands still in the scene): also turn the scene so
+        // its basis is the identity and its origin on a 1/16 m grid. Godot then
+        // adds its volumes' chunk centers (on a half-meter grid) to that
+        // origin exactly, in 32-bit floats: neighboring chunks share their
+        // seams bit for bit however large the planet. A turned basis rounded
+        // each chunk's place on its own (6 cm at 600 km). The camera turns
+        // along with everything, so nothing shows.
+        glm::dmat3 rest = _frameAnchorPose.basis;
+        for (int c = 0; c < 3; ++c)
+            rest[c] = glm::normalize(rest[c]);
+        const glm::dmat3 turn = glm::transpose(rest);
+        const glm::dvec3 origin = turn * (_frameAnchorPose.origin - viewer);
+        snapped = glm::round(origin * 16.0) / 16.0;
+        shift = DTransform(turn, snapped - turn * _frameAnchorPose.origin);
+    }
+    const glm::dmat3 scale = _frameAnchorPose.basis;
+    _frameAnchorPose = shift * _frameAnchorPose;
+    if (standing)
+    {
+        // Exactly the identity (times any scale) and the grid point, not a
+        // rounding off them.
+        glm::dmat3 exact(1.0);
+        for (int c = 0; c < 3; ++c)
+            exact[c][c] = glm::length(scale[c]);
+        _frameAnchorPose = DTransform(exact, snapped);
+    }
+    _lastView = shift * _lastView;
+    // Everything else moves with the shift; the bodies and orbits are placed
+    // from the new view right after.
+    std::unordered_set<uint64_t> placed;
+    for (const JarCelestialBody *body : _bodies)
+        placed.insert(body->get_instance_id());
+    for (const JarBodyOrbit *orbit : _orbits)
+        placed.insert(orbit->get_instance_id());
+    FloatingOrigin::apply(context->get_tree()->get_root(), shift.to(), placed);
+    _placed.clear();
+    place(time);
 }
 
 double JarVoxelUniverse::tick_time() const
@@ -306,22 +374,29 @@ void JarVoxelUniverse::place(double time)
     // A turning frame's anchor stands still: exactly at its pose (no rounding).
     JarCelestialBody *still = _frameRotating ? get_frame_anchor() : nullptr;
     // Parents first (orbits are top level, so only their bodies' order matters).
-    // An orbit carrying a still anchor stays where it is: its bodies are placed
-    // in the scene directly, and a moving parent would move all their chunks.
+    // An orbit carrying a still anchor stays put at the identity: its bodies
+    // are placed in the scene directly, a moving parent would move all their
+    // chunks, and through any other parent transform Godot would round the
+    // anchor's pose (off the floating origin's grid, see shift_origin_if_far).
     for (JarBodyOrbit *orbit : _orbits)
-        if (still == nullptr || !orbit->is_ancestor_of(still))
-            place_node(orbit, (view * orbit_transform(orbit, time)).to());
+        if (place_node(orbit, still == nullptr || !orbit->is_ancestor_of(still)
+                                  ? (view * orbit_transform(orbit, time)).to()
+                                  : Transform3D()))
+            for (JarCelestialBody *body : _bodies)
+                if (orbit->is_ancestor_of(body))
+                    _placed.erase(body->get_instance_id()); // moved along: place it again
     for (JarCelestialBody *body : _bodies)
         place_node(body, body == still ? _frameAnchorPose.to() : (view * universe_transform(body, time)).to());
 }
 
-void JarVoxelUniverse::place_node(Node3D *node, const Transform3D &transform)
+bool JarVoxelUniverse::place_node(Node3D *node, const Transform3D &transform)
 {
     auto [it, added] = _placed.try_emplace(node->get_instance_id(), transform);
     if (!added && it->second == transform)
-        return;
+        return false;
     it->second = transform;
     node->set_global_transform(transform);
+    return true;
 }
 
 void JarVoxelUniverse::switch_frame(Node *context, JarCelestialBody *anchor, bool rotating, double time)
@@ -338,6 +413,7 @@ void JarVoxelUniverse::switch_frame(Node *context, JarCelestialBody *anchor, boo
     _frameAnchor = anchor->get_instance_id();
     _frameRotating = rotating;
     _frameAnchorPose = now;
+    _alignPending = rotating;
     _skyFound = false; // pick up lights added since
     // Free physics bodies keep moving as they did, now seen from a frame that
     // moved (and turned) with the new one (not at the very first anchor: the

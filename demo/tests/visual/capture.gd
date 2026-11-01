@@ -11,7 +11,12 @@ extends Node
 ## mismatch of vertices shared by chunks), TIMING=1 (build phases). Always
 ## prints BUILD_MS (time until the volumes are idle).
 
+var _shifts := 0
+
 func _ready() -> void:
+	JarVoxelUniverse.origin_shifted.connect(func(_shift): _shifts += 1)
+	if OS.get_environment("ORIGIN") != "": # floating origin distance (0: off)
+		ProjectSettings.set_setting("jar_voxel_terrain/floating_origin/distance", float(OS.get_environment("ORIGIN")))
 	var scene: Node = load(OS.get_environment("SCENE")).instantiate()
 	for v: JarVoxelVolume in scene.find_children("*", "JarVoxelVolume", true, false):
 		if OS.get_environment("VOXEL") != "":
@@ -90,6 +95,8 @@ func _ready() -> void:
 		var busy := false
 		for v in volumes:
 			busy = busy or v.is_building() or v.is_meshing() or v.is_generating_details()
+			if v.is_generating_details():
+				phase["details"] = phase.get("details", 0) + 1
 			if v.is_building():
 				phase["building"] = phase.get("building", 0) + 1
 			elif v.is_meshing():
@@ -103,7 +110,7 @@ func _ready() -> void:
 		idle = 0 if busy else idle + 1
 	if OS.get_environment("TIMING") == "1":
 		print("PHASES frames %d %s, chunks settled at %d ms" % [frames, phase, last_change - start])
-	print("BUILD_MS ", Time.get_ticks_msec() - start)
+	print("BUILD_MS ", Time.get_ticks_msec() - start, " origin shifts ", _shifts)
 	if OS.get_environment("BOX") != "":
 		# Stamp a rotated shape (SHAPE = box | cone | torus | sphere, RADIUS for
 		# the sphere) and let it remesh.

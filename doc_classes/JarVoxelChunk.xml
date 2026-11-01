@@ -13,7 +13,7 @@
 		<method name="get_center" qualifiers="const">
 			<return type="Vector3" />
 			<description>
-				Center of the chunk's bounds, in the volume's space. Chunks themselves all sit at the volume's origin, with their mesh vertices in volume space: neighboring chunks then place the vertices they share identically on the GPU (with a transform per chunk, float rounding opened pinholes along the seams far from the origin).
+				Center of the chunk's bounds, in the volume's space (the chunk's position; its mesh vertices are relative to it).
 			</description>
 		</method>
 		<method name="get_lod" qualifiers="const">

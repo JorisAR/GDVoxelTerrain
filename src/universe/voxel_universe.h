@@ -70,8 +70,12 @@ class JarVoxelUniverse : public Object
     void place_sky(Node *context, const DTransform &view, bool restore = false);
     void apply_space_gravity(Node *context, JarCelestialBody *anchor);
     void switch_frame(Node *context, JarCelestialBody *anchor, bool rotating, double time);
+    // Floating origin (see floating_origin.h): moves the view (and everything
+    // else in the scene) back near the origin once the viewer is far from it.
+    void shift_origin_if_far(Node *context, double time);
+    bool _alignPending = false; // a new turning frame: its anchor still to be aligned
     void place(double time);
-    void place_node(Node3D *node, const Transform3D &transform);
+    bool place_node(Node3D *node, const Transform3D &transform); // whether it moved it
     // Velocity and spin (per real second) of something whose scene pose went
     // from `before` to `now` over the last tick.
     Vector3 point_velocity(const DTransform &now, const DTransform &before, const Vector3 &position) const;

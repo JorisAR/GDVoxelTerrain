@@ -207,12 +207,14 @@ func _test_round_trip() -> void:
 	var ground := _ground_height(volume, hole + Vector3(9, 0, 0))
 	var box := JarBoxSdf.new()
 	box.extent = Vector3(2, 6, 2)
-	volume.edit(box, JarVoxelVolume.SDF_OPERATION_SUBTRACTION, Transform3D(Basis(), Vector3(hole.x, _ground_height(volume, hole), hole.z)))
+	volume.edit(box, JarVoxelVolume.SDF_OPERATION_SUBTRACTION, Transform3D(Basis(), volume.to_global(Vector3(hole.x, _ground_height(volume, hole), hole.z))))
 	await _settle(volume)
 	var before := _lod0_count(volume)
 	var dug := _ground_height(volume, hole)
+	# Far enough for a floating origin shift on the way: positions on the
+	# terrain are in the volume's space.
 	for x in [600.0, 1500.0, 3000.0, 1500.0, 600.0, 3.0]:
-		viewer.position.x = x
+		viewer.global_position = volume.to_global(Vector3(x, 12, 5))
 		await _settle(volume)
 	_check("round trip: full detail regenerated", _lod0_count(volume) >= before * 0.9, "%d LOD 0 chunks, %d before" % [_lod0_count(volume), before])
 	var dug_after := _ground_height(volume, hole)
@@ -229,8 +231,9 @@ func _lod0_count(volume: JarVoxelVolume) -> int:
 	return n
 
 func _ground_height(volume: JarVoxelVolume, at: Vector3) -> float:
+	# In the volume's space: the floating origin may have moved it.
 	var space := volume.get_world_3d().direct_space_state
-	var from := Vector3(at.x, 200, at.z)
+	var from := volume.to_global(Vector3(at.x, 200, at.z))
 	var hit := space.intersect_ray(PhysicsRayQueryParameters3D.create(from, from + Vector3.DOWN * 400))
-	return hit.position.y if hit else NAN
+	return volume.to_local(hit.position).y if hit else NAN
 

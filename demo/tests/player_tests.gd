@@ -174,6 +174,9 @@ func _test_flight_to_moon() -> void:
 	var switched_at := [-10] # the frame of the last frame switch (measurements across it mix frames)
 	var on_frame := func(_anchor, _rotating): switched_at[0] = Engine.get_physics_frames()
 	JarVoxelUniverse.frame_changed.connect(on_frame)
+	# A floating origin shift moves the scene: scene positions jump across it too.
+	var on_shift := func(_shift): switched_at[0] = Engine.get_physics_frames()
+	JarVoxelUniverse.origin_shifted.connect(on_shift)
 	Input.action_press("move_forward")
 	var last_basis := player.global_basis
 	# Motion relative to the moon as a rigid frame (its orbit and spin): the
@@ -200,6 +203,7 @@ func _test_flight_to_moon() -> void:
 	Input.action_release("move_forward")
 	JarVoxelUniverse.anchor_changed.disconnect(on_switch)
 	JarVoxelUniverse.frame_changed.disconnect(on_frame)
+	JarVoxelUniverse.origin_shifted.disconnect(on_shift)
 	_check("flight reaches the moon", frames < 5000, "%d frames" % frames)
 	_check("flight switches the anchor to the moon", moon in switches and JarVoxelUniverse.get_frame_anchor() == moon
 		and not JarVoxelUniverse.is_frame_rotating())
