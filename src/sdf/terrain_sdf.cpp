@@ -129,7 +129,7 @@ JarTerrainSdf::Layers JarTerrainSdf::analytic_layers(const glm::dvec3 &surface, 
     Layers layers;
     if (_noise.jar.is_valid())
     {
-        const JarNoise::Sample n = _noise.jar->sample(p, broadWavelength);
+        const JarNoise::Sample n = _noise.jar->sample(p, broadWavelength, t_detailSize);
         const float scale = n.value > 0.0f ? _height : _depth;
         layers.height = n.value * scale;
         layers.gradient = n.gradient * scale;
@@ -138,7 +138,7 @@ JarTerrainSdf::Layers JarTerrainSdf::analytic_layers(const glm::dvec3 &surface, 
     if (_mountainNoise.jar.is_valid() && _mountainHeight > 0.0f)
     {
         const bool masked = _mountainMask.jar.is_valid();
-        const JarNoise::Sample m = (masked ? _mountainMask.jar : _mountainNoise.jar)->sample(p, broadWavelength);
+        const JarNoise::Sample m = (masked ? _mountainMask.jar : _mountainNoise.jar)->sample(p, broadWavelength, t_detailSize);
         const float raw = (m.value - _mountainThreshold) / _mountainBlend;
         const float t = std::clamp(raw, 0.0f, 1.0f);
         const float rise = t * t * (3.0f - 2.0f * t);
@@ -147,7 +147,7 @@ JarTerrainSdf::Layers JarTerrainSdf::analytic_layers(const glm::dvec3 &surface, 
         glm::vec3 shapeGradient(0.0f), shapeBroad(0.0f);
         if (masked)
         {
-            const JarNoise::Sample s = _mountainNoise.jar->sample(p, broadWavelength);
+            const JarNoise::Sample s = _mountainNoise.jar->sample(p, broadWavelength, t_detailSize);
             shape = 0.5f * (s.value + 1.0f);
             shapeGradient = 0.5f * s.gradient;
             shapeBroad = 0.5f * s.broad;
@@ -334,6 +334,8 @@ glm::mat3 JarTerrainSdf::lattice_jacobian(const glm::ivec3 &point, float spacing
     entry.point = point;
     if (shared_lookup(hash, generation, point, entry.jacobian))
         return entry.jacobian;
+    // At full detail: the lattice is shared by samples of every spacing.
+    const DetailScope fullDetail(0.0f);
 
     glm::dvec3 center = glm::dvec3(point) * double(spacing);
     glm::vec3 up(0.0f, 1.0f, 0.0f);

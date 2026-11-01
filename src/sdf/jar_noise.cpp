@@ -33,6 +33,9 @@ inline uint32_t octave_seed(uint32_t seed, int octave)
 // |x| rounded off near zero: ridged crests stay sharp but never have an
 // infinitely thin kink (its gradient stays continuous).
 constexpr float RidgeSoftness = 0.03f;
+// The mean of one ridged octave ((1 - |n|)^2, measured): what a left out one
+// adds (FBM octaves average 0).
+constexpr float RidgedOctaveMean = 0.523f;
 constexpr float BroadRidgeSoftness = 5.0f;
 } // namespace
 
@@ -86,7 +89,7 @@ float JarNoise::simplex(const glm::dvec3 &p, uint32_t seed, glm::vec3 &gradient)
     return n * SimplexScale;
 }
 
-JarNoise::Sample JarNoise::sample(const glm::dvec3 &position, float broadWavelength) const
+JarNoise::Sample JarNoise::sample(const glm::dvec3 &position, float broadWavelength, float minWavelength) const
 {
     glm::dvec3 p = position;
     // Domain warp: p' = p + w * W(p * f). Gradients come back through the
@@ -110,6 +113,15 @@ JarNoise::Sample JarNoise::sample(const glm::dvec3 &position, float broadWavelen
     glm::vec3 gradient(0.0f), broad(0.0f);
     for (int o = 0; o < octaves; ++o)
     {
+        if (minWavelength > 0.0f && frequency * minWavelength > 1.0f)
+        {
+            // Too fine for this sample's spacing: its mean, no slope.
+            sum += amplitude * (_fractal == FRACTAL_RIDGED ? RidgedOctaveMean : 0.0f);
+            norm += amplitude;
+            frequency *= _lacunarity;
+            amplitude *= _gain;
+            continue;
+        }
         glm::vec3 g;
         float n = simplex(p * double(frequency), octave_seed(uint32_t(_seed), o), g);
         g *= frequency;
