@@ -71,7 +71,7 @@ glm::vec3 cell_offset(const glm::ivec3 &cell)
 }
 } // namespace
 
-void JarTerrainSdf::frame(const glm::vec3 &pos, glm::vec3 &surface, glm::vec3 &up, float &above) const
+void JarTerrainSdf::frame(const glm::vec3 &pos, glm::dvec3 &surface, glm::vec3 &up, float &above) const
 {
     if (_shape == SHAPE_SPHERE)
     {
@@ -81,26 +81,27 @@ void JarTerrainSdf::frame(const glm::vec3 &pos, glm::vec3 &surface, glm::vec3 &u
         const double len = glm::length(p);
         const glm::dvec3 u = len > 1e-6 ? p / len : glm::dvec3(0.0, 1.0, 0.0);
         up = glm::vec3(u);
-        surface = glm::vec3(u * double(_radius));
+        surface = u * double(_radius);
         above = float(len - double(_radius));
     }
     else
     {
         up = glm::vec3(0.0f, 1.0f, 0.0f);
-        surface = glm::vec3(pos.x, 0.0f, pos.z);
+        surface = glm::dvec3(pos.x, 0.0, pos.z);
         above = pos.y;
     }
 }
 
-float JarTerrainSdf::noise_value(const Noise &noise, const glm::vec3 &surface) const
+float JarTerrainSdf::noise_value(const Noise &noise, const glm::dvec3 &surface) const
 {
     if (noise.jar.is_valid())
-        return noise.jar->sample(_shape == SHAPE_SPHERE ? surface : glm::vec3(surface.x, 0.0f, surface.z)).value;
-    return _shape == SHAPE_SPHERE ? noise.fast->get_noise_3d(surface.x, surface.y, surface.z)
-                                  : noise.fast->get_noise_2d(surface.x, surface.z);
+        return noise.jar->sample(_shape == SHAPE_SPHERE ? surface : glm::dvec3(surface.x, 0.0, surface.z)).value;
+    // FastNoiseLite takes floats only.
+    return _shape == SHAPE_SPHERE ? noise.fast->get_noise_3d(real_t(surface.x), real_t(surface.y), real_t(surface.z))
+                                  : noise.fast->get_noise_2d(real_t(surface.x), real_t(surface.z));
 }
 
-float JarTerrainSdf::layered_height(const glm::vec3 &surface) const
+float JarTerrainSdf::layered_height(const glm::dvec3 &surface) const
 {
     if (analytic())
         return analytic_layers(surface, 0.0f).height;
@@ -122,9 +123,9 @@ float JarTerrainSdf::layered_height(const glm::vec3 &surface) const
     return h;
 }
 
-JarTerrainSdf::Layers JarTerrainSdf::analytic_layers(const glm::vec3 &surface, float broadWavelength) const
+JarTerrainSdf::Layers JarTerrainSdf::analytic_layers(const glm::dvec3 &surface, float broadWavelength) const
 {
-    const glm::vec3 p = _shape == SHAPE_SPHERE ? surface : glm::vec3(surface.x, 0.0f, surface.z);
+    const glm::dvec3 p = _shape == SHAPE_SPHERE ? surface : glm::dvec3(surface.x, 0.0, surface.z);
     Layers layers;
     if (_noise.jar.is_valid())
     {
@@ -163,7 +164,7 @@ float JarTerrainSdf::max_layered_height() const
     return std::max(std::abs(_height), std::abs(_depth)) + (_mountainNoise.is_valid() ? _mountainHeight : 0.0f);
 }
 
-glm::vec3 JarTerrainSdf::height_gradient(const glm::vec3 &surface, const glm::vec3 &up, float h, float step) const
+glm::vec3 JarTerrainSdf::height_gradient(const glm::dvec3 &surface, const glm::vec3 &up, float h, float step) const
 {
     if (analytic())
     {
@@ -176,9 +177,9 @@ glm::vec3 JarTerrainSdf::height_gradient(const glm::vec3 &surface, const glm::ve
     const glm::vec3 t2 = glm::cross(up, t1);
     const float e = step;
     auto at = [&](const glm::vec3 &offset) {
-        glm::vec3 p = surface + offset;
+        glm::dvec3 p = surface + glm::dvec3(offset);
         if (_shape == SHAPE_SPHERE)
-            p = glm::normalize(p) * _radius;
+            p = glm::normalize(p) * double(_radius);
         return layered_height(p);
     };
     return t1 * ((at(t1 * e) - h) / e) + t2 * ((at(t2 * e) - h) / e);
@@ -189,7 +190,7 @@ glm::vec3 JarTerrainSdf::height_gradient(const glm::vec3 &surface, const glm::ve
 // along a tangent frame (which must switch axes somewhere on a sphere), this
 // is continuous everywhere: the frame switch left a ~2 m step in the eroded
 // terrain along two circles of latitude.
-glm::vec3 JarTerrainSdf::broad_gradient(const glm::vec3 &surface, const glm::vec3 &up, float step) const
+glm::vec3 JarTerrainSdf::broad_gradient(const glm::dvec3 &surface, const glm::vec3 &up, float step) const
 {
     if (analytic())
     {
@@ -204,11 +205,11 @@ glm::vec3 JarTerrainSdf::broad_gradient(const glm::vec3 &surface, const glm::vec
     glm::vec3 sum(0.0f);
     for (const glm::vec3 &c : corners)
     {
-        glm::vec3 p = surface + c * d;
+        glm::dvec3 p = surface + glm::dvec3(c * d);
         if (_shape == SHAPE_SPHERE)
-            p = glm::normalize(p) * _radius;
+            p = glm::normalize(p) * double(_radius);
         else
-            p.y = 0.0f;
+            p.y = 0.0;
         sum += c * layered_height(p);
     }
     const glm::vec3 g = sum / (4.0f * d);
@@ -221,12 +222,12 @@ glm::vec3 JarTerrainSdf::broad_gradient(const glm::vec3 &surface, const glm::vec
 // 1/4 of that apart, cached per thread, and blended trilinearly (continuous:
 // a jump would show in distances and their gradients). Differencing it at
 // every sample took 8 more noise samples each.
-glm::mat3 JarTerrainSdf::broad_jacobian(const glm::vec3 &surface, float step) const
+glm::mat3 JarTerrainSdf::broad_jacobian(const glm::dvec3 &surface, float step) const
 {
     const float spacing = _erosionScale;
-    const glm::vec3 g = surface / spacing;
+    const glm::dvec3 g = surface / double(spacing);
     const glm::ivec3 base = glm::ivec3(glm::floor(g));
-    const glm::vec3 f = g - glm::vec3(base);
+    const glm::vec3 f(g - glm::floor(g)); // in the cell, from doubles
     const bool flat = _shape != SHAPE_SPHERE;
     // Consecutive samples nearly always fall in the same lattice cell: keep
     // its corners per thread (8 cache lookups per sample were a fifth of the
@@ -334,7 +335,7 @@ glm::mat3 JarTerrainSdf::lattice_jacobian(const glm::ivec3 &point, float spacing
     if (shared_lookup(hash, generation, point, entry.jacobian))
         return entry.jacobian;
 
-    glm::vec3 center = glm::vec3(point) * spacing;
+    glm::dvec3 center = glm::dvec3(point) * double(spacing);
     glm::vec3 up(0.0f, 1.0f, 0.0f);
     place_on_surface(center, up);
     entry.jacobian = direct_jacobian(center, up, step);
@@ -344,29 +345,32 @@ glm::mat3 JarTerrainSdf::lattice_jacobian(const glm::ivec3 &point, float spacing
 
 // Moves `s` onto the base surface (plane or sphere) and sets `u` to the up
 // direction there.
-void JarTerrainSdf::place_on_surface(glm::vec3 &s, glm::vec3 &u) const
+void JarTerrainSdf::place_on_surface(glm::dvec3 &s, glm::vec3 &u) const
 {
     if (_shape == SHAPE_SPHERE)
     {
-        u = glm::length(s) > 1e-6f ? glm::normalize(s) : glm::vec3(0.0f, 1.0f, 0.0f);
-        s = u * _radius;
+        const double len = glm::length(s);
+        const glm::dvec3 unit = len > 1e-6 ? s / len : glm::dvec3(0.0, 1.0, 0.0);
+        u = glm::vec3(unit);
+        s = unit * double(_radius);
     }
     else
     {
-        s.y = 0.0f;
+        s.y = 0.0;
         u = glm::vec3(0.0f, 1.0f, 0.0f);
     }
 }
 
 // The low-passed slope's Jacobian at a surface point, by differences.
-glm::mat3 JarTerrainSdf::direct_jacobian(const glm::vec3 &center, const glm::vec3 &up, float step) const
+glm::mat3 JarTerrainSdf::direct_jacobian(const glm::dvec3 &center, const glm::vec3 &up, float step) const
 {
     const glm::vec3 t1 = glm::normalize(std::abs(up.y) < 0.9f ? glm::cross(up, glm::vec3(0, 1, 0))
                                                                : glm::cross(up, glm::vec3(1, 0, 0)));
     const glm::vec3 t2 = glm::cross(up, t1);
     const float e = 0.25f * step;
     auto broad_at = [&](const glm::vec3 &offset) {
-        glm::vec3 s = center + offset, u = up;
+        glm::dvec3 s = center + glm::dvec3(offset);
+        glm::vec3 u = up;
         place_on_surface(s, u);
         return broad_gradient(s, u, step);
     };
@@ -409,7 +413,7 @@ int JarTerrainSdf::erosion_octaves() const
     return octaves;
 }
 
-JarTerrainSdf::Sample JarTerrainSdf::evaluate(const glm::vec3 &surface, const glm::vec3 &up, bool localGradient) const
+JarTerrainSdf::Sample JarTerrainSdf::evaluate(const glm::dvec3 &surface, const glm::vec3 &up, bool localGradient) const
 {
     if (analytic())
     {
@@ -450,7 +454,7 @@ JarTerrainSdf::Sample JarTerrainSdf::evaluate(const glm::vec3 &surface, const gl
 
 // Adds the erosion to `result` (layered height and gradient filled in), with
 // the given low-passed slope of the layers.
-JarTerrainSdf::Sample JarTerrainSdf::erode(const glm::vec3 &surface, const glm::vec3 &up, const glm::vec3 &gradient,
+JarTerrainSdf::Sample JarTerrainSdf::erode(const glm::dvec3 &surface, const glm::vec3 &up, const glm::vec3 &gradient,
                                            const glm::mat3 &gradientJacobian, Sample result) const
 {
     const float h = result.layered;
@@ -522,9 +526,9 @@ JarTerrainSdf::Sample JarTerrainSdf::erode(const glm::vec3 &surface, const glm::
             const glm::vec3 acrossSlope = offsetAxes * across / cellSize;
             // Blend the stripes of nearby cells, each with its own random pivot
             // so rotating the stripes never distorts far from the pivot.
-            const glm::vec3 g = surface / cellSize;
+            const glm::dvec3 g = surface / double(cellSize);
             const glm::ivec3 base = glm::ivec3(glm::floor(g));
-            const glm::vec3 f = g - glm::vec3(base); // position in the cell, [0, 1)
+            const glm::vec3 f(g - glm::floor(g)); // position in the cell, [0, 1), from doubles
             // Per pivot only sums: the gradients are linear in its offset d,
             // so they are put together once after the loop.
             float c = 0.0f, s = 0.0f, weights = 0.0f;
@@ -543,10 +547,10 @@ JarTerrainSdf::Sample JarTerrainSdf::erode(const glm::vec3 &surface, const glm::
                         if (bx * bx + by * by + bz * bz >= 1.0f)
                             continue;
                         const glm::ivec3 cell = base + glm::ivec3(dx, dy, dz);
-                        glm::vec3 pivot = glm::vec3(cell) + cell_offset(cell);
+                        // From within the cell: small numbers, exact.
+                        glm::vec3 d = f - (glm::vec3(dx, dy, dz) + cell_offset(cell));
                         if (!sphere)
-                            pivot.y = g.y;
-                        const glm::vec3 d = g - pivot;
+                            d.y = 0.0f; // pivots follow the sample height
                         // Radius 1 cell: the farthest pivot that can be this close lies in
                         // a neighbouring cell, so the 3x3(x3) loop never misses one
                         // (a larger radius pops pivots in at cell borders).
@@ -703,7 +707,8 @@ float JarTerrainSdf::normalization(const Sample &sample, float gap) const
 
 float JarTerrainSdf::distance(const glm::vec3 &pos) const
 {
-    glm::vec3 surface, up;
+    glm::dvec3 surface;
+    glm::vec3 up;
     float above;
     frame(pos, surface, up, above);
     // Far from the surface the terrain cannot matter: return a lower bound,
@@ -730,7 +735,8 @@ float JarTerrainSdf::distance(const glm::vec3 &pos) const
 
 float JarTerrainSdf::sample_height(const Vector3 &position) const
 {
-    glm::vec3 surface, up;
+    glm::dvec3 surface;
+    glm::vec3 up;
     float above;
     frame(glm::vec3(position.x, position.y, position.z), surface, up, above);
     return evaluate(surface, up).height;
@@ -823,7 +829,8 @@ void JarTerrainSdf::_bind_methods()
 // which makes up much of the eroded slope.)
 glm::vec3 JarTerrainSdf::gradient(const glm::vec3 &pos) const
 {
-    glm::vec3 surface, up;
+    glm::dvec3 surface;
+    glm::vec3 up;
     float above;
     frame(pos, surface, up, above);
     const float reach = max_deviation();
@@ -853,10 +860,10 @@ glm::vec3 JarTerrainSdf::gradient(const glm::vec3 &pos) const
             const glm::vec3 t2 = glm::cross(up, t1);
             constexpr float Step = 0.25f;
             auto norm = [&](const glm::vec3 &offset) {
-                glm::vec3 s = surface + offset;
+                glm::dvec3 s = surface + glm::dvec3(offset);
                 if (sphere)
-                    s = glm::normalize(s) * _radius;
-                const Sample t = evaluate(s, sphere ? s / _radius : up, false);
+                    s = glm::normalize(s) * double(_radius);
+                const Sample t = evaluate(s, sphere ? glm::vec3(s / double(_radius)) : up, false);
                 return normalization(t, above - t.height);
             };
             nSlope = t1 * ((norm(t1 * Step) - n) / Step) + t2 * ((norm(t2 * Step) - n) / Step);
@@ -873,10 +880,10 @@ glm::vec3 JarTerrainSdf::gradient(const glm::vec3 &pos) const
     // distance() = (above - height) / n, with n from the slope: both vary.
     auto norm = [&](const Sample &t) { return normalization(t, above - t.height); };
     auto at = [&](const glm::vec3 &offset) {
-        glm::vec3 s = surface + offset;
+        glm::dvec3 s = surface + glm::dvec3(offset);
         if (sphere)
-            s = glm::normalize(s) * _radius;
-        return evaluate(s, sphere ? s / _radius : up, false);
+            s = glm::normalize(s) * double(_radius);
+        return evaluate(s, sphere ? glm::vec3(s / double(_radius)) : up, false);
     };
     const Sample a = at(t1 * Step), b = at(t2 * Step);
     const float n = norm(c);

@@ -50,13 +50,17 @@ class JarNoise : public Resource
 
   public:
     // One octave of simplex noise at `p` (unit frequency) with its gradient.
-    static float simplex(const glm::vec3 &p, uint32_t seed, glm::vec3 &gradient);
+    // The input is in doubles: its lattice cell is found in doubles and the
+    // rest done in floats from within the cell, so the noise keeps its
+    // precision far from the origin (a float step is 6 cm at 600 km, which
+    // turned planet surfaces into rounding noise).
+    static float simplex(const glm::dvec3 &p, uint32_t seed, glm::vec3 &gradient);
 
     // The fractal noise at `p`. `broadWavelength` > 0 also fills Sample::broad.
-    Sample sample(const glm::vec3 &p, float broadWavelength = 0.0f) const;
+    Sample sample(const glm::dvec3 &p, float broadWavelength = 0.0f) const;
 
-    float get_noise_3d(float x, float y, float z) const { return sample(glm::vec3(x, y, z)).value; }
-    float get_noise_2d(float x, float y) const { return sample(glm::vec3(x, 0.0f, y)).value; }
+    float get_noise_3d(float x, float y, float z) const { return sample(glm::dvec3(x, y, z)).value; }
+    float get_noise_2d(float x, float y) const { return sample(glm::dvec3(x, 0.0, y)).value; }
     Vector3 get_gradient_3d(const Vector3 &p) const;
 
     int get_seed() const { return _seed; }

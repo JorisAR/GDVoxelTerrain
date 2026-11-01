@@ -36,13 +36,14 @@ constexpr float RidgeSoftness = 0.03f;
 constexpr float BroadRidgeSoftness = 5.0f;
 } // namespace
 
-float JarNoise::simplex(const glm::vec3 &p, uint32_t seed, glm::vec3 &gradient)
+float JarNoise::simplex(const glm::dvec3 &p, uint32_t seed, glm::vec3 &gradient)
 {
-    constexpr float F3 = 1.0f / 3.0f, G3 = 1.0f / 6.0f;
-    const float s = (p.x + p.y + p.z) * F3;
-    const int i = int(std::floor(p.x + s)), j = int(std::floor(p.y + s)), k = int(std::floor(p.z + s));
-    const float t = float(i + j + k) * G3;
-    const glm::vec3 d0 = p - (glm::vec3(float(i), float(j), float(k)) - t);
+    constexpr float G3 = 1.0f / 6.0f;
+    // The cell in doubles, the offset into it (small) in floats.
+    const double s = (p.x + p.y + p.z) * (1.0 / 3.0);
+    const double fi = std::floor(p.x + s), fj = std::floor(p.y + s), fk = std::floor(p.z + s);
+    const int i = int(fi), j = int(fj), k = int(fk);
+    const glm::vec3 d0(p - (glm::dvec3(fi, fj, fk) - (fi + fj + fk) * (1.0 / 6.0)));
     // Which simplex of the skewed cube: the order of the coordinates.
     glm::ivec3 o1, o2;
     if (d0.x >= d0.y)
@@ -85,9 +86,9 @@ float JarNoise::simplex(const glm::vec3 &p, uint32_t seed, glm::vec3 &gradient)
     return n * SimplexScale;
 }
 
-JarNoise::Sample JarNoise::sample(const glm::vec3 &position, float broadWavelength) const
+JarNoise::Sample JarNoise::sample(const glm::dvec3 &position, float broadWavelength) const
 {
-    glm::vec3 p = position;
+    glm::dvec3 p = position;
     // Domain warp: p' = p + w * W(p * f). Gradients come back through the
     // warp's Jacobian: dn/dp = (I + J_w)^T dn/dp'.
     glm::mat3 warpJacobianT(1.0f);
@@ -95,10 +96,10 @@ JarNoise::Sample JarNoise::sample(const glm::vec3 &position, float broadWaveleng
     if (warped)
     {
         glm::vec3 gx, gy, gz;
-        const glm::vec3 q = position * _warpFrequency;
+        const glm::dvec3 q = position * double(_warpFrequency);
         const uint32_t s = uint32_t(_seed) ^ 0x5bd1e995U;
         const glm::vec3 w(simplex(q, s, gx), simplex(q, s + 1, gy), simplex(q, s + 2, gz));
-        p = position + _warpStrength * w;
+        p = position + double(_warpStrength) * glm::dvec3(w);
         const float k = _warpStrength * _warpFrequency;
         // Rows of J_w are the gradients of each component: (I + J)^T has them as columns.
         warpJacobianT = glm::mat3(1.0f) + k * glm::mat3(gx, gy, gz);
@@ -110,7 +111,7 @@ JarNoise::Sample JarNoise::sample(const glm::vec3 &position, float broadWaveleng
     for (int o = 0; o < octaves; ++o)
     {
         glm::vec3 g;
-        float n = simplex(p * frequency, octave_seed(uint32_t(_seed), o), g);
+        float n = simplex(p * double(frequency), octave_seed(uint32_t(_seed), o), g);
         g *= frequency;
         // The low-pass: each octave weighted as central differences over half
         // the wavelength would see it (sin x / x), none past their first zero.
@@ -166,7 +167,7 @@ JarNoise::Sample JarNoise::sample(const glm::vec3 &position, float broadWaveleng
 
 Vector3 JarNoise::get_gradient_3d(const Vector3 &p) const
 {
-    const glm::vec3 g = sample(glm::vec3(p.x, p.y, p.z)).gradient;
+    const glm::vec3 g = sample(glm::dvec3(p.x, p.y, p.z)).gradient;
     return Vector3(g.x, g.y, g.z);
 }
 

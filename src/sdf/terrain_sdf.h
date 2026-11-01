@@ -93,8 +93,10 @@ class JarTerrainSdf : public JarSignedDistanceField
     // sqrt(1 + slope^2) for a point `gap` meters off the surface (vertically).
     float normalization(const Sample &sample, float gap) const;
 
-    void frame(const glm::vec3 &pos, glm::vec3 &surface, glm::vec3 &up, float &above) const;
-    float layered_height(const glm::vec3 &surface) const; // base noise + mountains
+    // Surface points are in doubles (a float step is 6 cm at 600 km): the
+    // noises and erosion cells take them apart into a cell and a small offset.
+    void frame(const glm::vec3 &pos, glm::dvec3 &surface, glm::vec3 &up, float &above) const;
+    float layered_height(const glm::dvec3 &surface) const; // base noise + mountains
     // With JarNoise only: the layers and their exact gradients (3D, per meter
     // of surface position), `broad` low-passed as differences over half
     // `broadWavelength` would be, from one evaluation of each noise.
@@ -105,23 +107,23 @@ class JarTerrainSdf : public JarSignedDistanceField
         glm::vec3 broad{0.0f};
     };
     bool analytic() const { return _noise.analytic() && _mountainNoise.analytic() && _mountainMask.analytic(); }
-    Layers analytic_layers(const glm::vec3 &surface, float broadWavelength) const;
-    float noise_value(const Noise &noise, const glm::vec3 &surface) const;
+    Layers analytic_layers(const glm::dvec3 &surface, float broadWavelength) const;
+    float noise_value(const Noise &noise, const glm::dvec3 &surface) const;
     float max_layered_height() const;
-    glm::vec3 height_gradient(const glm::vec3 &surface, const glm::vec3 &up, float h, float step) const;
-    glm::vec3 broad_gradient(const glm::vec3 &surface, const glm::vec3 &up, float step) const;
+    glm::vec3 height_gradient(const glm::dvec3 &surface, const glm::vec3 &up, float h, float step) const;
+    glm::vec3 broad_gradient(const glm::dvec3 &surface, const glm::vec3 &up, float step) const;
     float max_deviation() const;
-    glm::mat3 broad_jacobian(const glm::vec3 &surface, float step) const;
+    glm::mat3 broad_jacobian(const glm::dvec3 &surface, float step) const;
     glm::mat3 lattice_jacobian(const glm::ivec3 &point, float spacing, float step) const;
-    glm::mat3 direct_jacobian(const glm::vec3 &center, const glm::vec3 &up, float step) const;
-    void place_on_surface(glm::vec3 &s, glm::vec3 &u) const;
+    glm::mat3 direct_jacobian(const glm::dvec3 &center, const glm::vec3 &up, float step) const;
+    void place_on_surface(glm::dvec3 &s, glm::vec3 &u) const;
     int erosion_octaves() const; // fewer for coarse samples (see DetailScope)
     std::atomic<uint64_t> _generation{0}; // new on every change: invalidates the per-thread caches
     // Without `localGradient` the gradient only holds the erosion's part (the
     // layers' local slope costs two more noise samples); `broad` then has the
     // layers' slope low-passed over the erosion scale, which comes for free.
-    Sample evaluate(const glm::vec3 &surface, const glm::vec3 &up, bool localGradient = true) const;
-    Sample erode(const glm::vec3 &surface, const glm::vec3 &up, const glm::vec3 &broadGradient,
+    Sample evaluate(const glm::dvec3 &surface, const glm::vec3 &up, bool localGradient = true) const;
+    Sample erode(const glm::dvec3 &surface, const glm::vec3 &up, const glm::vec3 &broadGradient,
                  const glm::mat3 &broadJacobian, Sample result) const;
 
     template <typename T> void set_shape_property(T &field, const T &value)
