@@ -220,20 +220,34 @@ bool VoxelOctreeNode::should_delete_chunk(const JarVoxelVolume &terrain) const
     return false;
 }
 
-uint16_t VoxelOctreeNode::compute_boundaries(const JarVoxelVolume &terrain) const
+// The LODs of the 26 neighbors relative to this chunk's: its mesh depends on
+// their leaves (vertices on its border), so it is meshed again when these
+// change. Faces (+x -x +y -y +z -z): bit i coarser, bit i + 8 finer; edges
+// and corners: bits 16 + 2j coarser, 17 + 2j finer.
+uint64_t VoxelOctreeNode::compute_boundaries(const JarVoxelVolume &terrain) const
 {
-    static const std::vector<glm::vec3> offsets = {glm::vec3(1, 0, 0), glm::vec3(-1, 0, 0),
-        glm::vec3(0, 1, 0), glm::vec3(0, -1, 0),
-        glm::vec3(0, 0, 1), glm::vec3(0, 0, -1)};
-
-    uint16_t boundaries = 0;
+    static const glm::vec3 faces[6] = {glm::vec3(1, 0, 0), glm::vec3(-1, 0, 0), glm::vec3(0, 1, 0),
+                                       glm::vec3(0, -1, 0), glm::vec3(0, 0, 1), glm::vec3(0, 0, -1)};
+    uint64_t boundaries = 0;
     const float el = edge_length(terrain.get_voxel_size());
-    for (size_t i = 0; i < offsets.size(); ++i)
+    for (int i = 0; i < 6; ++i)
     {
-        int l = terrain.lod_at(_center + el * offsets[i]);
-        boundaries |= (LoD < l ? 1 : 0) << i;       // high to low
-        boundaries |= (LoD > l ? 1 : 0) << (i + 8); // low to high
+        const int l = terrain.lod_at(_center + el * faces[i]);
+        boundaries |= uint64_t(LoD < l ? 1 : 0) << i;       // high to low
+        boundaries |= uint64_t(LoD > l ? 1 : 0) << (i + 8); // low to high
     }
+    int j = 0;
+    for (int z = -1; z <= 1; ++z)
+        for (int y = -1; y <= 1; ++y)
+            for (int x = -1; x <= 1; ++x)
+            {
+                if (std::abs(x) + std::abs(y) + std::abs(z) < 2)
+                    continue; // the chunk itself and its faces
+                const int l = terrain.lod_at(_center + el * glm::vec3(x, y, z));
+                boundaries |= uint64_t(LoD < l ? 1 : 0) << (16 + 2 * j);
+                boundaries |= uint64_t(LoD > l ? 1 : 0) << (17 + 2 * j);
+                ++j;
+            }
     return boundaries;
 }
 
@@ -280,7 +294,7 @@ void VoxelOctreeNode::build(JarVoxelVolume &terrain, BuildContext *ctx)
         _meshedEmpty = false;
     else if (!is_leaf())
     {
-        const uint16_t boundaries = compute_boundaries(terrain);
+        const uint64_t boundaries = compute_boundaries(terrain);
         const bool knownEmpty = _meshedEmpty && _chunk == nullptr && _meshedEmptyBoundaries == boundaries;
         if (!knownEmpty && (_chunk == nullptr || _chunk->get_boundaries() != boundaries ||
                             _chunk->mesh_version != terrain.get_mesh_version()))

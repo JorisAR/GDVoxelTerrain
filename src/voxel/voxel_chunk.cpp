@@ -77,12 +77,12 @@ void JarVoxelChunk::set_collider_lod_threshold(int p_collider_lod_threshold)
     collider_lod_threshold = p_collider_lod_threshold;
 }
 
-uint16_t JarVoxelChunk::get_boundaries() const
+uint64_t JarVoxelChunk::get_boundaries() const
 {
     return boundaries;
 }
 
-void JarVoxelChunk::set_boundaries(uint16_t p_h2lboundaries)
+void JarVoxelChunk::set_boundaries(uint64_t p_h2lboundaries)
 {
     boundaries = p_h2lboundaries;
 }

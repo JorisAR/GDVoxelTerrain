@@ -39,8 +39,9 @@ struct MesherSettings
     static MesherSettings from(const JarVoxelVolume &terrain);
 };
 
-// Meshes a grid of samples: an octree chunk (with stitched LOD seams) or a
-// tile of a voxel block (StitchedMeshChunk's two constructors).
+// Meshes the samples of an octree chunk (with its LOD neighbors) or of a tile
+// of a voxel block (StitchedMeshChunk's two constructors): surface nets or
+// dual contouring on leaves of mixed sizes (see StitchedMeshChunk).
 class StitchedSurfaceNets
 {
   private:
@@ -51,8 +52,20 @@ class StitchedSurfaceNets
     std::vector<VertexMaterials> _vertexMaterials;
     PackedInt32Array _indices;
     std::vector<bool> _badNormals;
-    std::unordered_map<glm::ivec3, int> _innerEdgeNodes;
-    std::unordered_map<glm::ivec3, int> _ringEdgeNodes;
+
+    // Dual cells: one per lattice point where leaves meet, made when a quad
+    // needs it. Corners: the samples in its 8 octants (x + 2y + 4z, a large
+    // leaf may fill several). `vertex`: its (first) vertex, -1 if it has none.
+    struct Cell
+    {
+        int corners[8];
+        int vertex = -1;
+    };
+    std::vector<Cell> _cells;
+    std::vector<int> _cellAt; // per lattice point: index in _cells, -1 not made yet, -2 none
+    // The vertex index of the dual cell at lattice point `point` (made on
+    // first use), -1 if there is none there.
+    int cell_vertex(const glm::ivec3 &point, int &cell);
 
     const VoxelOctreeNode *_chunk = nullptr; // the octree chunk, if meshing one
     const glm::vec3 _origin;                  // vertices are relative to it
@@ -83,12 +96,10 @@ class StitchedSurfaceNets
     // this stores which piece it belongs to (NoComponent if not crossed). The
     // piece's vertex is vertexIndices[node] + component.
     static constexpr uint8_t NoComponent = 0xFF;
-    std::vector<std::array<uint8_t, 12>> _edgeComponent;
+    std::vector<std::array<uint8_t, 12>> _edgeComponent; // per dual cell
     // Groups the cell's crossed edges into connected pieces; returns the count.
     int find_components(const std::vector<int> &neighbours, std::array<uint8_t, 12> &edgeComponent) const;
-    void create_component_vertices(const int node_id, const std::vector<int> &neighbours);
-    static int quad_edge(int face, int k);
-    void register_edge_node(const int node_id, const std::vector<int> &neighbours, const bool on_ring);
+    void create_component_vertices(const int cell, const std::vector<int> &neighbours);
     StitchedMeshChunk _meshChunk;
 
     // Dual contouring: surface normal per node (stored by edits, otherwise the
@@ -102,7 +113,7 @@ class StitchedSurfaceNets
     glm::vec3 project_to_volume_sdf(glm::vec3 point, glm::vec3 &normal) const;
     // Returns NaN if no dual contouring position fits the cell. `normal` gets the
     // average surface normal of the cell's samples (exact, for shading).
-    glm::vec3 place_dual_contouring_vertex(const int node_id, const std::vector<int> &neighbours, glm::vec3 &normal,
+    glm::vec3 place_dual_contouring_vertex(const std::vector<int> &neighbours, glm::vec3 &normal,
                                            uint16_t edgeMask = 0x0FFF);
     // Quad dual to the grid edge from sample `a` to sample `b`. Dual
     // contouring splits it along the diagonal that best matches the vertex
@@ -130,9 +141,14 @@ class StitchedSurfaceNets
     void split_creases();
 
     void add_tri(int n0, int n1, int n2, bool flip);
-    void add_tri_fix_normal(int n0, int n1, int n2);
-    void create_vertex(const int node_id, const std::vector<int> &neighbours, const bool on_ring);
-    std::vector<std::vector<int>> find_ring_nodes(const glm::ivec3 &pos, const int face) const;    
+    void create_vertex(const int cell, const std::vector<int> &neighbours);
+    // The polygon for the face between samples `negative` and `positive` (in
+    // that order along `axis`) whose corners are lattice points
+    // minCorner + {0, size} along the other two axes: the vertices of the
+    // dual cells around it, its corners and any octree vertices along its
+    // sides (where smaller samples meet a larger one's face: leaving those
+    // out cracked the seams between LODs).
+    void face_quad(int negative, int positive, int axis, const glm::ivec3 &minCorner, int size);
 
   public:
     StitchedSurfaceNets(const JarVoxelVolume &terrain, const VoxelOctreeNode &chunk);

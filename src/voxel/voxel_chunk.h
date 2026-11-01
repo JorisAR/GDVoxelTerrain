@@ -27,7 +27,7 @@ class JarVoxelChunk : public Node3D
   private:
     int lod = 0;
     int collider_lod_threshold = 1;
-    uint16_t boundaries = 0;
+    uint64_t boundaries = 0;
     bool edge_chunk = false;
     Bounds bounds;
 
@@ -91,9 +91,10 @@ class JarVoxelChunk : public Node3D
     int get_collider_lod_threshold() const;
     void set_collider_lod_threshold(int p_collider_lod_threshold);
 
-    // 16 bits: high-to-low LOD seams in the low byte, low-to-high in the high byte.
-    uint16_t get_boundaries() const;
-    void set_boundaries(uint16_t p_boundaries);
+    // The neighbors' LODs it was meshed for (see VoxelOctreeNode::compute_boundaries):
+    // faces in the low 16 bits (bit i coarser, bit i + 8 finer), then edges and corners.
+    uint64_t get_boundaries() const;
+    void set_boundaries(uint64_t p_boundaries);
     int mesh_version = -1; // JarVoxelVolume::get_mesh_version() this chunk was meshed with
 
     bool is_edge_chunk() const;

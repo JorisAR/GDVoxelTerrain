@@ -50,7 +50,7 @@ class VoxelOctreeNode : public OctreeNode<VoxelOctreeNode>
     // Also reset by edits and when the node stops being a chunk.
     bool _meshedEmpty = false;
     std::atomic<uint8_t> _isMaterialized{0};
-    uint16_t _meshedEmptyBoundaries = 0;
+    uint64_t _meshedEmptyBoundaries = 0;
 
     bool is_dirty() const;
     void set_dirty(bool value);
@@ -74,7 +74,7 @@ class VoxelOctreeNode : public OctreeNode<VoxelOctreeNode>
 
     int priority() const;
 
-    uint16_t compute_boundaries(const JarVoxelVolume &terrain) const;
+    uint64_t compute_boundaries(const JarVoxelVolume &terrain) const;
 
     JarVoxelChunk *get_chunk() const;
     bool is_chunk(const JarVoxelVolume &terrain) const;

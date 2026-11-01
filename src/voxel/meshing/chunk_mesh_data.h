@@ -36,7 +36,7 @@ class ChunkMeshData
     }
     PackedVector3Array collision_mesh;
     int lod;
-    uint16_t boundaries;
+    uint64_t boundaries; // see VoxelOctreeNode::compute_boundaries
     int mesh_version = 0;
     bool edge_chunk;
     Bounds bounds;

@@ -36,12 +36,6 @@ StitchedSurfaceNets::StitchedSurfaceNets(const MesherSettings &settings, Stitche
       _materialMode(settings.materialMode), _meshChunk(std::move(input)), _sdf(settings.sdf),
       _voxelSize(settings.voxelSize)
 {
-    if (_manifold)
-    {
-        std::array<uint8_t, 12> none;
-        none.fill(NoComponent);
-        _edgeComponent.resize(_meshChunk.nodes.size(), none);
-    }
     if (_dualContouring)
     {
         _gradients.resize(_meshChunk.nodes.size());
@@ -93,7 +87,7 @@ glm::vec3 StitchedSurfaceNets::project_to_volume_sdf(glm::vec3 point, glm::vec3 
     return point;
 }
 
-glm::vec3 StitchedSurfaceNets::place_dual_contouring_vertex(const int node_id, const std::vector<int> &neighbours,
+glm::vec3 StitchedSurfaceNets::place_dual_contouring_vertex(const std::vector<int> &neighbours,
                                                              glm::vec3 &averageNormal, uint16_t edgeMask)
 {
     // Corners touching the given edges (all corners when every edge is used).
@@ -240,21 +234,19 @@ glm::vec3 StitchedSurfaceNets::place_dual_contouring_vertex(const int node_id, c
     return glm::vec3(std::numeric_limits<float>::quiet_NaN());
 }
 
-void StitchedSurfaceNets::create_vertex(const int node_id, const std::vector<int> &neighbours, const bool on_ring)
+void StitchedSurfaceNets::create_vertex(const int cell, const std::vector<int> &neighbours)
 {
     glm::vec3 vertexPosition(0.0f);
     MaterialAccumulator materials;
     glm::vec3 normal(0.0f);
-    int duplicates = 0, edge_crossings = 0;
+    int edge_crossings = 0;
     glm::vec3 base(std::numeric_limits<float>::max()); // the cell's frame (see from_cell)
     for (int i = 0; i < 8; ++i)
         base = glm::min(base, _meshChunk.nodes[neighbours[i]]->_center);
     for (auto &edge : StitchedMeshChunk::Edges)
     {
-        auto ai = neighbours[edge.x];
-        auto bi = neighbours[edge.y];
-        auto na = _meshChunk.nodes[ai];
-        auto nb = _meshChunk.nodes[bi];
+        auto na = _meshChunk.nodes[neighbours[edge.x]];
+        auto nb = _meshChunk.nodes[neighbours[edge.y]];
         float valueA = na->get_value();
         float valueB = nb->get_value();
         glm::vec3 posA = na->_center - base;
@@ -275,25 +267,9 @@ void StitchedSurfaceNets::create_vertex(const int node_id, const std::vector<int
     if (edge_crossings <= 0)
         return;
 
-    //computes and stores the directions in which to generate quads, also determines winding order
-    _meshChunk.faceDirs[node_id] =
-        (static_cast<int>(glm::sign(glm::sign(_meshChunk.nodes[neighbours[6]]->get_value()) -
-                                    glm::sign(_meshChunk.nodes[neighbours[7]]->get_value())) +
-                          1))
-            << 0 |
-        (static_cast<int>(glm::sign(glm::sign(_meshChunk.nodes[neighbours[7]]->get_value()) -
-                                    glm::sign(_meshChunk.nodes[neighbours[5]]->get_value())) +
-                          1))
-            << 2 |
-        (static_cast<int>(glm::sign(glm::sign(_meshChunk.nodes[neighbours[3]]->get_value()) -
-                                    glm::sign(_meshChunk.nodes[neighbours[7]]->get_value())) +
-                          1))
-            << 4;
-
     if (_manifold)
     {
-        create_component_vertices(node_id, neighbours);
-        register_edge_node(node_id, neighbours, on_ring);
+        create_component_vertices(cell, neighbours);
         return;
     }
 
@@ -301,30 +277,125 @@ void StitchedSurfaceNets::create_vertex(const int node_id, const std::vector<int
     materials.scale(1.0f / static_cast<float>(edge_crossings));
     normal = glm::normalize(normal);
     if (_cubicVoxels)
-        vertexPosition = local(_meshChunk.nodes[node_id]);
+        vertexPosition = local(_meshChunk.nodes[neighbours[0]]);
     else if (_dualContouring)
     {
-        // Ring (LOD seam) vertices are copies of the neighbouring coarser
-        // chunk's vertices; they must be placed exactly as that chunk places
-        // them (a vertex depends only on its cell's corner samples), or the
-        // seam cracks.
+        // A vertex depends only on its cell's samples: every chunk that has
+        // the cell places it alike (no cracks between chunks or LODs).
         glm::vec3 exactNormal(0.0f);
-        const glm::vec3 dc = place_dual_contouring_vertex(node_id, neighbours, exactNormal);
+        const glm::vec3 dc = place_dual_contouring_vertex(neighbours, exactNormal);
         if (!glm::any(glm::isnan(dc)))
             vertexPosition = dc;
         if (glm::dot(exactNormal, exactNormal) > 0.5f)
             normal = exactNormal; // exact surface normal instead of the value-difference estimate
     }
 
-    int vertexIndex = _verts.size();
-    register_edge_node(node_id, neighbours, on_ring);
-
-    _meshChunk.vertexIndices[node_id] = vertexIndex;
+    _cells[cell].vertex = _verts.size();
     _sharp.push_back(_dualContouring && _lastVertexSharp ? 1 : 0);
-        _sharpPlanes.push_back(_dualContouring && _lastVertexSharp ? _lastPlanes : SharpPlanes());
+    _sharpPlanes.push_back(_dualContouring && _lastVertexSharp ? _lastPlanes : SharpPlanes());
     _verts.push_back({vertexPosition.x, vertexPosition.y, vertexPosition.z});
     _normals.push_back({normal.x, normal.y, normal.z});
     _vertexMaterials.push_back(VertexMaterials::from(materials));
+}
+
+int StitchedSurfaceNets::cell_vertex(const glm::ivec3 &point, int &cell)
+{
+    const glm::ivec3 points = _meshChunk.dims + 1;
+    if (glm::any(glm::lessThan(point, glm::ivec3(0))) || glm::any(glm::greaterThanEqual(point, points)))
+        return -1;
+    int &slot = _cellAt[point.x + points.x * (point.y + points.y * point.z)];
+    if (slot == -1)
+    {
+        // The samples in the 8 octants around the point.
+        thread_local std::vector<int> corners;
+        corners.resize(8);
+        slot = -2;
+        for (int o = 0; o < 8; ++o)
+        {
+            const glm::ivec3 c = point - glm::ivec3((o & 1) ? 0 : 1, (o & 2) ? 0 : 1, (o & 4) ? 0 : 1);
+            corners[o] = _meshChunk.sample_at(c);
+            if (corners[o] < 0)
+                return -1; // at the edge of what this chunk has: never needed there
+        }
+        slot = int(_cells.size());
+        Cell made;
+        std::copy(corners.begin(), corners.end(), made.corners);
+        _cells.push_back(made);
+        if (_manifold)
+        {
+            std::array<uint8_t, 12> none;
+            none.fill(NoComponent);
+            _edgeComponent.push_back(none);
+        }
+        create_vertex(slot, corners);
+    }
+    if (slot < 0)
+        return -1;
+    cell = slot;
+    return _cells[slot].vertex;
+}
+
+void StitchedSurfaceNets::face_quad(int negative, int positive, int axis, const glm::ivec3 &minCorner, int size)
+{
+    // The face's other two axes in order (u, v). Its outline, in the cyclic
+    // order (lo, lo), (hi, lo), (hi, hi), (lo, hi), with the octree vertices
+    // between its corners.
+    const int u = axis == 0 ? 1 : 0;
+    const int v = axis == 2 ? 1 : 2;
+    glm::ivec3 corner[4] = {minCorner, minCorner, minCorner, minCorner};
+    corner[1][u] += size;
+    corner[2][u] += size;
+    corner[2][v] += size;
+    corner[3][v] += size;
+    thread_local std::vector<glm::ivec3> outline;
+    outline.clear();
+    int cornerAt[4];
+    for (int c = 0; c < 4; ++c)
+    {
+        cornerAt[c] = int(outline.size());
+        outline.push_back(corner[c]);
+        const glm::ivec3 step = glm::sign(corner[(c + 1) % 4] - corner[c]);
+        for (int k = 1; k < size; ++k)
+            if (_meshChunk.is_corner(corner[c] + step * k))
+                outline.push_back(corner[c] + step * k);
+    }
+    // Twice the face's center, in lattice units (integers).
+    const glm::ivec3 center2 = 2 * minCorner + size;
+    thread_local std::vector<int> n;
+    n.resize(outline.size());
+    for (size_t k = 0; k < outline.size(); ++k)
+    {
+        const glm::ivec3 point = outline[k];
+        int cell = -1;
+        n[k] = cell_vertex(point, cell);
+        if (n[k] < 0)
+            return;
+        if (_manifold)
+        {
+            // The cell's edge between the face's two samples: from the
+            // octant on the negative side towards the face's center.
+            const int toward = (2 * point[u] <= center2[u] ? 1 << u : 0) | (2 * point[v] <= center2[v] ? 1 << v : 0);
+            const int edge = axis == 0 ? toward / 2 : (axis == 1 ? 4 + (toward & 1) + 2 * ((toward >> 2) & 1) : 8 + toward);
+            const uint8_t component = _edgeComponent[cell][edge];
+            if (component == NoComponent)
+                return;
+            n[k] += component;
+        }
+    }
+    // Wound from the solid sample to the empty one. The (u, v) corner order
+    // runs the other way around the y axis (x, z) than around x (y, z) and
+    // z (x, y): there it flips for the other sample.
+    const bool flip = _meshChunk.nodes[axis == 1 ? positive : negative]->get_value() < 0.0f;
+    if (outline.size() == 4)
+    {
+        add_quad(n[cornerAt[0]], n[cornerAt[1]], n[cornerAt[3]], n[cornerAt[2]], flip, positive, negative);
+        return;
+    }
+    // More than 4: fanned around the face's surface crossing (as add_quad
+    // does with a folded quad, in the same winding).
+    const int c = add_crossing_vertex(positive, negative);
+    for (size_t k = 0; k < n.size(); ++k)
+        add_tri(n[k], n[(k + 1) % n.size()], c, flip);
 }
 
 ChunkMeshData *StitchedSurfaceNets::generate_mesh_data(const JarVoxelVolume &terrain)
@@ -337,7 +408,7 @@ ChunkMeshData *StitchedSurfaceNets::generate_mesh_data(const JarVoxelVolume &ter
                                                   terrain.get_up_field(), _origin);
     ChunkMeshData *output = new ChunkMeshData(meshData, _chunk->get_lod(), _meshChunk.is_edge_chunk(),
                                               _chunk->get_bounds(terrain.get_voxel_size()));
-    output->boundaries = _meshChunk._lodH2LBoundaries | (_meshChunk._lodL2HBoundaries << 8);
+    output->boundaries = _meshChunk.boundaries;
     output->mesh_version = terrain.get_mesh_version();
     output->painted = painted;
     return output;
@@ -369,172 +440,41 @@ PackedByteArray StitchedSurfaceNets::biome_weights(const PackedVector3Array &ver
 
 bool StitchedSurfaceNets::generate_arrays(Array &meshData, PackedFloat32Array &painted)
 {
-    // One scratch buffer for all neighbour queries: allocating a vector per
-    // voxel was a large share of meshing time.
-    std::vector<int> neighbours;
-    neighbours.reserve(8);
-    for (size_t node_id = 0; node_id < _meshChunk.innerNodeCount; node_id++)
+    // Each of this chunk's own samples meshes its faces: those towards equal
+    // samples on its positive sides, and all towards larger ones (smaller
+    // ones mesh their own).
+    _cellAt.assign(size_t(_meshChunk.dims.x + 1) * (_meshChunk.dims.y + 1) * (_meshChunk.dims.z + 1), -1);
+    for (int i = 0; i < int(_meshChunk.nodes.size()); ++i)
     {
-        if (_meshChunk.vertexIndices[node_id] <= -2)
+        if (!_meshChunk.own[i])
             continue;
-        neighbours.clear();
-        glm::ivec3 grid_position = _meshChunk.positions[node_id];
-
-        if (!_meshChunk.get_neighbours(grid_position, neighbours))
-            continue;
-        create_vertex(node_id, neighbours, false);
-    }
-
-    if (_verts.size() == 0)
-        return false;    
-
-    // if on lod boundary, add an additional pass
-    for (size_t node_id = _meshChunk.innerNodeCount; node_id < _meshChunk.innerNodeCount + _meshChunk.ringNodeCount;
-         node_id++)
-    {
-        if (_meshChunk.vertexIndices[node_id] <= -2)
-            continue;
-        neighbours.clear();
-        glm::ivec3 grid_position = _meshChunk.positions[node_id];
-
-        if (!_meshChunk.get_ring_neighbours(grid_position, neighbours))
-            continue;
-        create_vertex(node_id, neighbours, true);
-        // if (false)
-        // { // print the nodes itself
-        //     glm::vec3 vertexPosition = _meshChunk.nodes[node_id]->_center;
-        //     vertexPosition -= _chunk->_center;
-        //     int vertexIndex = (_verts.size());
-        //     _meshChunk.vertexIndices[node_id] = vertexIndex;
-        //     _verts.push_back({vertexPosition.x, vertexPosition.y, vertexPosition.z});
-        //     _normals.push_back({0, 1, 0});
-        //     _colors.push_back(Color(0, 0, 0, 0));
-        //     _edgeIndices[grid_position] = (vertexIndex);
-        // }
-    }
-    // godot::String ringNodes = "";
-    // for (auto& [position, vertexId]: _ringEdgeNodes)
-    // {
-    //     ringNodes += Utils::to_string(position) + ", ";
-    // }
-    // godot::String innerNodes = "";
-    // for (auto& [position, vertexId]: _innerEdgeNodes)
-    // {
-    //     innerNodes += Utils::to_string(position) + ", ";
-    // }
-    // UtilityFunctions::print("Ring Nodes: " + ringNodes);
-    // UtilityFunctions::print("Inner Nodes: " + innerNodes);
-
-    std::vector<int> corners;
-    corners.reserve(8);
-    for (size_t node_id = 0; node_id < _meshChunk.innerNodeCount; node_id++)
-    {
-        if (_meshChunk.vertexIndices[node_id] <= -1)
-            continue;
-
-        auto pos = _meshChunk.positions[node_id];
-        auto faceDirs = _meshChunk.faceDirs[node_id];
-        static const int faces = 3;
-        for (int i = 0; i < faces; i++)
-        {
-            int flipFace = ((faceDirs >> (2 * i)) & 3) - 1;
-            if (flipFace == 0 || !_meshChunk.should_have_quad(pos, i))
-                continue;
-
-            neighbours.clear();
-            if (_meshChunk.get_unique_neighbouring_vertices(pos, StitchedMeshChunk::FaceOffsets[i], neighbours) &&
-                neighbours.size() == 4)
+        const glm::ivec3 m = _meshChunk.minCell[i];
+        const int size = _meshChunk.cells[i];
+        const bool inside = _meshChunk.nodes[i]->get_value() < 0.0f;
+        for (int axis = 0; axis < 3; ++axis)
+            for (int dir = -1; dir <= 1; dir += 2)
             {
-                int n[4];
-                bool ok = true;
-                for (int k = 0; k < 4; ++k)
-                {
-                    n[k] = _meshChunk.vertexIndices[neighbours[k]];
-                    if (_manifold)
-                    {
-                        // The quad's edge, seen from cell k, and the piece it is part of there.
-                        const uint8_t component = _edgeComponent[neighbours[k]][quad_edge(i, k)];
-                        ok = ok && component != NoComponent;
-                        n[k] += component;
-                    }
-                }
-                if (ok)
-                {
-                    // The grid edge the quad is dual to: corner 7 of this cell
-                    // and the corner across face i.
-                    static const int Across[3] = {6, 5, 3};
-                    corners.clear();
-                    if (_meshChunk.get_neighbours(pos, corners))
-                        add_quad(n[0], n[1], n[2], n[3], flipFace == -1, corners[7], corners[Across[i]]);
-                }
+                glm::ivec3 across = m;
+                across[axis] = dir > 0 ? m[axis] + size : m[axis] - 1;
+                const int j = _meshChunk.sample_at(across);
+                if (j < 0)
+                    continue;
+                const int other = _meshChunk.cells[j];
+                if (other < size || (other == size && dir < 0))
+                    continue;
+                if ((_meshChunk.nodes[j]->get_value() < 0.0f) == inside)
+                    continue; // no surface between them
+                glm::ivec3 corner = m;
+                corner[axis] = dir > 0 ? m[axis] + size : m[axis];
+                if (dir > 0)
+                    face_quad(i, j, axis, corner, size);
+                else
+                    face_quad(j, i, axis, corner, size);
             }
-        }
     }
 
     if (_indices.size() == 0)
         return false;
-    
-
-    if (_meshChunk.is_edge_chunk())
-    {
-        // go through inner node edges, then if some inner node edge in +x/y/z exists, attempt to find a ring vertices
-        // around this. make triangle/quad depending on what you find
-        // The search below finds most stitch triangles several times (from each
-        // inner edge node around it): emit each vertex triple only once.
-        std::unordered_set<uint64_t> stitched;
-        auto stitch = [&](int a, int b, int c) {
-            if (a == b || b == c || a == c)
-                return;
-            int k[3] = {a, b, c};
-            std::sort(k, k + 3);
-            const uint64_t key = (uint64_t(k[0]) << 42) | (uint64_t(k[1]) << 21) | uint64_t(k[2]);
-            if (stitched.insert(key).second)
-                add_tri_fix_normal(a, b, c);
-        };
-        for (auto &[pos, node_id] : _innerEdgeNodes)
-        {
-            static const int faces = 3;
-            static const glm::ivec3 offsets[3] = {glm::ivec3(1, 0, 0), glm::ivec3(0, 1, 0), glm::ivec3(0, 0, 1)};
-            auto faceDirs = _meshChunk.faceDirs[node_id];
-            for (int i = 0; i < faces; i++)
-            {
-                int innerNeighbour = node_id;
-                if(!(_meshChunk.on_positive_edge(pos))) {
-                    auto it = _innerEdgeNodes.find(pos + offsets[i]);
-                    if (it == _innerEdgeNodes.end() || it->second < 0)
-                        continue;
-                    innerNeighbour = it->second;
-                }
-
-                std::vector<std::vector<int>> neighboursLists = find_ring_nodes(pos, i);
-                int n0 = _meshChunk.vertexIndices[node_id];
-                int n1 = _meshChunk.vertexIndices[innerNeighbour];
-                for (auto &neighbours : neighboursLists)
-                {
-                    if (neighbours.size() == 2)
-                    {
-                        int n2 = _meshChunk.vertexIndices[neighbours[0]];
-                        int n3 = _meshChunk.vertexIndices[neighbours[1]];
-                        if (_verts[n0].distance_squared_to(_verts[n3]) < _verts[n1].distance_squared_to(_verts[n2]))
-                        {
-                            stitch(n0, n1, n3);
-                            stitch(n0, n3, n2);
-                        }
-                        else
-                        {
-                            stitch(n1, n3, n2);
-                            stitch(n1, n2, n0);
-                        }
-                    }
-                    else if (neighbours.size() == 1)
-                    {
-                        int n2 = _meshChunk.vertexIndices[neighbours[0]];
-                        stitch(n0, n1, n2);
-                    }
-                }
-            }
-        }
-    }
 
     if (_dualContouring && !_cubicVoxels)
         split_creases();
@@ -551,54 +491,6 @@ bool StitchedSurfaceNets::generate_arrays(Array &meshData, PackedFloat32Array &p
     return true;
 }
 
-//this function finds way too many possible nodes.
-//Possible improvement: check the octant, e.g. we dont need to find ringnodes towards neighbours of the same LOD
-//Possible improvement: use the same system of a crossed edge as before to verify if we need a quad or not
-std::vector<std::vector<int>> StitchedSurfaceNets::find_ring_nodes(const glm::ivec3 &pos, const int face) const
-{
-    static const glm::ivec3 face_offsets[3] = {glm::ivec3(1, 0, 0), glm::ivec3(0, 1, 0), glm::ivec3(0, 0, 1)};
-    static const glm::ivec3 ring_offsets[3][8] = {
-        {glm::ivec3(0, 1, 0), glm::ivec3(0, -1, 0), glm::ivec3(0, 0, 1), glm::ivec3(0, 0, -1), glm::ivec3(0, 1, 1), glm::ivec3(0, -1, -1), glm::ivec3(0, -1, 1), glm::ivec3(0, 1, -1)},
-        {glm::ivec3(1, 0, 0), glm::ivec3(-1, 0, 0), glm::ivec3(0, 0, 1), glm::ivec3(0, 0, -1), glm::ivec3(1, 0, 1), glm::ivec3(-1, 0, -1), glm::ivec3(-1, 0, 1), glm::ivec3(1, 0, -1)},
-        {glm::ivec3(1, 0, 0), glm::ivec3(-1, 0, 0), glm::ivec3(0, 1, 0), glm::ivec3(0, -1, 0), glm::ivec3(1, 1, 0), glm::ivec3(-1, -1, 0), glm::ivec3(-1, 1, 0), glm::ivec3(1, -1, 0)}};
-
-        // static const glm::ivec3 ring_offsets[3][4] = {
-        //     {glm::ivec3(0, 1, 0), glm::ivec3(0, -1, 0), glm::ivec3(0, 0, 1), glm::ivec3(0, 0, -1)},
-        //     {glm::ivec3(1, 0, 0), glm::ivec3(-1, 0, 0), glm::ivec3(0, 0, 1), glm::ivec3(0, 0, -1)},
-        //     {glm::ivec3(1, 0, 0), glm::ivec3(-1, 0, 0), glm::ivec3(0, 1, 0), glm::ivec3(0, -1, 0)}};
-    // function to go from inner coordinates to ring coordinates
-    auto get_ring_node = [this](const glm::ivec3 pos) {
-        glm::ivec3 ring_pos = glm::floor((glm::vec3(pos)) / 2.0f);
-
-        auto it = _ringEdgeNodes.find(ring_pos);
-        if (it == _ringEdgeNodes.end() || it->second < 0 || _meshChunk.vertexIndices[it->second] < 0)
-            return -1;
-
-        return it->second;
-    };
-
-    std::vector<std::vector<int>> result;
-    for (size_t i = 0; i < 3; i++)//check all directions?
-    {
-        for (auto dir : ring_offsets[i])
-        {
-            int n0 = get_ring_node(pos + dir);
-            int n1 = get_ring_node(pos + dir + face_offsets[i]);
-    
-            if (n0 >= 0 && n1 >= 0)
-                result.push_back({n0, n1});
-            else if (n0 >= 0)
-                result.push_back({n0});
-            else if (n1 >= 0)
-                result.push_back({n1});
-        }
-    }
-    
-
-    return result;
-}
-
-//I'd rather not base the winding order on the normal, but it works for now. Only required for the edge chunk.
 namespace
 {
 // Cube corners are numbered x + 2y + 4z; StitchedMeshChunk::Edges lists the 12
@@ -626,34 +518,6 @@ int find_root(int parent[12], int e)
     return e;
 }
 } // namespace
-
-// Edge index (in StitchedMeshChunk::Edges) of the grid edge shared by the 4
-// cells of a quad, seen from cell k of FaceOffsets[face].
-int StitchedSurfaceNets::quad_edge(int face, int k)
-{
-    // Built once; function-local static initialization is thread-safe.
-    struct Table
-    {
-        int edge[3][4];
-    };
-    static const Table table = [] {
-        Table t{};
-        for (int f = 0; f < 3; ++f)
-            for (int c = 0; c < 4; ++c)
-            {
-                glm::ivec3 axis(0);
-                axis[f] = 1;
-                const glm::ivec3 a = glm::ivec3(1) - axis - StitchedMeshChunk::FaceOffsets[f][c];
-                const glm::ivec3 b = a + axis;
-                const int ca = a.x + 2 * a.y + 4 * a.z, cb = b.x + 2 * b.y + 4 * b.z;
-                for (int e = 0; e < 12; ++e)
-                    if (StitchedMeshChunk::Edges[e].x == ca && StitchedMeshChunk::Edges[e].y == cb)
-                        t.edge[f][c] = e;
-            }
-        return t;
-    }();
-    return table.edge[face][k];
-}
 
 // Pieces of surface inside a cell: crossed edges are connected along the
 // cube's faces. A face with 4 crossings is ambiguous; the average of its 4
@@ -736,11 +600,12 @@ int StitchedSurfaceNets::find_components(const std::vector<int> &neighbours,
 
 // One vertex per surface piece of the cell, placed by the active mesher from
 // that piece's edges only.
-void StitchedSurfaceNets::create_component_vertices(const int node_id, const std::vector<int> &neighbours)
+void StitchedSurfaceNets::create_component_vertices(const int cell, const std::vector<int> &neighbours)
 {
-    std::array<uint8_t, 12> &edgeComponent = _edgeComponent[node_id];
+    std::array<uint8_t, 12> &edgeComponent = _edgeComponent[cell];
     const int components = find_components(neighbours, edgeComponent);
-    _meshChunk.vertexIndices[node_id] = _verts.size();
+    if (components > 0)
+        _cells[cell].vertex = _verts.size();
     for (int c = 0; c < components; ++c)
     {
         uint16_t edgeMask = 0;
@@ -771,7 +636,7 @@ void StitchedSurfaceNets::create_component_vertices(const int node_id, const std
         if (_dualContouring)
         {
             glm::vec3 exactNormal(0.0f);
-            const glm::vec3 dc = place_dual_contouring_vertex(node_id, neighbours, exactNormal, edgeMask);
+            const glm::vec3 dc = place_dual_contouring_vertex(neighbours, exactNormal, edgeMask);
             if (!glm::any(glm::isnan(dc)))
                 position = dc;
             if (glm::dot(exactNormal, exactNormal) > 0.5f)
@@ -782,19 +647,6 @@ void StitchedSurfaceNets::create_component_vertices(const int node_id, const std
         _verts.push_back({position.x, position.y, position.z});
         _normals.push_back({normal.x, normal.y, normal.z});
         _vertexMaterials.push_back(VertexMaterials::from(materials));
-    }
-}
-
-void StitchedSurfaceNets::register_edge_node(const int node_id, const std::vector<int> &neighbours, const bool on_ring)
-{
-    const glm::ivec3 grid_position = _meshChunk.positions[node_id];
-    if ((on_ring || _meshChunk.is_on_any_boundary(grid_position)) &&
-        _meshChunk.should_have_boundary_quad(neighbours, on_ring))
-    {
-        if (on_ring)
-            _ringEdgeNodes[grid_position] = node_id;
-        else
-            _innerEdgeNodes[grid_position] = node_id;
     }
 }
 
@@ -985,12 +837,6 @@ void StitchedSurfaceNets::split_creases()
                     indices[3 * t + k] = target;
         }
     }
-}
-
-void StitchedSurfaceNets::add_tri_fix_normal(int n0, int n1, int n2)
-{
-    godot::Vector3 normal = (_verts[n1] - _verts[n0]).cross(_verts[n2] - _verts[n0]);
-    add_tri(n0, n1, n2, normal.dot(_normals[n0]) > 0);
 }
 
 void StitchedSurfaceNets::add_tri(int n0, int n1, int n2, bool flip)

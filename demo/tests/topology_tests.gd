@@ -37,6 +37,7 @@ func _ready() -> void:
 	var up := Vector3(-0.2983, 0.9543, 0.0194).normalized()
 	await _eroded_mountain("ridged peak", planet, up * (planet.radius + planet.sample_height(up * planet.radius)), 36000.0)
 	await _reported_spots()
+	await _lod_seams()
 	print("Topology tests: %s" % ("ALL PASSED" if _failures == 0 else "%d FAILED" % _failures))
 	get_tree().quit(1 if _failures > 0 else 0)
 
@@ -94,6 +95,50 @@ func _reported_spots() -> void:
 		_check("reported %s no holes" % spot.name, r.open == 0, "%d open edges" % r.open)
 		_check("reported %s on the surface" % spot.name, q.off_surface == 0 and q.flipped * 1000 < q.triangles,
 			"%d vertices off the surface, %d of %d faces folded" % [q.off_surface, q.flipped, q.triangles])
+		holder.queue_free()
+		await get_tree().process_frame
+
+## Where chunks of different LODs meet, from the viewer out to a kilometer:
+## not a single open edge (the mesh is closed across every seam, with dual
+## contouring and with surface nets, manifold or not).
+func _lod_seams() -> void:
+	var sdf: JarTerrainSdf = load("res://tests/planet_terrain_4km.tres")
+	for setup in [[JarVoxelVolume.MESHING_DUAL_CONTOURING, true], [JarVoxelVolume.MESHING_DUAL_CONTOURING, false],
+			[JarVoxelVolume.MESHING_SURFACE_NETS, false]]:
+		var holder := Node.new()
+		add_child(holder)
+		var volume := JarVoxelVolume.new()
+		volume.chunk_scene = TestWorld.CHUNK_SCENE
+		volume.extent = 10000.0
+		volume.sdf = sdf
+		volume.meshing_algorithm = setup[0]
+		volume.manifold = setup[1]
+		holder.add_child(volume)
+		var up := Vector3(0.45, 0.55, 0.7).normalized()
+		var viewer := JarVoxelViewer.new()
+		viewer.position = up * (sdf.radius + sdf.sample_height(up * sdf.radius) + 5.0)
+		holder.add_child(viewer)
+		await _settle(volume)
+		# Spots along the ground (in the volume's space, as Topology takes
+		# them), across the LOD 0-1, 1-2 and 2-3 seams.
+		var side := up.cross(Vector3.UP).normalized()
+		var open := 0
+		var spots := 0
+		var triangles := 0
+		var lods := {}
+		for k in range(1, 40):
+			var dir := (up * sdf.radius + side * (k * 25.0)).normalized()
+			var at := dir * (sdf.radius + sdf.sample_height(dir * sdf.radius))
+			var r := Topology.analyze(volume, at, 30.0)
+			open += r.open
+			triangles += r.triangles
+			spots += 1
+		for c in volume.get_children():
+			if c is JarVoxelChunk and c.visible:
+				lods[c.get_lod()] = true
+		var label := "%s%s" % [["surface nets", "dual contouring"][setup[0]], " manifold" if setup[1] else ""]
+		_check("%s: LOD seams closed" % label, open == 0 and lods.size() >= 3 and triangles > 100000,
+			"%d open edges in %d triangles at %d spots, LODs %s" % [open, triangles, spots, lods.keys()])
 		holder.queue_free()
 		await get_tree().process_frame
 
