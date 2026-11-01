@@ -53,6 +53,10 @@ func _ready() -> void:
 	if OS.get_environment("TICKS") != "":
 		JarVoxelUniverse.set_ticks(int(OS.get_environment("TICKS")))
 	var camera: Camera3D = scene.find_children("*", "Camera3D", true, false)[0]
+	if OS.get_environment("FAR") != "":
+		camera.far = float(OS.get_environment("FAR"))
+	if OS.get_environment("NEAR") != "":
+		camera.near = float(OS.get_environment("NEAR"))
 	var pos := _vec(OS.get_environment("POS"))
 	var moon: Node3D = scene.get_node_or_null("%Moon")
 	if OS.get_environment("ON_MOON") != "" and moon:
@@ -167,6 +171,9 @@ func _ready() -> void:
 			camera.look_at(camera.global_position + towards * 100.0 + up * 8.0, up)
 			for i in 4:
 				await get_tree().process_frame
+	if OS.get_environment("DEBUG") != "":
+		for v in volumes:
+			print("DEBUG camera ", camera.global_position, " far ", camera.far, " volume ", v.get_path(), " at ", v.global_position, " distance ", camera.global_position.distance_to(v.global_position), " in front ", camera.is_position_in_frustum(v.global_position))
 	var image := get_viewport().get_texture().get_image()
 	image.save_png(OS.get_environment("OUT"))
 	if OS.get_environment("HOLES") == "1":

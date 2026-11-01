@@ -1,0 +1,9 @@
+[gd_resource type="JarCraterSdf" format=3]
+
+[ext_resource type="JarTerrainSdf" path="res://demo/giant/giant_moon_terrain.tres" id="1_terrain"]
+
+[resource]
+size = 2812.5
+density = 0.4
+rim = 0.12
+sdf = ExtResource("1_terrain")

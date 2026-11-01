@@ -1,0 +1,33 @@
+[gd_resource type="JarTerrainSdf" format=3]
+
+[sub_resource type="JarNoise" id="MountainBelts"]
+seed = 11
+frequency = 3.28e-06
+octaves = 3
+
+[sub_resource type="JarNoise" id="Ridges"]
+seed = 17
+frequency = 0.0003
+fractal_type = 2
+gain = 0.45
+warp_strength = 500.0
+warp_frequency = 0.0002
+
+[sub_resource type="JarNoise" id="Continents"]
+seed = 3
+frequency = 2.73e-06
+
+[resource]
+shape = 1
+radius = 600000.0
+sea_level = -5.0
+noise = SubResource("Continents")
+height = 250.0
+depth = 400.0
+mountain_noise = SubResource("Ridges")
+mountain_mask = SubResource("MountainBelts")
+mountain_height = 900.0
+mountain_threshold = 0.05
+mountain_blend = 0.4
+erosion_strength = 0.4
+erosion_scale = 150.0

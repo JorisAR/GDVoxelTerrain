@@ -1,0 +1,15 @@
+[gd_resource type="JarTerrainSdf" format=3]
+
+[sub_resource type="FastNoiseLite" id="Noise"]
+noise_type = 2
+seed = 7
+frequency = 0.000171
+fractal_octaves = 4
+
+[resource]
+shape = 1
+radius = 30000.0
+noise = SubResource("Noise")
+height = 703.1
+depth = 1171.9
+erosion = false

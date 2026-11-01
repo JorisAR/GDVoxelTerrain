@@ -1,0 +1,193 @@
+[gd_scene format=3]
+
+[ext_resource type="PackedScene" uid="uid://c7kqgl1k10x14" path="res://addons/jar_voxel_terrain/src/chunk.tscn" id="1_chunk"]
+[ext_resource type="JarTerrainSdf" path="res://demo/giant/giant_terrain.tres" id="2_terrain"]
+[ext_resource type="Material" path="res://demo/planet/planet_material.tres" id="3_material"]
+[ext_resource type="JarTerrainDetail" uid="uid://b07o6puiiv3ht" path="res://demo/planet/grass.tres" id="6_grass"]
+[ext_resource type="JarTerrainFeature" uid="uid://2dvalovk54ou" path="res://demo/planet/rock.tres" id="6_rock"]
+[ext_resource type="JarCraterSdf" path="res://demo/giant/giant_moon_craters.tres" id="12_moon"]
+[ext_resource type="Material" path="res://demo/planet/moon_material.tres" id="13_moon_material"]
+[ext_resource type="PackedScene" uid="uid://cupyeuv1xe20s" path="res://demo/player/player.tscn" id="14_player"]
+[ext_resource type="Material" uid="uid://55tbedv6qxva" path="res://demo/assets/space/space_sky.tres" id="15_sky"]
+[ext_resource type="JarBiomeMap" uid="uid://dt3ug1atfvmdb" path="res://demo/planet/biomes.tres" id="17_biomes"]
+
+[sub_resource type="JarTerrainMaterial" id="Grass"]
+albedo = Color(0.25, 0.35, 0.15, 1)
+roughness = 0.9
+variation = 0.4
+
+[sub_resource type="JarTerrainMaterial" id="Rock"]
+albedo = Color(0.47, 0.45, 0.42, 1)
+roughness = 0.8
+variation = 0.3
+
+[sub_resource type="JarTerrainMaterial" id="Sand"]
+albedo = Color(0.78, 0.7, 0.5, 1)
+roughness = 0.9
+variation = 0.2
+
+[sub_resource type="JarTerrainMaterial" id="Seabed"]
+albedo = Color(0.36, 0.33, 0.24, 1)
+roughness = 0.9
+variation = 0.3
+
+[sub_resource type="JarTerrainMaterial" id="Snow"]
+albedo = Color(0.9, 0.92, 0.95, 1)
+roughness = 0.55
+variation = 0.08
+
+[sub_resource type="JarTerrainMaterial" id="Dirt"]
+albedo = Color(0.38, 0.27, 0.17, 1)
+roughness = 0.95
+variation = 0.3
+
+[sub_resource type="JarTerrainMaterial" id="DarkStone"]
+albedo = Color(0.22, 0.22, 0.24, 1)
+roughness = 0.7
+variation = 0.2
+
+[sub_resource type="JarTerrainMaterial" id="Clay"]
+albedo = Color(0.72, 0.43, 0.22, 1)
+roughness = 0.6
+variation = 0.3
+
+[sub_resource type="JarTerrainMaterial" id="Tundra"]
+albedo = Color(0.43, 0.41, 0.3, 1)
+roughness = 0.95
+variation = 0.35
+
+[sub_resource type="JarTerrainMaterial" id="DryGrass"]
+albedo = Color(0.6, 0.54, 0.3, 1)
+roughness = 0.95
+variation = 0.3
+
+[sub_resource type="JarTerrainMaterial" id="Regolith"]
+albedo = Color(0.3, 0.29, 0.28, 1)
+roughness = 0.95
+variation = 0.3
+
+[sub_resource type="JarTerrainMaterial" id="MoonRock"]
+albedo = Color(0.18, 0.18, 0.19, 1)
+roughness = 0.8
+
+[sub_resource type="Sky" id="Sky"]
+sky_material = ExtResource("15_sky")
+
+[sub_resource type="Environment" id="Environment"]
+background_mode = 2
+sky = SubResource("Sky")
+ambient_light_source = 2
+ambient_light_color = Color(0.45, 0.52, 0.7, 1)
+ambient_light_energy = 0.05
+tonemap_mode = 3
+glow_enabled = true
+glow_intensity = 0.4
+glow_bloom = 0.05
+
+[sub_resource type="CameraAttributesPractical" id="Exposure"]
+auto_exposure_enabled = true
+auto_exposure_scale = 0.15
+auto_exposure_speed = 2.0
+auto_exposure_min_sensitivity = 50.0
+
+[node name="GiantPlanetDemo" type="Node3D" unique_id=700940484]
+
+[node name="Sun" type="JarCelestialBody" parent="." unique_id=1203398541]
+radius = 186000.0
+surface_gravity = 30.0
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1684048.3, 19448558, 34913000)
+
+[node name="Light" type="JarBodyLight" parent="Sun" unique_id=1659315502 node_paths=PackedStringArray("sun")]
+sun = NodePath("../../SunLight")
+
+[node name="PlanetOrbit" type="JarBodyOrbit" parent="Sun" unique_id=318843216]
+radius = 40000000.0
+period = 36000.0
+axis = Vector3(0.023426, 0.87384, -0.485649)
+phase = 87.5864
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.015625, 1.125, -0.75)
+top_level = true
+
+[node name="Planet" type="JarCelestialBody" parent="Sun/PlanetOrbit" unique_id=1486947439]
+spin_period = 1800.0
+unique_name_in_owner = true
+
+[node name="JarVoxelVolume" type="JarVoxelVolume" parent="Sun/PlanetOrbit/Planet" unique_id=337742281]
+extent = 1212000.0
+chunk_scene = ExtResource("1_chunk")
+materials = Array[JarTerrainMaterial]([SubResource("Grass"), SubResource("Rock"), SubResource("Sand"), SubResource("Seabed"), SubResource("Snow"), SubResource("Dirt"), SubResource("DarkStone"), SubResource("Clay"), SubResource("Tundra"), SubResource("DryGrass")])
+material = ExtResource("3_material")
+edit_material = 5
+sdf = ExtResource("2_terrain")
+meshing_algorithm = 1
+manifold = true
+lod_automatic_update_distance = 16.0
+editor_preview_min_lod = 5
+population_terrain_features = Array[JarTerrainFeature]([ExtResource("6_rock")])
+population_biome_map = ExtResource("17_biomes")
+population_terrain_details = Array[JarTerrainDetail]([ExtResource("6_grass")])
+
+[node name="Debris" type="JarVoxelDebris" parent="Sun/PlanetOrbit/Planet/JarVoxelVolume" unique_id=1288236388]
+collision_layer = 3
+collision_mask = 3
+
+[node name="Water" type="JarBodyWater" parent="Sun/PlanetOrbit/Planet" unique_id=1585027726]
+
+[node name="Atmosphere" type="JarBodyAtmosphere" parent="Sun/PlanetOrbit/Planet" unique_id=1764051413]
+thickness = 0.03
+
+[node name="Clouds" type="JarBodyClouds" parent="Sun/PlanetOrbit/Planet" unique_id=1226887604]
+altitude = 4000.0
+
+[node name="MoonOrbit" type="JarBodyOrbit" parent="Sun/PlanetOrbit/Planet" unique_id=1730493881]
+radius = 1500000.0
+period = 7200.0
+axis = Vector3(0.2, 1, 0)
+unique_name_in_owner = true
+top_level = true
+
+[node name="Moon" type="JarCelestialBody" parent="Sun/PlanetOrbit/Planet/MoonOrbit" unique_id=1054570794]
+surface_gravity = 3.0
+spin_period = 600.0
+spin_axis = Vector3(0.3, 1, 0)
+unique_name_in_owner = true
+
+[node name="JarVoxelVolume" type="JarVoxelVolume" parent="Sun/PlanetOrbit/Planet/MoonOrbit/Moon" unique_id=1688426930]
+extent = 66000.0
+chunk_scene = ExtResource("1_chunk")
+materials = Array[JarTerrainMaterial]([SubResource("Regolith"), SubResource("MoonRock")])
+material = ExtResource("13_moon_material")
+edit_material = 1
+sdf = ExtResource("12_moon")
+meshing_algorithm = 1
+manifold = true
+lod_automatic_update_distance = 16.0
+
+[node name="Debris" type="JarVoxelDebris" parent="Sun/PlanetOrbit/Planet/MoonOrbit/Moon/JarVoxelVolume" unique_id=31110237]
+collision_layer = 3
+collision_mask = 3
+
+[node name="Light" type="JarBodyLight" parent="Sun/PlanetOrbit/Planet/MoonOrbit/Moon" unique_id=902733119 node_paths=PackedStringArray("reflects", "sun")]
+reflects = NodePath("../../../../../Light")
+sun = NodePath("../../../../../../MoonLight")
+
+[node name="Player" parent="." unique_id=184981125 instance=ExtResource("14_player")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 298396.5, 356014.8, 381647.0)
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="." unique_id=1854622839]
+environment = SubResource("Environment")
+camera_attributes = SubResource("Exposure")
+
+[node name="SunLight" type="DirectionalLight3D" parent="." unique_id=705585350]
+transform = Transform3D(0.9987146, 0.024603227, -0.04431396, 0, 0.8742882, 0.48540714, 0.050685756, -0.4847832, 0.8731645, 0, 0, 0)
+light_energy = 1.4
+shadow_enabled = true
+directional_shadow_max_distance = 400.0
+
+[node name="MoonLight" type="DirectionalLight3D" parent="." unique_id=412907551]
+transform = Transform3D(-0.20412448, 0.37763318, 0.9031758, 0, 0.9226012, -0.38575527, -0.97894496, -0.078742094, -0.18832548, 0, 0, 0)
+light_color = Color(0.72, 0.8, 1, 1)
+light_energy = 0.043707762
+sky_mode = 1
+
+[node name="LensFlare" type="JarLensFlare" parent="." unique_id=1771092205]
