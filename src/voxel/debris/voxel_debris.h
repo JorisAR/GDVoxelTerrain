@@ -9,6 +9,7 @@
 #include <godot_cpp/classes/array_mesh.hpp>
 #include <godot_cpp/classes/node.hpp>
 #include <godot_cpp/classes/mesh_instance3d.hpp>
+#include <godot_cpp/classes/physics_direct_body_state3d.hpp>
 #include <godot_cpp/classes/rigid_body3d.hpp>
 #include <godot_cpp/classes/shader_material.hpp>
 #include <memory>
@@ -45,6 +46,7 @@ class JarVoxelDebrisBody : public RigidBody3D
     // Solid voxels in the piece.
     int get_voxel_count() const { return _cells; }
     bool is_merging() const { return _merging; }
+    void _integrate_forces(PhysicsDirectBodyState3D *state) override;
 
   protected:
     static void _bind_methods();

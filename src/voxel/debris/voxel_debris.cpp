@@ -3,6 +3,7 @@
 #include "utility/job_system.h"
 #include "voxel_chunk.h"
 #include "voxel_volume.h"
+#include "universe/voxel_universe.h"
 #include <godot_cpp/classes/collision_shape3d.hpp>
 #include <godot_cpp/classes/convex_polygon_shape3d.hpp>
 #include <godot_cpp/classes/engine.hpp>
@@ -13,6 +14,21 @@ void JarVoxelDebrisBody::_bind_methods()
 {
     ClassDB::bind_method(D_METHOD("get_voxel_count"), &JarVoxelDebrisBody::get_voxel_count);
     ClassDB::bind_method(D_METHOD("is_merging"), &JarVoxelDebrisBody::is_merging);
+}
+
+// Falls with the universe's gravity (that of the body the viewer is on, plus
+// tides), like the player. The space's own point gravity cannot do it under
+// Jolt: it pulled every body as if it were at the world origin (pieces shot
+// off a planet and hung above a moon). The engine's gravity is off for these
+// bodies then (gravity_scale 0, see JarVoxelDebris::spawn).
+void JarVoxelDebrisBody::_integrate_forces(PhysicsDirectBodyState3D *state)
+{
+    const JarVoxelUniverse *universe = JarVoxelUniverse::get_singleton();
+    const bool own = universe != nullptr && universe->has_bodies();
+    set_gravity_scale(own ? 0.0f : 1.0f);
+    if (own)
+        state->set_linear_velocity(state->get_linear_velocity() +
+                                   universe->get_gravity(state->get_transform().origin) * state->get_step());
 }
 
 void JarVoxelDebris::_bind_methods()
@@ -209,6 +225,11 @@ void JarVoxelDebris::spawn(JarVoxelVolume &volume, Piece &piece)
     body->set_collision_layer(_collisionLayer != 0 ? _collisionLayer : volume.get_collision_layer());
     body->set_collision_mask(_collisionMask != 0 ? _collisionMask
                                                  : volume.get_collision_mask() | volume.get_collision_layer());
+    // Gravity from the universe when there is one (see _integrate_forces):
+    // even one tick of the engine's could launch the piece.
+    const JarVoxelUniverse *universe = JarVoxelUniverse::get_singleton();
+    if (universe != nullptr && universe->has_bodies())
+        body->set_gravity_scale(0.0f);
     body->set_contact_monitor(true);
     body->set_max_contacts_reported(8);
     body->set_as_top_level(true); // the volume moving (an orbiting moon) does not drag it

@@ -17,6 +17,8 @@ extends CharacterBody3D
 @export var ground_acceleration := 14.0
 @export var air_acceleration := 3.0
 @export var fly_speed := 20.0
+## Upper limit of Ctrl + scroll (the moon is 60 km away).
+@export var max_fly_speed := 20000.0
 @export var mouse_sensitivity := 0.0025
 ## How quickly the body turns to match a new gravity direction (1/s).
 @export var align_speed := 8.0
@@ -100,7 +102,7 @@ func _unhandled_input(event: InputEvent) -> void:
 			volume.meshing_algorithm = (1 - volume.meshing_algorithm) as JarVoxelVolume.MeshingAlgorithm
 	elif event is InputEventMouseButton and event.pressed and event.ctrl_pressed:
 		if event.button_index == MOUSE_BUTTON_WHEEL_UP:
-			fly_speed = minf(fly_speed * 1.5, 2000.0)
+			fly_speed = minf(fly_speed * 1.5, max_fly_speed)
 		elif event.button_index == MOUSE_BUTTON_WHEEL_DOWN:
 			fly_speed = maxf(fly_speed / 1.5, 1.0)
 

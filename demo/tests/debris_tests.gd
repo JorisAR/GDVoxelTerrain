@@ -10,6 +10,8 @@ func _ready() -> void:
 	await _test_floating_blob()
 	await _test_pillar()
 	await _test_disabled()
+	await _test_on_body(false)
+	await _test_on_body(true)
 	print("Debris tests: %s" % ("ALL PASSED" if _failures == 0 else "%d FAILED" % _failures))
 	get_tree().quit(1 if _failures > 0 else 0)
 
@@ -106,6 +108,49 @@ func _test_disabled() -> void:
 	await _frames(10)
 	_check("disabled: nothing falls", _events.detached.is_empty())
 	await _cleanup(world)
+
+## On the demo planet and its moon: a piece falls towards the body it broke
+## off (with the universe's gravity) and comes to rest there. Under Jolt the
+## space's point gravity pulled it as if it were at the world origin: it shot
+## off the planet and hung above the moon.
+func _test_on_body(on_moon: bool) -> void:
+	var label := "moon" if on_moon else "planet"
+	var scene: Node = load("res://demo/planet.tscn").instantiate()
+	var player = scene.get_node("Player")
+	player.start_flying = true
+	add_child(scene)
+	var body: Node3D = scene.get_node("%Moon") if on_moon else scene.get_node("Sun/PlanetOrbit/Planet")
+	var volume: JarVoxelVolume = body.get_node("JarVoxelVolume")
+	var sdf: JarTerrainSdf = volume.sdf if volume.sdf is JarTerrainSdf else volume.sdf.sdf
+	var detached: Array = []
+	for d: JarVoxelDebris in volume.find_children("*", "JarVoxelDebris", false, false):
+		d.debris_detached.connect(func(b): detached.append(b))
+		d.merge_delay = 100.0 # stays a body while checked
+	var dir := Vector3(0.3, 0.8, 0.5).normalized()
+	var h := sdf.sample_height(dir * sdf.radius)
+	await get_tree().physics_frame
+	# Beside the spot, as when digging (colliders far from a viewer come later).
+	var side := dir.cross(Vector3.UP).normalized()
+	player.global_position = volume.global_transform * (dir * (sdf.radius + maxf(h, 0.0) + 15.0) + side * 10.0)
+	player.process_mode = Node.PROCESS_MODE_DISABLED # teleported: it would drift off with its old frame's velocity
+	await _settle(volume)
+	var spot := dir * (sdf.radius + h + 8.0)
+	var slab := JarBoxSdf.new()
+	slab.extent = Vector3(3, 1, 3)
+	volume.edit(slab, JarVoxelVolume.SDF_OPERATION_UNION,
+		Transform3D(volume.global_basis * Basis(Quaternion(Vector3.UP, dir)), volume.global_transform * spot))
+	await _wait_until(func(): return not detached.is_empty(), 10000)
+	_check("%s: piece breaks off" % label, not detached.is_empty())
+	if not detached.is_empty():
+		var piece: RigidBody3D = detached[0]
+		await get_tree().create_timer(4.0).timeout
+		var local: Vector3 = volume.global_transform.affine_inverse() * piece.global_position
+		var above := local.length() - sdf.radius - sdf.sample_height(local.normalized() * sdf.radius)
+		var drift := (local.normalized() - dir).length() * sdf.radius
+		_check("%s: piece lands where it broke off" % label, absf(above) < 3.0 and drift < 5.0,
+			"%.2f m above the ground, %.2f m to the side" % [above, drift])
+	scene.queue_free()
+	await get_tree().process_frame
 
 func _cleanup(world: Dictionary) -> void:
 	world.volume.queue_free()
