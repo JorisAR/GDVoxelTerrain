@@ -83,6 +83,11 @@ func _ready() -> void:
 			var n: Node3D = scene.get_node_or_null(name)
 			if n:
 				n.visible = false
+	if OS.get_environment("NOSHADOW") == "1":
+		for l: DirectionalLight3D in scene.find_children("*", "DirectionalLight3D", true, false):
+			l.shadow_enabled = false
+	if OS.get_environment("DRAW") != "": # Viewport.DebugDraw value, e.g. 1 unshaded
+		get_viewport().debug_draw = int(OS.get_environment("DRAW")) as Viewport.DebugDraw
 	if OS.get_environment("WIRE") == "1":
 		get_viewport().debug_draw = Viewport.DEBUG_DRAW_WIREFRAME
 	# Let the volumes build around the camera.
@@ -174,6 +179,14 @@ func _ready() -> void:
 	if OS.get_environment("DEBUG") != "":
 		for v in volumes:
 			print("DEBUG camera ", camera.global_position, " far ", camera.far, " volume ", v.get_path(), " at ", v.global_position, " distance ", camera.global_position.distance_to(v.global_position), " in front ", camera.is_position_in_frustum(v.global_position))
+	if OS.get_environment("TERRAIN") != "": # TERRAIN=param=value,... (the volumes' runtime materials)
+		for pair in OS.get_environment("TERRAIN").split(",", false):
+			for v: JarVoxelVolume in volumes:
+				var m: ShaderMaterial = v.get_runtime_material()
+				if m:
+					m.set_shader_parameter(pair.get_slice("=", 0), str_to_var(pair.get_slice("=", 1)))
+		for i in 4:
+			await get_tree().process_frame
 	var image := get_viewport().get_texture().get_image()
 	image.save_png(OS.get_environment("OUT"))
 	if OS.get_environment("HOLES") == "1":

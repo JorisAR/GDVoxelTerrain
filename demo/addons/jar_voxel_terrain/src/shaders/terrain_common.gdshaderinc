@@ -17,6 +17,10 @@
 //
 // Everything works in the volume's own space, so textures and rules stay put on
 // moving volumes and work the same on flat worlds and planets of any radius.
+// Positions there are large (600 km on a big planet, where a float steps 6 cm),
+// so anything fine (noise, textures, bump) uses the chunk's center (exact, on the
+// voxel grid) and the offset from it (small) separately: per pixel, the large
+// position alone rounded so coarsely that bumped normals flipped (black dots).
 
 uniform mat4 jar_world_to_volume = mat4(1.0);
 uniform vec4 jar_up_center = vec4(0.0);
@@ -68,13 +72,15 @@ uniform float detail_distance = 120.0;
 uniform float normal_strength : hint_range(0.0, 2.0) = 1.0;
 group_uniforms;
 
-varying vec3 jar_position; // volume space
-varying vec3 jar_normal;   // volume space
-varying vec4 jar_biomes;   // weights of biomes 0-3
+varying vec3 jar_position;   // volume space (large: fine for coarse things only)
+varying flat vec3 jar_chunk; // volume space, the chunk's center
+varying vec3 jar_local;      // from the chunk's center (small: precise)
+varying vec3 jar_normal;     // volume space
+varying vec4 jar_biomes;     // weights of biomes 0-3
 
-// Use in vertex(): fills jar_position and jar_normal (varyings may only be
-// written in the stage functions themselves).
-#define JAR_VERTEX jar_position = (jar_world_to_volume * MODEL_MATRIX[3]).xyz + VERTEX; jar_normal = NORMAL; jar_biomes = CUSTOM1;
+// Use in vertex(): fills the varyings above (varyings may only be written in
+// the stage functions themselves).
+#define JAR_VERTEX jar_chunk = (jar_world_to_volume * MODEL_MATRIX[3]).xyz; jar_local = VERTEX; jar_position = jar_chunk + VERTEX; jar_normal = NORMAL; jar_biomes = CUSTOM1;
 
 // --- Noise ------------------------------------------------------------------
 
@@ -98,10 +104,56 @@ float jar_fbm(vec3 x) {
 	return 0.6 * jar_value_noise(x) + 0.3 * jar_value_noise(x * 2.03 + 17.1) + 0.1 * jar_value_noise(x * 4.1 + 3.7);
 }
 
+// The same noise, exact at any distance from the volume's origin: at
+// (chunk + local) / size, where chunk is on the voxel grid and size is
+// rounded to a power of two, so chunk / size splits into whole cells and a
+// fraction without rounding. Lattice cells are hashed as integers.
+float jar_pow2(float size) {
+	return exp2(round(log2(max(size, 1e-6))));
+}
+
+float jar_hash_cell(vec3 cell) {
+	uvec3 v = uvec3(ivec3(cell));
+	uint h = (v.x * 0x8da6b343u) ^ (v.y * 0xd8163841u) ^ (v.z * 0xcb1ab31fu);
+	h ^= h >> 16u;
+	h *= 0x7feb352du;
+	h ^= h >> 15u;
+	h *= 0x846ca68bu;
+	h ^= h >> 16u;
+	return float(h) * (1.0 / 4294967296.0);
+}
+
+// Value noise at base + x: base whole cells (exact), x small.
+float jar_value_noise_split(vec3 base, vec3 x) {
+	vec3 fl = floor(x);
+	vec3 i = base + fl;
+	vec3 f = x - fl;
+	f = f * f * (3.0 - 2.0 * f);
+	return mix(mix(mix(jar_hash_cell(i), jar_hash_cell(i + vec3(1, 0, 0)), f.x),
+				   mix(jar_hash_cell(i + vec3(0, 1, 0)), jar_hash_cell(i + vec3(1, 1, 0)), f.x), f.y),
+			   mix(mix(jar_hash_cell(i + vec3(0, 0, 1)), jar_hash_cell(i + vec3(1, 0, 1)), f.x),
+				   mix(jar_hash_cell(i + vec3(0, 1, 1)), jar_hash_cell(i + vec3(1, 1, 1)), f.x), f.y), f.z);
+}
+
+// Value noise at ((chunk + local) / size) * scale + offset (scale a power of two).
+float jar_noise_at(vec3 chunk, vec3 local, float size, float scale, float offset) {
+	float s = jar_pow2(size);
+	vec3 a = chunk / s;
+	vec3 whole = floor(a);
+	return jar_value_noise_split(whole * scale, (a - whole) * scale + local * (scale / s) + offset);
+}
+
+float jar_fbm_at(vec3 chunk, vec3 local, float size) {
+	return 0.6 * jar_noise_at(chunk, local, size, 1.0, 0.0) + 0.3 * jar_noise_at(chunk, local, size, 2.0, 17.0)
+		+ 0.1 * jar_noise_at(chunk, local, size, 4.0, 3.0);
+}
+
 // --- Per-pixel context ------------------------------------------------------
 
 struct JarContext {
-	vec3 position;  // volume space
+	vec3 position;  // volume space (large: for coarse things)
+	vec3 chunk;     // its chunk's center, volume space (exact)
+	vec3 local;     // the position from the chunk's center (small, precise)
 	vec3 normal;    // volume space, geometric
 	vec3 up;
 	float height;   // above sea level
@@ -113,10 +165,13 @@ struct JarContext {
 	vec4 biomes;    // weights of biomes 0-3
 };
 
-// Use in fragment(): JarContext c = jar_context(jar_position, jar_normal, jar_biomes, -VERTEX.z);
-JarContext jar_context(vec3 position, vec3 normal, vec4 biomes, float view_distance) {
+// Use in fragment(): JarContext c = jar_context(jar_chunk, jar_local, jar_normal, jar_biomes, -VERTEX.z);
+JarContext jar_context(vec3 chunk, vec3 local, vec3 normal, vec4 biomes, float view_distance) {
 	JarContext c;
 	c.biomes = biomes;
+	c.chunk = chunk;
+	c.local = local;
+	vec3 position = chunk + local;
 	c.position = position;
 	c.normal = normalize(normal);
 	bool radial = jar_up_axis.w > 0.5;
@@ -125,10 +180,11 @@ JarContext jar_context(vec3 position, vec3 normal, vec4 biomes, float view_dista
 	c.height = radial ? length(to_center) - jar_up_center.w : dot(to_center, jar_up_axis.xyz) - jar_up_center.w;
 	vec3 w = pow(abs(c.normal), vec3(triplanar_sharpness));
 	c.triplanar = w / max(w.x + w.y + w.z, 1e-5);
-	c.macro = jar_fbm(position / variation_size);
-	c.hue = jar_value_noise(position / (variation_size * 2.3) + 41.0);
+	// Noise sizes are rounded to powers of two (see jar_noise_at).
+	c.macro = jar_fbm_at(chunk, local, variation_size);
+	c.hue = jar_noise_at(chunk, local, variation_size * 2.0, 1.0, 41.0);
 	c.fade = 1.0 - smoothstep(detail_distance * 0.5, detail_distance, view_distance);
-	c.detail = c.fade > 0.0 ? jar_fbm(position / detail_size) : 0.5;
+	c.detail = c.fade > 0.0 ? jar_fbm_at(chunk, local, detail_size) : 0.5;
 	return c;
 }
 
@@ -157,6 +213,13 @@ vec3 jar_triplanar_normal(vec3 p, vec3 n, vec3 w, float layer) {
 	return normalize(nx.zyx * w.x + ny.xzy * w.y + nz.xyz * w.z);
 }
 
+// Texture coordinates for 1 / `scale` meter textures: the chunk's part
+// wrapped (textures repeat), the rest small. Exact for power of two sizes;
+// otherwise the chunk's part rounds a little, once per chunk (never per pixel).
+vec3 jar_texture_position(JarContext c, float scale) {
+	return fract(c.chunk * scale) + c.local * scale;
+}
+
 // Adds material `id` with weight `w` to the surface.
 void jar_add_material(inout JarSurface s, JarContext c, int id, float w) {
 	if (w < 0.004 || id < 0 || id >= max(jar_material_count, 1))
@@ -172,9 +235,9 @@ void jar_add_material(inout JarSurface s, JarContext c, int id, float w) {
 	albedo *= 1.0 + variation * (c.detail - 0.5) * 0.6 * c.fade;
 	vec3 normal = c.normal;
 	if (jar_has_albedo_textures && p1.g >= 0.0)
-		albedo *= jar_triplanar(jar_albedo_textures, c.position * p1.r, c.triplanar, p1.g).rgb;
+		albedo *= jar_triplanar(jar_albedo_textures, jar_texture_position(c, p1.r), c.triplanar, p1.g).rgb;
 	if (jar_has_normal_textures && p1.b >= 0.0)
-		normal = jar_triplanar_normal(c.position * p1.r, c.normal, c.triplanar, p1.b);
+		normal = jar_triplanar_normal(jar_texture_position(c, p1.r), c.normal, c.triplanar, p1.b);
 	s.albedo += albedo * w;
 	s.normal += normal * w;
 	s.roughness += roughness * w;
@@ -196,7 +259,7 @@ int jar_biome_material(int biome, int rule, int fallback) {
 void jar_add_ground(inout JarSurface s, JarContext c, float amount) {
 	if (amount < 0.004)
 		return;
-	float r = (jar_value_noise(c.position / rule_noise_size) - 0.5) * 2.0 * rule_noise;
+	float r = (jar_noise_at(c.chunk, c.local, rule_noise_size, 1.0, 0.0) - 0.5) * 2.0 * rule_noise;
 	float h = c.height + r * max(shore_blend, 1.0) * 2.0;
 	float slope_cos = dot(c.normal, c.up) + r * 0.08;
 	float cliff_cos = cos(radians(cliff_angle));
@@ -244,8 +307,8 @@ void jar_finish(JarSurface s, JarContext c, mat4 model, mat4 view, out vec3 albe
 	vec3 n = normalize(s.normal / total);
 	if (detail_bump > 0.0 && c.fade > 0.0) {
 		// Surface gradient bump mapping (Mikkelsen) with the detail noise as height.
-		vec3 dpdx = dFdx(c.position);
-		vec3 dpdy = dFdy(c.position);
+		vec3 dpdx = dFdx(c.local); // small, precise (the large position's were rounding noise)
+		vec3 dpdy = dFdy(c.local);
 		float height = c.detail * detail_size * 0.15 * detail_bump * c.fade;
 		float dhdx = dFdx(height);
 		float dhdy = dFdy(height);
