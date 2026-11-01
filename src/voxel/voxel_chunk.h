@@ -153,9 +153,15 @@ class JarVoxelChunk : public Node3D
         set_visible(false);
         if (collision_shape)
             set_collider_active(false);
+        // Out of the volume's transform: Godot then skips it (and its mesh
+        // and body) when the volume moves. Off a planet the scene follows
+        // another body, so the planet moves every physics tick, and the
+        // thousands of parked chunks cost 2-3 ms per tick.
+        set_as_top_level(true);
     }
     void reactivate()
     {
+        set_as_top_level(false);
         // Collision stays disabled: the shape still holds the previous owner's
         // faces. update_collision_mesh() re-enables it once rebuilt.
         set_visible(true);

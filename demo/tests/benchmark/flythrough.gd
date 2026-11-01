@@ -5,12 +5,14 @@ extends Node
 ## the costliest stages and the worst frames; OUT=path.csv writes every frame.
 ##   godot --path demo res://tests/benchmark/flythrough.tscn
 ## Options (environment): SCENE, SPEEDS (m/s, comma separated), SECONDS (per
-## speed), ALTITUDE (m), OUT.
+## speed), ALTITUDE (m), CLIMB (m/s: rises while flying, e.g. out to space),
+## OUT.
 
 var SCENE := _env("SCENE", "res://demo/planet.tscn")
 var SPEEDS := Array(_env("SPEEDS", "50,500").split(",")).map(func(s): return float(s))
 var SECONDS := float(_env("SECONDS", "20"))
 var ALTITUDE := float(_env("ALTITUDE", "40"))
+var CLIMB := float(_env("CLIMB", "0"))
 var OUT := _env("OUT", "")
 
 var _frames: Array[Dictionary] = []
@@ -38,6 +40,7 @@ func _ready() -> void:
 	var dir := (volume.global_transform.affine_inverse() * player.global_position).normalized()
 	var axis := dir.cross(Vector3(0.3, 0.9, 0.1)).normalized()
 	var angle := 0.0
+	var altitude := ALTITUDE
 	for speed in SPEEDS:
 		var label := "%d m/s" % speed
 		var elapsed := 0.0
@@ -54,16 +57,17 @@ func _ready() -> void:
 			var delta := get_process_delta_time()
 			elapsed += delta
 			angle += speed * delta / sdf.radius
+			altitude += CLIMB * delta
 			var at := dir.rotated(axis, angle)
 			var ahead := dir.rotated(axis, angle + 200.0 / sdf.radius)
 			var height := maxf(sdf.sample_height(at * sdf.radius), 0.0)
 			var to_global := volume.global_transform
-			player.global_position = to_global * (at * (sdf.radius + height + ALTITUDE))
+			player.global_position = to_global * (at * (sdf.radius + height + altitude))
 			var look := to_global * (ahead * (sdf.radius + maxf(sdf.sample_height(ahead * sdf.radius), 0.0)))
 			player.look_at(look, to_global.basis * at)
 			var stats := JarVoxelStats.get_frame()
 			stats["frame"] = frame_ms
-			stats["phase"] = label
+			stats["phase"] = label if CLIMB == 0.0 else "%s, %d km up" % [label, int(altitude / 10000.0) * 10]
 			_frames.append(stats)
 	_report()
 	get_tree().quit()
