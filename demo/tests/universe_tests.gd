@@ -365,13 +365,15 @@ func _test_rotating_frame() -> void:
 	var to_body: Basis = material.get_shader_parameter("world_to_body")
 	_check("clouds turn with the body", to_body.is_equal_approx(planet.global_basis.orthonormalized().transposed()))
 
-	viewer.position = Vector3(0, 1550, 0) # 550 m: above the height, below 1.2x
+	# From the planet's center: switching to a turning frame aligns the scene
+	# with the planet (floating origin), which moves and turns it.
+	viewer.position = planet.global_position + Vector3(0, 1550, 0) # 550 m: above the height, below 1.2x
 	await _frames(2)
 	_check("hysteresis: stays not rotating", not JarVoxelUniverse.is_frame_rotating())
-	viewer.position = Vector3(0, 1400, 0)
+	viewer.position = planet.global_position + Vector3(0, 1400, 0)
 	await _frames(2)
 	_check("rotating again below the height", JarVoxelUniverse.is_frame_rotating())
-	viewer.position = Vector3(0, 1550, 0)
+	viewer.position = planet.global_position + Vector3(0, 1550, 0)
 	await _frames(2)
 	_check("hysteresis: stays rotating", JarVoxelUniverse.is_frame_rotating())
 

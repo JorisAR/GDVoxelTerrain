@@ -41,6 +41,7 @@ class JarVoxelUniverse : public Object
     uint64_t _anchorOverride = 0; // instance id, 0: automatic
     uint64_t _updater = 0;        // instance id of the internal node driving step()
     bool _spaceGravitySet = false;
+    uint64_t _gravityArea = 0; // instance id of the Area3D carrying the anchor's gravity
     // Frame switching: the scene is view(t) * U(body, t), where view(t) keeps
     // the frame anchor at the scene pose it had when it became the anchor.
     uint64_t _frameAnchor = 0;   // instance id
@@ -152,6 +153,12 @@ class JarVoxelUniverse : public Object
     // spin, seen from the anchor), and the body's angular velocity in the scene.
     Vector3 get_body_velocity_at(JarCelestialBody *body, const Vector3 &position) const;
     Vector3 get_body_angular_velocity(JarCelestialBody *body) const;
+    // How `body` moved in the scene over the last physics tick, computed in
+    // double precision: exactly the identity for the anchor the scene turns
+    // with. For controllers that move along with a body (apply it to their
+    // transform each tick); differencing its global transforms instead
+    // rounds at the scale of its distance (centimeters on a 600 km planet).
+    Transform3D get_body_motion(JarCelestialBody *body) const;
     // The body the scene is currently relative to: its center stands still,
     // and near it (its rotating frame height) it does not turn either.
     JarCelestialBody *get_frame_anchor() const;

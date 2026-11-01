@@ -7,7 +7,10 @@
 #include <algorithm>
 #include <climits>
 #include <cmath>
+#include <godot_cpp/classes/area3d.hpp>
 #include <godot_cpp/classes/camera3d.hpp>
+#include <godot_cpp/classes/collision_shape3d.hpp>
+#include <godot_cpp/classes/sphere_shape3d.hpp>
 #include <godot_cpp/classes/character_body3d.hpp>
 #include <godot_cpp/classes/directional_light3d.hpp>
 #include <godot_cpp/classes/environment.hpp>
@@ -33,6 +36,8 @@ const char *UpSharpness = "jar_voxel_terrain/gravity/up_sharpness";
 const char *SpaceGravity = "jar_voxel_terrain/gravity/drive_space_gravity";
 const char *FrameSwitching = "jar_voxel_terrain/universe/frame_switching";
 const char *AdaptCamera = "jar_voxel_terrain/universe/adapt_camera_clip";
+// The reach of the gravity area: the whole system (meters).
+constexpr real_t GravityAreaRadius = 1.0e8;
 
 Variant setting(const char *name, const Variant &fallback)
 {
@@ -108,6 +113,7 @@ void JarVoxelUniverse::_bind_methods()
     ClassDB::bind_method(D_METHOD("get_body_velocity_at", "body", "global_position"),
                          &JarVoxelUniverse::get_body_velocity_at);
     ClassDB::bind_method(D_METHOD("get_body_angular_velocity", "body"), &JarVoxelUniverse::get_body_angular_velocity);
+    ClassDB::bind_method(D_METHOD("get_body_motion", "body"), &JarVoxelUniverse::get_body_motion);
     ADD_SIGNAL(MethodInfo("anchor_changed",
                           PropertyInfo(Variant::OBJECT, "previous", PROPERTY_HINT_NODE_TYPE, "JarCelestialBody"),
                           PropertyInfo(Variant::OBJECT, "current", PROPERTY_HINT_NODE_TYPE, "JarCelestialBody")));
@@ -579,6 +585,16 @@ Vector3 JarVoxelUniverse::get_body_velocity_at(JarCelestialBody *body, const Vec
     return point_velocity(now, before, position);
 }
 
+Transform3D JarVoxelUniverse::get_body_motion(JarCelestialBody *body) const
+{
+    if (body == nullptr)
+        return Transform3D();
+    const double time = get_time();
+    const DTransform now = view_at(time) * universe_transform(body, time);
+    const DTransform before = view_at(time - tick_time()) * universe_transform(body, time - tick_time());
+    return (now * before.inverse()).to();
+}
+
 Vector3 JarVoxelUniverse::get_body_angular_velocity(JarCelestialBody *body) const
 {
     if (body == nullptr)
@@ -687,6 +703,39 @@ void JarVoxelUniverse::apply_space_gravity(Node *context, JarCelestialBody *anch
         physics->area_set_param(space, PhysicsServer3D::AREA_PARAM_GRAVITY_IS_POINT, false);
         physics->area_set_param(space, PhysicsServer3D::AREA_PARAM_GRAVITY_VECTOR, -frame.axis);
     }
+    // Jolt keeps one uniform gravity per space: it evaluates the default
+    // area's point gravity at the world origin, pulling every body as if it
+    // were there. An Area3D's gravity is evaluated per body (with either
+    // engine), so the same gravity also comes from one around the whole
+    // system, replacing the default.
+    auto *updater = Object::cast_to<Node>(ObjectDB::get_instance(_updater));
+    auto *area = Object::cast_to<Area3D>(ObjectDB::get_instance(_gravityArea));
+    if (area == nullptr && updater != nullptr && updater->is_inside_tree())
+    {
+        area = memnew(Area3D);
+        area->set_name("GravityArea");
+        Ref<SphereShape3D> sphere;
+        sphere.instantiate();
+        sphere->set_radius(GravityAreaRadius);
+        auto *shape = memnew(CollisionShape3D);
+        shape->set_shape(sphere);
+        area->add_child(shape);
+        area->set_collision_layer(0);
+        area->set_collision_mask(0xFFFFFFFFu); // every body
+        area->set_gravity_space_override_mode(Area3D::SPACE_OVERRIDE_REPLACE);
+        updater->add_child(area);
+        _gravityArea = area->get_instance_id();
+    }
+    if (area != nullptr)
+    {
+        // Centered on the anchor: the gravity point is the area's origin.
+        area->set_global_position(frame.radial ? frame.center : Vector3());
+        area->set_gravity(anchor->get_surface_gravity());
+        area->set_gravity_is_point(frame.radial);
+        area->set_gravity_point_center(Vector3());
+        area->set_gravity_point_unit_distance(frame.radial ? std::max(frame.radius, real_t(1.0)) : 0.0);
+        area->set_gravity_direction(-frame.axis);
+    }
     _spaceGravitySet = true;
 }
 
@@ -703,6 +752,9 @@ void JarVoxelUniverse::restore_space_gravity(Node *context)
     physics->area_set_param(space, PhysicsServer3D::AREA_PARAM_GRAVITY_IS_POINT, false);
     physics->area_set_param(space, PhysicsServer3D::AREA_PARAM_GRAVITY_VECTOR,
                             setting("physics/3d/default_gravity_vector", Vector3(0, -1, 0)));
+    if (auto *area = Object::cast_to<Area3D>(ObjectDB::get_instance(_gravityArea)))
+        area->queue_free();
+    _gravityArea = 0;
     _spaceGravitySet = false;
 }
 

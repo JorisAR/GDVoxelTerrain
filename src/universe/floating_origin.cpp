@@ -58,7 +58,9 @@ void shift_node(Node3D *node, const Transform3D &shift, bool turns)
     }
 }
 
-void visit(Node *node, const Transform3D &shift, bool turns, const std::unordered_set<uint64_t> &skip)
+// `moves`: whether `node`'s global transform moves with the shift (it was
+// moved, or follows one that was), so its children follow it.
+void visit(Node *node, bool moves, const Transform3D &shift, bool turns, const std::unordered_set<uint64_t> &skip)
 {
     const int count = node->get_child_count();
     for (int i = 0; i < count; ++i)
@@ -67,15 +69,23 @@ void visit(Node *node, const Transform3D &shift, bool turns, const std::unordere
         // Chunks hold no top-level nodes; there are thousands of them.
         if (Object::cast_to<JarVoxelChunk>(child) != nullptr)
             continue;
+        bool childMoves = false;
         if (auto *spatial = Object::cast_to<Node3D>(child))
         {
-            // Its pose follows its parent's, unless the parent is no Node3D
-            // or it is top level: those are moved themselves.
-            const bool follows = !spatial->is_set_as_top_level() && Object::cast_to<Node3D>(node) != nullptr;
-            if (!follows && !skip.count(spatial->get_instance_id()))
+            if (moves && !spatial->is_set_as_top_level())
+                childMoves = true; // follows its parent
+            else if (skip.count(spatial->get_instance_id()))
+                childMoves = true; // placed by someone else, its children with it
+            else if (spatial->get_class() == "Node3D" && spatial->get_transform() == Transform3D() &&
+                     spatial->get_child_count() > 0)
+                childMoves = false; // a plain container (a scene's root): its children move instead
+            else
+            {
                 shift_node(spatial, shift, turns);
+                childMoves = true;
+            }
         }
-        visit(child, shift, turns, skip);
+        visit(child, childMoves, shift, turns, skip);
     }
 }
 
@@ -102,7 +112,11 @@ void FloatingOrigin::apply(Node *root, const Transform3D &shift, const std::unor
 {
     if (root == nullptr)
         return;
-    visit(root, shift, !shift.basis.is_equal_approx(Basis()), skip);
+    // Each moved node is moved itself, never through a moved container: a
+    // scene's root moved far away put its children (the player) far the
+    // other way inside it, and Godot composed their global transforms from
+    // both in floats (1/32 m steps at 400 km).
+    visit(root, false, shift, !shift.basis.is_equal_approx(Basis()), skip);
     if (JarVoxelUniverse *universe = JarVoxelUniverse::get_singleton())
         universe->emit_signal("origin_shifted", shift);
 }

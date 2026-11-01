@@ -34,7 +34,6 @@ var flying := false
 var _spawned := false
 var _moved_to_surface := false
 var _frame: JarCelestialBody # body whose motion the player currently follows
-var _frame_transform: Transform3D
 # Fly mode steers towards fly_speed relative to the scene's frame. When the
 # universe switches frames it converts the velocity; that change is kept here
 # and fades out, instead of being steered away within a few frames (a jolt).
@@ -52,9 +51,8 @@ func _ready() -> void:
 	JarVoxelUniverse.origin_shifted.connect(_on_origin_shifted)
 
 ## Floating origin: the scene (this body included, its velocity turned along)
-## moved by `shift`; so did the frame it follows, which is no motion of its own.
+## moved by `shift`.
 func _on_origin_shifted(shift: Transform3D) -> void:
-	_frame_transform = shift * _frame_transform
 	_fly_offset = shift.basis * _fly_offset
 	_last_velocity = shift.basis * _last_velocity
 
@@ -169,7 +167,9 @@ func _try_spawn() -> bool:
 	for volume: JarVoxelVolume in volumes:
 		if volume.is_building() or volume.is_meshing():
 			return false
-	var query := PhysicsRayQueryParameters3D.create(global_position + up_direction * 2.0, global_position - up_direction * 2000.0)
+	# From well above: the first move used the terrain as it was then (coarse,
+	# tens of meters off on a large planet), which may have left it below the ground.
+	var query := PhysicsRayQueryParameters3D.create(global_position + up_direction * 500.0, global_position - up_direction * 2000.0)
 	query.exclude = [get_rid()]
 	var hit := get_world_3d().direct_space_state.intersect_ray(query)
 	if not hit:
@@ -200,12 +200,12 @@ func _follow_frame() -> void:
 		else:
 			remove_from_group("jar_frame_exempt")
 	elif frame:
-		# Apply how the frame moved since the last physics frame.
-		var motion := frame.global_transform * _frame_transform.affine_inverse()
+		# Apply how the frame moved since the last physics frame (from the
+		# universe, in doubles: differencing its global transforms here
+		# rounded at its distance, centimeters of jitter on a large planet).
+		var motion := JarVoxelUniverse.get_body_motion(frame)
 		global_transform = motion * global_transform
 		velocity = motion.basis * velocity
-	if frame:
-		_frame_transform = frame.global_transform
 
 ## How a point at the player moves along with `body` (its orbit and spin).
 func _body_velocity(body: Node3D) -> Vector3:
