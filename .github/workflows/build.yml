@@ -60,18 +60,6 @@ jobs:
             target: template_release
             platform: macos
             arch: universal
-          # - identifier: android-debug-arm64
-          #   name: Android Debug arm64
-          #   runner: ubuntu-22.04
-          #   target: template_debug
-          #   platform: android
-          #   arch: arm64
-          # - identifier: android-release-arm64
-          #   name: Android Release arm64
-          #   runner: ubuntu-22.04
-          #   target: template_release
-          #   platform: android
-          #   arch: arm64
 
     steps:
       - name: Checkout project
@@ -86,16 +74,6 @@ jobs:
           sudo apt-get install -y mingw-w64
           sudo update-alternatives --set x86_64-w64-mingw32-gcc /usr/bin/x86_64-w64-mingw32-gcc-posix
           sudo update-alternatives --set x86_64-w64-mingw32-g++ /usr/bin/x86_64-w64-mingw32-g++-posix
-
-      # Only the NDK is needed to build the extension (no SDK/JDK). r23c matches
-      # godot-cpp's default ndk_version (23.2.8568313).
-      - name: Install NDK r23c (android)
-        if: ${{ matrix.platform == 'android' }}
-        id: setup-ndk
-        uses: nttld/setup-ndk@v1
-        with:
-          ndk-version: r23c
-          link-to-sdk: false
 
       - name: Install Python and SCons
         uses: actions/setup-python@v5
@@ -121,13 +99,7 @@ jobs:
         env:
           SCONS_CACHE: '${{ github.workspace }}/.scons-cache/'
           SCONS_CACHE_LIMIT: 4096
-          ANDROID_NDK_ROOT: ${{ steps.setup-ndk.outputs.ndk-path }}
         run: |
-          if [ '${{ matrix.platform }}' = 'android' ]; then
-            # godot-cpp prefers $ANDROID_HOME/ndk/<version>, which the runner's
-            # preinstalled SDK doesn't have; make it use ANDROID_NDK_ROOT instead.
-            unset ANDROID_HOME ANDROID_SDK_ROOT
-          fi
           scons target='${{ matrix.target }}' platform='${{ matrix.platform }}' arch='${{ matrix.arch }}' -j2
           echo "--- build output ---"
           ls -l demo/addons/jar_voxel_terrain/bin/
