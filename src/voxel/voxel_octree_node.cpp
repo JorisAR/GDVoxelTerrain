@@ -265,20 +265,27 @@ void VoxelOctreeNode::build(JarVoxelVolume &terrain, BuildContext *ctx)
     if (!has_flag(FlagGenerated))
     {
         const JarSignedDistanceField::DetailScope detail(edge_length(terrain.get_voxel_size()));
-        float value = terrain.get_sdf_ptr()->distance(_center);
+        const float value = terrain.get_sdf_ptr()->distance(_center);
         set_value(value);
-        if (has_surface(terrain, value) && (_size > LoD))
+        set_flag(FlagGenerated, true);
+        // A leaf for good (no surface to refine, or the finest size): a fully
+        // realized subtree, not walked again.
+        if (!(has_surface(terrain, value) && _size > LoD) && (_size > LoD || _size == min_size()))
         {
-            subdivide(terrain.get_voxel_size());
-            set_flag(FlagGenerated, true);
-        }
-        // if we don't subdivide further, we mark it as a fully realized subtree
-        if (is_leaf() && (_size > LoD || _size == min_size()))
-        { //
-            set_flag(FlagGenerated, true);
             mark_materialized();
             return;
         }
+    }
+    // Refined where the surface needs this LOD. A leaf at its LOD's size
+    // stays walked (not materialized) for when the LOD gets finer; it used to
+    // stay ungenerated for that, and every build evaluated the SDF for all of
+    // them again (~57k per build on the 16 km planet). Edited leaves keep
+    // their (edited) value whole.
+    if (is_leaf() && _size > LoD && !has_flag(FlagEdited) && has_surface(terrain, get_value()))
+    {
+        subdivide(terrain.get_voxel_size());
+        for (auto &child : *_children)
+            child.set_flag(FlagGenerated, false); // from the SDF, not copied (as edits do)
     }
 
     // Detail no longer needed (the viewer moved away) is dropped, or the octree
