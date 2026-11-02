@@ -234,6 +234,11 @@ void JarVoxelVolume::_bind_methods()
     ClassDB::bind_method(D_METHOD("spawn_debug_spheres_in_bounds", "position", "range"),
                          &JarVoxelVolume::spawn_debug_spheres_in_bounds);
     ClassDB::bind_method(D_METHOD("force_update_lod"), &JarVoxelVolume::force_update_lod);
+    ClassDB::bind_method(D_METHOD("get_distance", "position"), &JarVoxelVolume::get_distance);
+    ClassDB::bind_method(D_METHOD("project_to_surface", "position"), &JarVoxelVolume::project_to_surface);
+    ClassDB::bind_method(D_METHOD("raycast", "from", "to"), &JarVoxelVolume::raycast);
+    ClassDB::bind_method(D_METHOD("keep_above_surface", "body", "margin"), &JarVoxelVolume::keep_above_surface,
+                         DEFVAL(0.0f));
     ClassDB::bind_method(D_METHOD("is_building"), &JarVoxelVolume::is_building);
     ClassDB::bind_method(D_METHOD("is_meshing"), &JarVoxelVolume::is_meshing);
     ClassDB::bind_method(D_METHOD("is_generating_details"), &JarVoxelVolume::is_generating_details);
@@ -511,6 +516,8 @@ void JarVoxelVolume::queue_edit(const Ref<JarSignedDistanceField> &sdf, SDF::Ope
 
     // Queued rather than applied immediately: the octree may only be mutated
     // when no build or meshing task is reading it (see process()).
+    if (!paintOnly)
+        _everEdited = true;
     _modifySettingsQueue.push(settings);
 }
 

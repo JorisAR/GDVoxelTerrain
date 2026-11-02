@@ -143,6 +143,8 @@ func _physics_process(delta: float) -> void:
 		_fly_offset = Vector3.ZERO
 		_walk(input, gravity, delta)
 	move_and_slide()
+	if not flying:
+		_stay_above_ground()
 	_last_velocity = velocity
 	_update_hud()
 
@@ -220,6 +222,14 @@ func _debris_nodes() -> Array[Node]:
 		_debris_searched = true
 		_debris = get_tree().root.find_children("*", "JarVoxelDebris", true, false)
 	return _debris
+
+## Where colliders lag behind (a fast fall onto ground still being refined),
+## the feet can end up under the surface: back on top, from the volumes'
+## own field (edits included, so dug holes stay open).
+func _stay_above_ground() -> void:
+	for volume: JarVoxelVolume in _volumes():
+		if volume.get_distance(global_position) < -0.5:
+			volume.keep_above_surface(self, 0.05)
 
 var _volume_nodes: Array[Node] = []
 

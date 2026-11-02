@@ -526,6 +526,35 @@ void VoxelOctreeNode::get_chunks_touching(const JarVoxelVolume &terrain, const B
         child.get_chunks_touching(terrain, bounds, result);
 }
 
+VoxelOctreeNode *VoxelOctreeNode::node_at(float voxelSize, const glm::vec3 &point)
+{
+    if (!get_bounds(voxelSize).contains_point(point))
+        return nullptr;
+    VoxelOctreeNode *node = this;
+    while (!node->is_leaf())
+    {
+        const glm::vec3 &c = node->_center;
+        node = &(*node->_children)[(point.x >= c.x ? 1 : 0) + (point.y >= c.y ? 2 : 0) + (point.z >= c.z ? 4 : 0)];
+    }
+    return node;
+}
+
+bool VoxelOctreeNode::edited_around(float voxelSize, const Bounds &bounds)
+{
+    VoxelOctreeNode *node = this;
+    while (!node->is_leaf() && node->has_flag(FlagEdited))
+    {
+        VoxelOctreeNode *inner = nullptr;
+        for (auto &child : *node->_children)
+            if (child.get_bounds(voxelSize).encloses(bounds))
+                inner = &child;
+        if (inner == nullptr)
+            break;
+        node = inner;
+    }
+    return node->has_flag(FlagEdited);
+}
+
 void VoxelOctreeNode::get_shown_chunks_replaced(std::vector<VoxelOctreeNode *> &result)
 {
     for (VoxelOctreeNode *ancestor = _parent; ancestor != nullptr; ancestor = ancestor->_parent)

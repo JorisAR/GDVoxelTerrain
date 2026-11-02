@@ -157,6 +157,10 @@ class VoxelOctreeNode : public OctreeNode<VoxelOctreeNode>
                              std::vector<VoxelOctreeNode *> &result);
     // The shown chunks this chunk replaces: coarser ones above it, finer ones below.
     void get_shown_chunks_replaced(std::vector<VoxelOctreeNode *> &result);
+    // The deepest node containing `point` (volume space), null if outside this one.
+    VoxelOctreeNode *node_at(float voxelSize, const glm::vec3 &point);
+    // Whether an edit changed anything in the deepest node enclosing `bounds`.
+    bool edited_around(float voxelSize, const Bounds &bounds);
     void modify_sdf_in_bounds(JarVoxelVolume &terrain, const ModifySettings &settings);
     void update_chunk(JarVoxelVolume &terrain, ChunkMeshData *chunkMeshData);
 

@@ -119,6 +119,11 @@ class JarVoxelVolume : public Node3D
     static constexpr int MaxPoolReserve = 1024;
     static constexpr int PoolRefillMicroseconds = 500;
     int _poolReserve = MinPoolReserve;
+    // Surface queries (volume_queries.cpp): the field at a volume-space point
+    // (NaN while the octree changes, near edits), and its gradient.
+    bool _everEdited = false; // main thread: an edit was queued; until then the SDF is the field
+    float field_at(const glm::vec3 &point);
+    glm::vec3 field_normal(const glm::vec3 &point);
     int _acquiredSinceCommit = 0;
     JarVoxelChunk *create_chunk();
     void refill_pool(); // main thread, every frame
@@ -223,6 +228,25 @@ class JarVoxelVolume : public Node3D
 
     void force_update_lod();
 
+    // Surface queries in global space, from the volume's field itself, not
+    // its meshes or colliders: they work at any LOD, far from any viewer, and
+    // right after an edit. Where nothing was edited they use the SDF (exact);
+    // around edits the octree's samples. While an edit or LOD build changes
+    // the octree (is_building()), places near edits are unknown: NaN, or an
+    // empty result. Main thread.
+    // Signed distance to the surface (negative inside).
+    float get_distance(const Vector3 &position);
+    // The nearest surface point: {position, normal}; empty if unknown.
+    Dictionary project_to_surface(const Vector3 &position);
+    // The first surface point on the segment: {position, normal, distance};
+    // empty if none (or unknown). Starting inside: the start, distance 0.
+    Dictionary raycast(const Vector3 &from, const Vector3 &to);
+    // Puts `body` (RigidBody3D, CharacterBody3D or any Node3D) back above the
+    // surface when its origin is less than `margin` above it (e.g. sunk or
+    // fallen through where colliders lag behind a fast fall), and drops its
+    // velocity into the ground. Call it from _physics_process. True if moved.
+    bool keep_above_surface(Node3D *body, float margin = 0.0f);
+
     // chunks
     void enqueue_chunk_collider(JarVoxelChunk *chunk);
     void enqueue_chunk_update(VoxelOctreeNode &node, bool urgent);
@@ -257,8 +281,8 @@ class JarVoxelVolume : public Node3D
     void set_sea_level(float value);
     // Script helpers taking and returning global-space values.
     Vector3 get_up_direction_at(const Vector3 &global_position) const;
-    // Ray marches the volume's base SDF (edits are not included) from `from`
-    // to `to`, in global space. Works at any distance, without colliders.
+    // Ray marches the volume's base SDF (edits are not included; raycast()
+    // includes them) from `from` to `to`, in global space. Works at any distance, without colliders.
     // Returns {position, normal} or an empty dictionary.
     Dictionary raycast_sdf(const Vector3 &from, const Vector3 &to) const;
     float get_height_at(const Vector3 &global_position) const;
