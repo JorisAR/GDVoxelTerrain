@@ -6,7 +6,7 @@ extends Node
 ##   godot --path demo res://tests/benchmark/flythrough.tscn
 ## Options (environment): SCENE, SPEEDS (m/s, comma separated), SECONDS (per
 ## speed), ALTITUDE (m), CLIMB (m/s: rises while flying, e.g. out to space),
-## OUT.
+## FAST_NORMALS (1: the terrain's fast_normals, in memory only), OUT.
 
 var SCENE := _env("SCENE", "res://demo/planet.tscn")
 var SPEEDS := Array(_env("SPEEDS", "50,500").split(",")).map(func(s): return float(s))
@@ -28,6 +28,8 @@ func _ready() -> void:
 	add_child(scene)
 	var volume: JarVoxelVolume = scene.get_node("%Planet/JarVoxelVolume")
 	var sdf: JarTerrainSdf = volume.sdf
+	if _env("FAST_NORMALS", "") == "1":
+		sdf.fast_normals = true
 	var start := Time.get_ticks_msec()
 	while not player._spawned and Time.get_ticks_msec() - start < 60000:
 		await get_tree().physics_frame

@@ -819,6 +819,7 @@ void JarTerrainSdf::_bind_methods()
     BIND_PROP(gully_weight, Variant::FLOAT, PROPERTY_HINT_RANGE, "0.05,1,0.01");
     BIND_PROP(assumed_slope, Variant::FLOAT, PROPERTY_HINT_RANGE, "0.05,3,0.01");
     BIND_PROP(crease_softness, Variant::FLOAT, PROPERTY_HINT_RANGE, "0,10,0.01,or_greater,suffix:m");
+    BIND_PROP(fast_normals, Variant::BOOL, PROPERTY_HINT_NONE, "");
 #undef BIND_PROP
     ClassDB::bind_method(D_METHOD("sample_height", "position"), &JarTerrainSdf::sample_height);
 }
@@ -855,7 +856,7 @@ glm::vec3 JarTerrainSdf::gradient(const glm::vec3 &pos) const
         const float n = normalization(c, above - c.height);
         const float d = (above - c.height) / n;
         glm::vec3 nSlope(0.0f);
-        if (std::abs(d) > 1e-3f)
+        if (!_fastNormals && std::abs(d) > 1e-3f)
         {
             const glm::vec3 t1 = glm::normalize(std::abs(up.y) < 0.9f ? glm::cross(up, glm::vec3(0, 1, 0))
                                                                        : glm::cross(up, glm::vec3(1, 0, 0)));

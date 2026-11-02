@@ -128,12 +128,23 @@ class JarVoxelChunk : public Node3D
     // A chunk without a collider takes its body out of the physics space:
     // otherwise every body of a moving volume (an orbiting moon) is moved by the
     // physics engine each frame, collider or not, which is expensive.
+    // Without a collider the body is also taken out of the volume's transform
+    // (top level), like a parked chunk: moving a planet (off it, every
+    // physics tick) otherwise updated thousands of idle bodies.
     void set_collider_active(bool active)
     {
         if (collision_shape)
             collision_shape->set_disabled(!active);
         if (static_body)
+        {
             static_body->set_process_mode(active ? PROCESS_MODE_INHERIT : PROCESS_MODE_DISABLED);
+            if (static_body->is_set_as_top_level() == active)
+            {
+                static_body->set_as_top_level(!active);
+                if (active)
+                    static_body->set_transform(Transform3D()); // see reactivate()
+            }
+        }
     }
     void apply_rendering(const JarVoxelVolume &terrain);
     // The volume's terrain material on a chunk mesh (its shader inputs are set
@@ -162,6 +173,10 @@ class JarVoxelChunk : public Node3D
     void reactivate()
     {
         set_as_top_level(false);
+        // Back under the volume, Godot keeps the global transform it had when
+        // parked: the volume has moved (and turned) since. update_chunk()
+        // sets the position.
+        set_transform(Transform3D());
         // Collision stays disabled: the shape still holds the previous owner's
         // faces. update_collision_mesh() re-enables it once rebuilt.
         set_visible(true);

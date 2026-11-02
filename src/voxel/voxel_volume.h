@@ -116,7 +116,7 @@ class JarVoxelVolume : public Node3D
     // commit has needed so far: creating hundreds inside a commit stalled it
     // for 30-75 ms while flying.
     static constexpr int MinPoolReserve = 128;
-    static constexpr int MaxPoolReserve = 4096;
+    static constexpr int MaxPoolReserve = 1024;
     static constexpr int PoolRefillMicroseconds = 500;
     int _poolReserve = MinPoolReserve;
     int _acquiredSinceCommit = 0;

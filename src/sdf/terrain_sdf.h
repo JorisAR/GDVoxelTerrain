@@ -76,6 +76,12 @@ class JarTerrainSdf : public JarSignedDistanceField
     float _gullyWeight = 0.5f; // < 1 keeps peaks pointy (strength is compensated)
     float _assumedSlope = 0.6f;
     float _creaseSoftness = 2.0f; // meters over which gully floors and ridge lines round off
+    // Normals (gradient()) without the normalization's change along the
+    // ground: 4.5x faster (1 terrain evaluation instead of 3; most of the
+    // cost of meshing new ground), a little off away from the surface (on
+    // the demo planets, within 0.5 m of it under 2 degrees, at 1-1.5 m 99%
+    // under 3-6 degrees, a few up to 10-18 degrees in steep gullies).
+    bool _fastNormals = false;
 
     static constexpr int MaxOctaves = 10;
     struct Sample
@@ -201,6 +207,8 @@ class JarTerrainSdf : public JarSignedDistanceField
     void set_gully_weight(float v) { set_and_notify(_gullyWeight, std::clamp(v, 0.01f, 1.0f)); }
     float get_assumed_slope() const { return _assumedSlope; }
     void set_assumed_slope(float v) { set_and_notify(_assumedSlope, std::max(0.01f, v)); }
+    bool get_fast_normals() const { return _fastNormals; }
+    void set_fast_normals(bool v) { set_and_notify(_fastNormals, v); }
     float get_crease_softness() const { return _creaseSoftness; }
     void set_crease_softness(float v) { set_and_notify(_creaseSoftness, std::max(0.0f, v)); }
 

@@ -21,6 +21,7 @@ func _ready() -> void:
 	await _test_flat_body()
 	await _test_volume_body()
 	await _test_space_gravity_restored()
+	await _test_space_round_trip()
 	print("Universe tests: %s" % ("ALL PASSED" if _failures == 0 else "%d FAILED" % _failures))
 	get_tree().quit(1 if _failures > 0 else 0)
 
@@ -540,3 +541,56 @@ func _test_space_gravity_restored() -> void:
 	_check("project gravity restored", _near(ball.linear_velocity, expected, 0.03), "%s vs %s" % [ball.linear_velocity, expected])
 	_check("universe gravity is project gravity", _near(JarVoxelUniverse.get_gravity(Vector3.ZERO), expected * 2.0))
 	ball.queue_free()
+
+## Out to space and back over the demo planet: off it the scene follows
+## another body, so the planet moves and turns while chunks are parked in
+## the pool. Reused, they must sit in the volume again (a parked chunk came
+## back with the turn it had when parked: all of them, after a round trip),
+## and the ground must be solid again.
+func _test_space_round_trip() -> void:
+	Engine.max_fps = 60
+	var scene: Node = load("res://demo/planet.tscn").instantiate()
+	var player: DemoPlayer = scene.get_node("Player")
+	add_child(scene)
+	var volume: JarVoxelVolume = scene.get_node("%Planet/JarVoxelVolume")
+	var sdf: JarTerrainSdf = volume.sdf
+	while not player._spawned:
+		await get_tree().physics_frame
+	player.set_physics_process(false)
+	var dir := (volume.global_transform.affine_inverse() * player.global_position).normalized()
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 3
+	while sdf.sample_height(dir * sdf.radius) < 30.0:
+		dir = (dir + Vector3(rng.randf_range(-1, 1), rng.randf_range(-1, 1), rng.randf_range(-1, 1)) * 0.01).normalized()
+	var ground := sdf.radius + sdf.sample_height(dir * sdf.radius)
+	var altitude := 40.0
+	for climb in [6000.0, -6000.0]:
+		var t := 0.0
+		while t < 7.0:
+			await get_tree().process_frame
+			t += get_process_delta_time()
+			altitude = maxf(40.0, altitude + climb * get_process_delta_time())
+			player.global_position = volume.global_transform * (dir * (ground + altitude))
+	var idle := 0
+	var start := Time.get_ticks_msec()
+	while idle < 30 and Time.get_ticks_msec() - start < 30000:
+		player.global_position = volume.global_transform * (dir * (ground + altitude))
+		await get_tree().process_frame
+		idle = idle + 1 if not volume.is_building() and not volume.is_meshing() else 0
+	await get_tree().physics_frame
+	var turned := 0
+	var shown := 0
+	for c in volume.get_children():
+		if c is JarVoxelChunk and c.visible:
+			shown += 1
+			if not c.transform.basis.is_equal_approx(Basis()) or c.is_set_as_top_level():
+				turned += 1
+	_check("space round trip: chunks in the volume", shown > 100 and turned == 0, "%d of %d shown chunks off" % [turned, shown])
+	var up: Vector3 = volume.global_transform.basis * dir
+	var query := PhysicsRayQueryParameters3D.create(player.global_position + up * 10.0, player.global_position - up * 200.0)
+	query.exclude = [player.get_rid()]
+	var hit := volume.get_world_3d().direct_space_state.intersect_ray(query)
+	_check("space round trip: ground solid again", not hit.is_empty())
+	scene.queue_free()
+	await get_tree().process_frame
+	Engine.max_fps = 0

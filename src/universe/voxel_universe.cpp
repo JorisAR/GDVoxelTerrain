@@ -4,6 +4,7 @@
 #include "celestial_body.h"
 #include "floating_origin.h"
 #include "voxel_viewer.h"
+#include "voxel_chunk.h"
 #include "voxel_stats.h"
 #include <algorithm>
 #include <climits>
@@ -60,6 +61,22 @@ void add_setting(const char *name, const Variant &value, Variant::Type type, Pro
     info["hint"] = hint;
     info["hint_string"] = hintString;
     settings->add_property_info(info);
+}
+
+// Every node below `node`, except inside terrain chunks: thousands of nodes,
+// never a free body or a light. Node::find_children walked them all, twice
+// per frame switch: 16 ms of one physics tick when leaving a planet.
+template <typename Visit> void for_each_node(Node *node, const Visit &visit)
+{
+    const int count = node->get_child_count();
+    for (int i = 0; i < count; ++i)
+    {
+        Node *child = node->get_child(i);
+        if (Object::cast_to<JarVoxelChunk>(child) != nullptr)
+            continue;
+        visit(child);
+        for_each_node(child, visit);
+    }
 }
 
 int depth(const Node *node)
@@ -457,30 +474,23 @@ void JarVoxelUniverse::switch_frame(Node *context, JarCelestialBody *anchor, boo
     if (previous != nullptr && context->is_inside_tree())
     {
         const Vector3 spin = angular_velocity(now, before);
-        Node *root = context->get_tree()->get_root();
-        for (const char *type : {"RigidBody3D", "CharacterBody3D"})
-        {
-            TypedArray<Node> found = root->find_children("*", type, true, false);
-            for (int64_t i = 0; i < found.size(); ++i)
+        for_each_node(context->get_tree()->get_root(), [&](Node *node) {
+            if (auto *rigid = Object::cast_to<RigidBody3D>(node))
             {
-                Node *node = Object::cast_to<Node>(found[i]);
-                if (node == nullptr || node->is_in_group(FrameExemptGroup))
-                    continue;
-                if (auto *rigid = Object::cast_to<RigidBody3D>(node))
-                {
-                    if (rigid->is_freeze_enabled())
-                        continue;
-                    const Vector3 carried = point_velocity(now, before, rigid->get_global_position());
-                    rigid->set_linear_velocity(rigid->get_linear_velocity() - carried);
-                    rigid->set_angular_velocity(rigid->get_angular_velocity() - spin);
-                }
-                else if (auto *character = Object::cast_to<CharacterBody3D>(node))
-                {
-                    const Vector3 carried = point_velocity(now, before, character->get_global_position());
-                    character->set_velocity(character->get_velocity() - carried);
-                }
+                if (rigid->is_freeze_enabled() || node->is_in_group(FrameExemptGroup))
+                    return;
+                const Vector3 carried = point_velocity(now, before, rigid->get_global_position());
+                rigid->set_linear_velocity(rigid->get_linear_velocity() - carried);
+                rigid->set_angular_velocity(rigid->get_angular_velocity() - spin);
             }
-        }
+            else if (auto *character = Object::cast_to<CharacterBody3D>(node))
+            {
+                if (node->is_in_group(FrameExemptGroup))
+                    return;
+                const Vector3 carried = point_velocity(now, before, character->get_global_position());
+                character->set_velocity(character->get_velocity() - carried);
+            }
+        });
     }
     if (previous != anchor)
         emit_signal("anchor_changed", previous, anchor);
@@ -504,16 +514,16 @@ void JarVoxelUniverse::find_sky(Node *context)
                              toUniverse * Basis::from_euler(environment->get_sky_rotation()));
     }
     // Lights not on a body and not driven by a star: other sky lights.
-    TypedArray<Node> lights = context->get_tree()->get_root()->find_children("*", "DirectionalLight3D", true, false);
-    for (int64_t i = 0; i < lights.size(); ++i)
-    {
-        auto *light = Object::cast_to<DirectionalLight3D>(lights[i]);
+    for_each_node(context->get_tree()->get_root(), [&](Node *node) {
+        auto *light = Object::cast_to<DirectionalLight3D>(node);
+        if (light == nullptr)
+            return;
         bool onBody = false;
         for (Node *n = light ? light->get_parent() : nullptr; n != nullptr && !onBody; n = n->get_parent())
             onBody = Object::cast_to<JarCelestialBody>(n) != nullptr;
-        if (light && !onBody && !light->is_in_group(JarBodyLight::LightGroup))
+        if (!onBody && !light->is_in_group(JarBodyLight::LightGroup))
             _skyRest.try_emplace(light->get_instance_id(), toUniverse * light->get_global_basis());
-    }
+    });
 }
 
 void JarVoxelUniverse::place_sky(Node *context, const DTransform &view, bool restore)
