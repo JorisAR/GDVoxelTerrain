@@ -161,6 +161,19 @@ void JarVoxelChunk::set_material(Ref<ShaderMaterial> p_material)
 }
 
 
+void JarVoxelChunk::prepare_mesh(const JarVoxelVolume &terrain, const ChunkMeshData &chunk_mesh_data)
+{
+    const glm::vec3 position = chunk_mesh_data.bounds.get_center();
+    set_position(Vector3(position.x, position.y, position.z));
+    array_mesh = chunk_mesh_data.uploaded;
+    // Straight to the RenderingServer: MeshInstance3D::set_mesh took ~10 us
+    // (surface materials, notifications), half of showing thousands of
+    // chunks in one commit. The node's own mesh property stays as the scene
+    // has it; get_mesh() is the chunk's mesh.
+    RenderingServer::get_singleton()->instance_set_base(mesh_instance->get_instance(), array_mesh->get_rid());
+    apply_rendering(terrain);
+}
+
 void JarVoxelChunk::update_chunk(JarVoxelVolume &terrain, VoxelOctreeNode *node, ChunkMeshData *chunk_mesh_data)
 {
     _chunk_mesh_data.reset(chunk_mesh_data);
@@ -183,17 +196,14 @@ void JarVoxelChunk::update_chunk(JarVoxelVolume &terrain, VoxelOctreeNode *node,
     // place on its own: pinholes along the seams (a float step is 2 mm at
     // 16 km), which only show near the camera, where this holds.
     const glm::vec3 position = bounds.get_center();
-    set_position(Vector3(position.x, position.y, position.z));
-
-    if (chunk_mesh_data->uploaded.is_null())
-        chunk_mesh_data->upload();
-    array_mesh = chunk_mesh_data->uploaded;
-    // Straight to the RenderingServer: MeshInstance3D::set_mesh took ~10 us
-    // (surface materials, notifications), half of showing thousands of
-    // chunks in one commit. The node's own mesh property stays as the scene
-    // has it; get_mesh() is the chunk's mesh.
-    RenderingServer::get_singleton()->instance_set_base(mesh_instance->get_instance(), array_mesh->get_rid());
-    apply_rendering(terrain);
+    if (chunk_mesh_data->prepared == this)
+        set_visible(true);
+    else
+    {
+        if (chunk_mesh_data->uploaded.is_null())
+            chunk_mesh_data->upload();
+        prepare_mesh(terrain, *chunk_mesh_data);
+    }
 
     // Details are made separately (DetailScheduler), near a viewer only, from
     // this mesh. Until new ones arrive the old ones stay (an edit nearby);

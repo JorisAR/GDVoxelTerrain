@@ -124,6 +124,9 @@ class JarVoxelChunk : public Node3D
     // mesh tasks, set only while none runs (update_chunk).
     std::shared_ptr<const SampleGradients> sample_gradients;
 
+    // Places the chunk and gives it the mesh (uploaded); update_chunk does
+    // this itself, or only shows the chunk if this was done ahead of it.
+    void prepare_mesh(const JarVoxelVolume &terrain, const ChunkMeshData &chunk_mesh_data);
     // Takes ownership of chunk_mesh_data.
     void update_chunk(JarVoxelVolume &terrain, VoxelOctreeNode *node, ChunkMeshData *chunk_mesh_data);
     void update_collision_mesh();
@@ -172,7 +175,7 @@ class JarVoxelChunk : public Node3D
         // thousands of parked chunks cost 2-3 ms per tick.
         set_as_top_level(true);
     }
-    void reactivate()
+    void reactivate(bool show = true)
     {
         set_as_top_level(false);
         // Back under the volume, Godot keeps the global transform it had when
@@ -181,7 +184,7 @@ class JarVoxelChunk : public Node3D
         set_transform(Transform3D());
         // Collision stays disabled: the shape still holds the previous owner's
         // faces. update_collision_mesh() re-enables it once rebuilt.
-        set_visible(true);
+        set_visible(show);
     }
 };
 

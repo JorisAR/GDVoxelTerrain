@@ -59,6 +59,8 @@ struct SampleGradients
     }
 };
 
+class JarVoxelChunk;
+
 class ChunkMeshData
 {
   public:
@@ -87,6 +89,9 @@ class ChunkMeshData
     // Painted amount per vertex (0 = ground): details avoid painted ground.
     PackedFloat32Array painted;
     std::shared_ptr<const SampleGradients> gradients; // for the next mesh, if kept
+    // The chunk made ready for this mesh ahead of the commit, hidden (see
+    // VoxelOctreeNode::prepare_chunk); null when an existing chunk gets it.
+    JarVoxelChunk *prepared = nullptr;
     // ChunkDetailData chunk_detail_data;
 
     bool has_collision_mesh() const

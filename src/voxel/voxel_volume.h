@@ -207,7 +207,7 @@ class JarVoxelVolume : public Node3D
 
     // Chunk pool API (used by VoxelOctreeNode). acquire() runs on the main thread;
     // release() is thread-safe (called from the build worker).
-    JarVoxelChunk *pool_acquire();
+    JarVoxelChunk *pool_acquire(bool show = true);
     void pool_release(JarVoxelChunk *chunk);
     // Main thread: hide (and pool) the chunks released so far, now.
     void process_pool();

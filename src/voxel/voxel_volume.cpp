@@ -408,17 +408,19 @@ void JarVoxelVolume::stop_build_worker()
 
 // --- chunk object pool ------------------------------------------------------
 // Main thread: reuse a parked chunk if one is free, else instantiate a new one.
-JarVoxelChunk *JarVoxelVolume::pool_acquire()
+JarVoxelChunk *JarVoxelVolume::pool_acquire(bool show)
 {
     _acquiredSinceCommit++;
     if (!_freeChunks.empty())
     {
         JarVoxelChunk *c = _freeChunks.back();
         _freeChunks.pop_back();
-        c->reactivate();
+        c->reactivate(show);
         return c;
     }
-    return create_chunk();
+    JarVoxelChunk *c = create_chunk();
+    c->set_visible(show);
+    return c;
 }
 
 void JarVoxelVolume::refill_pool()

@@ -476,6 +476,14 @@ void VoxelOctreeNode::modify_sdf_in_bounds(JarVoxelVolume &terrain, const Modify
         finish_modify(terrain, settings);
 }
 
+void VoxelOctreeNode::prepare_chunk(JarVoxelVolume &terrain, ChunkMeshData &chunkMeshData)
+{
+    if (_chunk != nullptr || !is_chunk(terrain))
+        return;
+    chunkMeshData.prepared = terrain.pool_acquire(false);
+    chunkMeshData.prepared->prepare_mesh(terrain, chunkMeshData);
+}
+
 void VoxelOctreeNode::update_chunk(JarVoxelVolume &terrain, ChunkMeshData *chunkMeshData)
 {
     set_enqueued(false);
@@ -485,6 +493,8 @@ void VoxelOctreeNode::update_chunk(JarVoxelVolume &terrain, ChunkMeshData *chunk
     _meshedEmpty = chunkMeshData == nullptr && is_chunk(terrain);
     if (chunkMeshData == nullptr || !is_chunk(terrain))
     {
+        if (chunkMeshData != nullptr)
+            terrain.pool_release(chunkMeshData->prepared);
         delete chunkMeshData; // owned by us until handed to a chunk
         delete_chunk();
         return;
@@ -492,7 +502,13 @@ void VoxelOctreeNode::update_chunk(JarVoxelVolume &terrain, ChunkMeshData *chunk
 
     if (_chunk == nullptr)
     {
-        set_chunk(terrain.pool_acquire()); // reuse a pooled chunk, or instantiate one
+        // Normally prepared already; else reuse a pooled chunk, or instantiate one.
+        set_chunk(chunkMeshData->prepared != nullptr ? chunkMeshData->prepared : terrain.pool_acquire());
+    }
+    else if (chunkMeshData->prepared != nullptr && chunkMeshData->prepared != _chunk)
+    {
+        terrain.pool_release(chunkMeshData->prepared);
+        chunkMeshData->prepared = nullptr;
     }
 
     _chunk->update_chunk(terrain, this, chunkMeshData);

@@ -39,8 +39,7 @@ class MeshComputeScheduler
     static constexpr int ApplyBudgetMicroseconds = 4000;
 
     // From the build worker (any of its threads): chunks queued by the build
-    // or edit running now, and once it is done, their relations (see
-    // close_batch). Drained by the main thread.
+    // or edit running now, until close_batch.
     struct Incoming
     {
         VoxelOctreeNode *node;
@@ -48,10 +47,11 @@ class MeshComputeScheduler
         std::vector<VoxelOctreeNode *> related; // chunks it touches, shown chunks it replaces
     };
     std::mutex _incomingMutex;
-    std::vector<Incoming> _incoming; // queued, not yet closed into a batch
-    std::vector<Incoming> _closed;   // closed batches, ready for the main thread
+    std::vector<Incoming> _incoming;
 
-    // Main thread: every chunk queued and not yet shown.
+    // Every chunk queued and not yet shown: the main thread's (process()),
+    // except while a build or edit runs, when process() is not called and
+    // close_batch adds to it on the build worker.
     enum State : uint8_t
     {
         Queued,  // waiting for a task
@@ -72,9 +72,6 @@ class MeshComputeScheduler
     std::vector<Entry> _entries;
     std::vector<int> _freeEntries;
     std::unordered_map<const VoxelOctreeNode *, int> _entryOf;
-    // Tie-break related chunks to entries: shown chunks (not themselves
-    // queued) stand for the queued chunks replacing them.
-    std::unordered_map<const VoxelOctreeNode *, int> _replacing;
     std::deque<int> _urgent; // edit chunks
     struct ByLod
     {
@@ -85,7 +82,7 @@ class MeshComputeScheduler
         }
     };
     std::priority_queue<int, std::vector<int>, ByLod> _normal{ByLod{&_entries}};
-    int _pendingTotal = 0; // entries alive
+    std::atomic<int> _pendingTotal{0}; // entries alive
 
     std::atomic<int> _activeTasks{0};
     ConcurrentPriorityQueue<std::pair<VoxelOctreeNode *, ChunkMeshData *>> _results;
@@ -94,12 +91,12 @@ class MeshComputeScheduler
     void unite(int a, int b);
     int new_entry(VoxelOctreeNode *node);
     void requeue(int id, bool urgent);
-    void drain_incoming(JarVoxelVolume &terrain);
     void dispatch(JarVoxelVolume &terrain);
-    void collect_results();
+    void collect_results(JarVoxelVolume &terrain);
     void commit_ready_groups(JarVoxelVolume &terrain);
     void run_task(const JarVoxelVolume &terrain, VoxelOctreeNode &chunk);
     std::vector<int> _readyRoots; // groups that became complete
+    std::vector<ChunkMeshData *> _outdated; // results an edit replaced: freed on the main thread
 
   public:
     MeshComputeScheduler();
@@ -108,7 +105,8 @@ class MeshComputeScheduler
     // Build worker: `node` (a chunk) needs a new mesh; edits' chunks are urgent.
     void enqueue(VoxelOctreeNode &node, bool urgent);
     // Build worker, at the end of a build or edit (the octree settled): finds
-    // how the chunks it queued relate, and hands them to the main thread.
+    // how the chunks it queued relate, and groups them. Thousands after a
+    // big LOD update: on the main thread that was 5-7 ms in one frame.
     void close_batch(const JarVoxelVolume &terrain);
     // Main thread, every frame (not while building): starts tasks (if
     // `dispatch`), uploads results and shows the groups that are complete.

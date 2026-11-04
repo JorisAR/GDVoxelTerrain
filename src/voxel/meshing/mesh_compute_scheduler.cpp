@@ -21,6 +21,8 @@ MeshComputeScheduler::~MeshComputeScheduler()
         delete tuple.second;
     for (Entry &entry : _entries)
         delete entry.result;
+    for (ChunkMeshData *result : _outdated)
+        delete result;
 }
 
 void MeshComputeScheduler::enqueue(VoxelOctreeNode &node, bool urgent)
@@ -47,9 +49,40 @@ void MeshComputeScheduler::close_batch(const JarVoxelVolume &terrain)
         terrain.get_chunks_touching(node.get_bounds(voxel).expanded(0.01f * voxel), batch[i].related);
         node.get_shown_chunks_replaced(batch[i].related);
     });
-    std::lock_guard<std::mutex> lock(_incomingMutex);
-    for (Incoming &incoming : batch)
-        _closed.push_back(std::move(incoming));
+    for (const Incoming &incoming : batch)
+    {
+        const auto it = _entryOf.find(incoming.node);
+        if (it == _entryOf.end())
+        {
+            const int id = new_entry(incoming.node);
+            if (incoming.urgent)
+                _urgent.push_back(id);
+            else
+                _normal.push(id);
+        }
+        else
+            requeue(it->second, incoming.urgent); // an edit changed a chunk not shown yet
+    }
+    // Shown chunks being replaced tie together the chunks replacing them.
+    std::unordered_map<const VoxelOctreeNode *, int> replacing;
+    for (const Incoming &incoming : batch)
+    {
+        const int id = _entryOf[incoming.node];
+        for (const VoxelOctreeNode *related : incoming.related)
+        {
+            if (related == incoming.node)
+                continue;
+            const auto pending = _entryOf.find(related);
+            if (pending != _entryOf.end())
+                unite(id, pending->second);
+            else if (related->get_chunk() != nullptr)
+            {
+                const auto other = replacing.emplace(related, id);
+                if (!other.second)
+                    unite(id, other.first->second);
+            }
+        }
+    }
 }
 
 int MeshComputeScheduler::find(int id)
@@ -118,7 +151,7 @@ void MeshComputeScheduler::requeue(int id, bool urgent)
         entry.stale = true; // meshed again when this result comes in
         return;
     case Ready:
-        delete entry.result;
+        _outdated.push_back(entry.result);
         entry.result = nullptr;
         entry.state = Queued;
         _entries[find(id)].notReady++;
@@ -129,51 +162,6 @@ void MeshComputeScheduler::requeue(int id, bool urgent)
         _urgent.push_back(id);
     else
         _normal.push(id);
-}
-
-void MeshComputeScheduler::drain_incoming(JarVoxelVolume &terrain)
-{
-    std::vector<Incoming> batch;
-    {
-        std::lock_guard<std::mutex> lock(_incomingMutex);
-        batch.swap(_closed);
-    }
-    if (batch.empty())
-        return;
-    for (const Incoming &incoming : batch)
-    {
-        const auto it = _entryOf.find(incoming.node);
-        if (it == _entryOf.end())
-        {
-            const int id = new_entry(incoming.node);
-            if (incoming.urgent)
-                _urgent.push_back(id);
-            else
-                _normal.push(id);
-        }
-        else
-            requeue(it->second, incoming.urgent); // an edit changed a chunk not shown yet
-    }
-    // Shown chunks being replaced tie together the chunks replacing them.
-    std::unordered_map<const VoxelOctreeNode *, int> replacing;
-    for (const Incoming &incoming : batch)
-    {
-        const int id = _entryOf[incoming.node];
-        for (const VoxelOctreeNode *related : incoming.related)
-        {
-            if (related == incoming.node)
-                continue;
-            const auto pending = _entryOf.find(related);
-            if (pending != _entryOf.end())
-                unite(id, pending->second);
-            else if (related->get_chunk() != nullptr)
-            {
-                const auto other = replacing.emplace(related, id);
-                if (!other.second)
-                    unite(id, other.first->second);
-            }
-        }
-    }
 }
 
 void MeshComputeScheduler::dispatch(JarVoxelVolume &terrain)
@@ -212,7 +200,7 @@ void MeshComputeScheduler::dispatch(JarVoxelVolume &terrain)
     }
 }
 
-void MeshComputeScheduler::collect_results()
+void MeshComputeScheduler::collect_results(JarVoxelVolume &terrain)
 {
     // Uploading a mesh to the GPU runs on the main thread. Spread it over
     // frames: uploading thousands at once after a build stalled a frame for
@@ -234,7 +222,10 @@ void MeshComputeScheduler::collect_results()
             continue;
         }
         if (tuple.second != nullptr)
+        {
             tuple.second->upload();
+            tuple.first->prepare_chunk(terrain, *tuple.second);
+        }
         entry.result = tuple.second;
         entry.state = Ready;
         const int root = find(id);
@@ -279,7 +270,13 @@ void MeshComputeScheduler::commit_ready_groups(JarVoxelVolume &terrain)
 
 void MeshComputeScheduler::process(JarVoxelVolume &terrain, bool dispatchTasks, int waitMicroseconds)
 {
-    drain_incoming(terrain);
+    for (ChunkMeshData *result : _outdated)
+    {
+        if (result != nullptr)
+            terrain.pool_release(result->prepared);
+        delete result;
+    }
+    _outdated.clear();
     if (dispatchTasks)
     {
         if (waitMicroseconds > 0)
@@ -300,7 +297,7 @@ void MeshComputeScheduler::process(JarVoxelVolume &terrain, bool dispatchTasks, 
         dispatch(terrain);
     }
     VoxelStats::set_gauge(VoxelStats::MeshQueue, _pendingTotal);
-    collect_results();
+    collect_results(terrain);
     commit_ready_groups(terrain);
 }
 
@@ -309,7 +306,7 @@ bool MeshComputeScheduler::is_meshing()
     if (_activeTasks > 0 || _pendingTotal > 0)
         return true;
     std::lock_guard<std::mutex> lock(_incomingMutex);
-    return !_incoming.empty() || !_closed.empty();
+    return !_incoming.empty();
 }
 
 void MeshComputeScheduler::run_task(const JarVoxelVolume &terrain, VoxelOctreeNode &chunk)

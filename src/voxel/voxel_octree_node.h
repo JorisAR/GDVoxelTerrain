@@ -186,6 +186,11 @@ class VoxelOctreeNode : public OctreeNode<VoxelOctreeNode>
     void modify_sdf_in_bounds(JarVoxelVolume &terrain, const ModifySettings &settings, EditContext *ctx = nullptr);
     // What an edit does to a node after its children.
     void finish_modify(JarVoxelVolume &terrain, const ModifySettings &settings);
+    // Main thread, as a mesh is uploaded, within that budget: readies a new
+    // chunk for it, hidden, so showing a group takes a visibility change per
+    // chunk: pooling, placing and creating chunks made commits of thousands
+    // take 50+ ms in one frame.
+    void prepare_chunk(JarVoxelVolume &terrain, ChunkMeshData &chunkMeshData);
     void update_chunk(JarVoxelVolume &terrain, ChunkMeshData *chunkMeshData);
 
     void delete_chunk();
