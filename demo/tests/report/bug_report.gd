@@ -95,7 +95,7 @@ func _report() -> void:
 		for c in volume.get_children():
 			if not (c is JarVoxelChunk and c.visible):
 				continue
-			var mesh: Mesh = c.get_mesh_instance().mesh
+			var mesh: Mesh = c.get_mesh()
 			if mesh == null or mesh.get_surface_count() == 0:
 				continue
 			var size: float = CHUNK_VOXELS * volume.voxel_size * pow(2.0, c.get_lod())

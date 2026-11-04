@@ -4,12 +4,14 @@
 #include "voxel_volume.h"
 #include "voxel_octree_node.h"
 #include "voxel_stats.h"
+#include <godot_cpp/classes/rendering_server.hpp>
 #include <godot_cpp/classes/multi_mesh.hpp>
 #include <godot_cpp/classes/sphere_mesh.hpp>
 #include <godot_cpp/classes/standard_material3d.hpp>
 
 void JarVoxelChunk::_bind_methods()
 {
+    ClassDB::bind_method(D_METHOD("get_mesh"), &JarVoxelChunk::get_array_mesh);
     ClassDB::bind_method(D_METHOD("get_mesh_instance"), &JarVoxelChunk::get_mesh_instance);
     ClassDB::bind_method(D_METHOD("set_mesh_instance", "mesh_instance"), &JarVoxelChunk::set_mesh_instance);
     ADD_PROPERTY(PropertyInfo(Variant::OBJECT, "mesh_instance", PROPERTY_HINT_NODE_TYPE, "MeshInstance3D"),
@@ -163,7 +165,6 @@ void JarVoxelChunk::update_chunk(JarVoxelVolume &terrain, VoxelOctreeNode *node,
 {
     _chunk_mesh_data.reset(chunk_mesh_data);
     sample_gradients = chunk_mesh_data->gradients;
-    array_mesh = Ref<ArrayMesh>(Object::cast_to<ArrayMesh>(*mesh_instance->get_mesh()));
     concave_polygon_shape =
         Ref<ConcavePolygonShape3D>(Object::cast_to<ConcavePolygonShape3D>(*collision_shape->get_shape()));
     material = Ref<ShaderMaterial>(Object::cast_to<ShaderMaterial>(*mesh_instance->get_material_override()));
@@ -187,7 +188,11 @@ void JarVoxelChunk::update_chunk(JarVoxelVolume &terrain, VoxelOctreeNode *node,
     if (chunk_mesh_data->uploaded.is_null())
         chunk_mesh_data->upload();
     array_mesh = chunk_mesh_data->uploaded;
-    mesh_instance->set_mesh(array_mesh);
+    // Straight to the RenderingServer: MeshInstance3D::set_mesh took ~10 us
+    // (surface materials, notifications), half of showing thousands of
+    // chunks in one commit. The node's own mesh property stays as the scene
+    // has it; get_mesh() is the chunk's mesh.
+    RenderingServer::get_singleton()->instance_set_base(mesh_instance->get_instance(), array_mesh->get_rid());
     apply_rendering(terrain);
 
     // Details are made separately (DetailScheduler), near a viewer only, from

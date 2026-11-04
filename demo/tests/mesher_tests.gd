@@ -110,7 +110,7 @@ func _vertices() -> PackedVector3Array:
 	for c in volume.get_children():
 		if not (c is JarVoxelChunk and c.visible):
 			continue
-		var mesh: Mesh = c.get_mesh_instance().mesh
+		var mesh: Mesh = c.get_mesh()
 		if mesh.get_surface_count() == 0:
 			continue
 		for v in mesh.surface_get_arrays(0)[Mesh.ARRAY_VERTEX]:

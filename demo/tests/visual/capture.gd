@@ -218,10 +218,11 @@ func _seams(volumes: Array, center: Vector3, radius: float) -> void:
 			if not (c is JarVoxelChunk) or not c.is_visible_in_tree():
 				continue
 			var mi: MeshInstance3D = c.get_mesh_instance()
-			if mi == null or mi.mesh == null or (mi.global_transform * mi.mesh.get_aabb()).get_center().distance_to(center) > radius:
+			var mesh: Mesh = c.get_mesh()
+			if mi == null or mesh == null or (mi.global_transform * mesh.get_aabb()).get_center().distance_to(center) > radius:
 				continue
-			for s in mi.mesh.get_surface_count():
-				var arrays := mi.mesh.surface_get_arrays(s)
+			for s in mesh.get_surface_count():
+				var arrays := mesh.surface_get_arrays(s)
 				var verts: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
 				var normals: PackedVector3Array = arrays[Mesh.ARRAY_NORMAL]
 				for i in verts.size():
@@ -270,16 +271,17 @@ func _probe(camera: Camera3D, volumes: Array, pixel: Vector2) -> void:
 			if not (c is JarVoxelChunk) or not c.visible:
 				continue
 			var mi: MeshInstance3D = c.get_mesh_instance()
-			if mi == null or mi.mesh == null or not mi.is_visible_in_tree():
+			var mesh: Mesh = c.get_mesh()
+			if mi == null or mesh == null or not mi.is_visible_in_tree():
 				continue
 			var xf := mi.global_transform
 			var inv := xf.affine_inverse()
 			var lf := inv * from
 			var ld := (inv.basis * dir).normalized()
-			if not mi.mesh.get_aabb().grow(1.0).intersects_ray(lf, ld):
+			if not mesh.get_aabb().grow(1.0).intersects_ray(lf, ld):
 				continue
-			for s in mi.mesh.get_surface_count():
-				var arrays := mi.mesh.surface_get_arrays(s)
+			for s in mesh.get_surface_count():
+				var arrays := mesh.surface_get_arrays(s)
 				var verts: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
 				var normals: PackedVector3Array = arrays[Mesh.ARRAY_NORMAL]
 				var idx: PackedInt32Array = arrays[Mesh.ARRAY_INDEX]
@@ -309,14 +311,15 @@ func _probe(camera: Camera3D, volumes: Array, pixel: Vector2) -> void:
 		if not (c is JarVoxelChunk):
 			continue
 		var mi: MeshInstance3D = c.get_mesh_instance()
-		if mi == null or mi.mesh == null:
+		var mesh: Mesh = c.get_mesh()
+		if mi == null or mesh == null:
 			continue
-		var box: AABB = mi.global_transform * mi.mesh.get_aabb()
+		var box: AABB = mi.global_transform * mesh.get_aabb()
 		if not box.grow(2.0).has_point(surface):
 			continue
 		var best := 1e9
-		for s in mi.mesh.get_surface_count():
-			for vtx in mi.mesh.surface_get_arrays(s)[Mesh.ARRAY_VERTEX]:
+		for s in mesh.get_surface_count():
+			for vtx in mesh.surface_get_arrays(s)[Mesh.ARRAY_VERTEX]:
 				best = min(best, (mi.global_transform * vtx).distance_to(surface))
 		print("PROBE   chunk %s lod=%d visible=%s pos=%s aabb=%s nearest vertex %.2f" % [c.name, c.get_lod(), c.is_visible_in_tree(), c.global_position, box, best])
 	# Open edges near the surface point, over all chunks (vertices welded).
@@ -326,10 +329,11 @@ func _probe(camera: Camera3D, volumes: Array, pixel: Vector2) -> void:
 		if not (c is JarVoxelChunk) or not c.is_visible_in_tree():
 			continue
 		var mi: MeshInstance3D = c.get_mesh_instance()
-		if mi == null or mi.mesh == null or not (mi.global_transform * mi.mesh.get_aabb()).grow(6.0).has_point(surface):
+		var mesh: Mesh = c.get_mesh()
+		if mi == null or mesh == null or not (mi.global_transform * mesh.get_aabb()).grow(6.0).has_point(surface):
 			continue
-		for s in mi.mesh.get_surface_count():
-			var arrays := mi.mesh.surface_get_arrays(s)
+		for s in mesh.get_surface_count():
+			var arrays := mesh.surface_get_arrays(s)
 			var verts: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
 			var idx: PackedInt32Array = arrays[Mesh.ARRAY_INDEX]
 			for ti in range(0, idx.size(), 3):

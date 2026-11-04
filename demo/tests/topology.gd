@@ -24,7 +24,7 @@ static func analyze(volume: JarVoxelVolume, center: Vector3, radius: float) -> D
 	for c in volume.get_children():
 		if not (c is JarVoxelChunk and c.visible and _near(volume, c, center, radius)):
 			continue
-		var mesh: Mesh = c.get_mesh_instance().mesh
+		var mesh: Mesh = c.get_mesh()
 		if mesh.get_surface_count() == 0:
 			continue
 		var arrays := mesh.surface_get_arrays(0)
@@ -77,7 +77,7 @@ static func seam_normals(volume: JarVoxelVolume, center: Vector3, radius: float,
 	for c in volume.get_children():
 		if not (c is JarVoxelChunk and c.visible and _near(volume, c, center, radius)):
 			continue
-		var mesh: Mesh = c.get_mesh_instance().mesh
+		var mesh: Mesh = c.get_mesh()
 		if mesh == null or mesh.get_surface_count() == 0:
 			continue
 		var arrays := mesh.surface_get_arrays(0)
@@ -131,7 +131,7 @@ static func quality(volume: JarVoxelVolume, center: Vector3, radius: float, all_
 	for c in volume.get_children():
 		if not (c is JarVoxelChunk and c.visible and (all_lods or c.get_lod() == 0) and _near(volume, c, center, radius)):
 			continue
-		var mesh: Mesh = c.get_mesh_instance().mesh
+		var mesh: Mesh = c.get_mesh()
 		if mesh == null or mesh.get_surface_count() == 0:
 			continue
 		var arrays := mesh.surface_get_arrays(0)

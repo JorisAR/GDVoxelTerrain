@@ -109,6 +109,8 @@ class JarVoxelChunk : public Node3D
     StaticBody3D* get_static_body() const;
     void set_static_body(StaticBody3D* p_static_body);
 
+    // The chunk's mesh (bound as get_mesh). The mesh instance shows it, set
+    // on the RenderingServer: the MeshInstance3D's mesh property is not it.
     Ref<ArrayMesh> get_array_mesh() const;
     void set_array_mesh(Ref<ArrayMesh> p_array_mesh);
 

@@ -136,7 +136,7 @@ func _material_weights_near(at: Vector3, radius: float, mode := 0) -> Array:
 	for c in volume.get_children():
 		if not (c is JarVoxelChunk and c.visible and c.get_lod() == 0):
 			continue
-		var mesh: Mesh = c.get_mesh_instance().mesh
+		var mesh: Mesh = c.get_mesh()
 		if mesh.get_surface_count() == 0:
 			continue
 		var arrays := mesh.surface_get_arrays(0)

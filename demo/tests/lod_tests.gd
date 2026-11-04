@@ -88,7 +88,7 @@ func _seam_mismatches(volume: JarVoxelVolume) -> int:
 	var shown := {}
 	var chunks := []
 	for c in volume.get_children():
-		if c is JarVoxelChunk and c.visible and c.get_mesh_instance().mesh and c.get_mesh_instance().mesh.get_surface_count() > 0:
+		if c is JarVoxelChunk and c.visible and c.get_mesh() and c.get_mesh().get_surface_count() > 0:
 			var size: float = 16.0 * volume.voxel_size * pow(2.0, c.get_lod())
 			shown[_chunk_key(c.get_center(), c.get_lod(), size)] = true
 			chunks.append(c)
@@ -116,7 +116,7 @@ func _chunk_key(p: Vector3, lod: int, size: float) -> String:
 func _chunk_boxes(volume: JarVoxelVolume, tolerant: bool) -> Array:
 	var boxes := []
 	for c in volume.get_children():
-		if c is JarVoxelChunk and c.visible and c.get_mesh_instance().mesh and c.get_mesh_instance().mesh.get_surface_count() > 0:
+		if c is JarVoxelChunk and c.visible and c.get_mesh() and c.get_mesh().get_surface_count() > 0:
 			var voxel: float = volume.voxel_size * pow(2.0, c.get_lod())
 			var box := AABB(c.get_center() - Vector3.ONE * 8.0 * voxel, Vector3.ONE * 16.0 * voxel)
 			boxes.append([box.grow(voxel) if tolerant else box, c.get_lod()])

@@ -62,7 +62,7 @@ func _dump_chunks(path: String) -> void:
 	var lines := PackedStringArray()
 	for c in terrain.get_children():
 		if c is JarVoxelChunk and c.visible:
-			lines.append("%s verts=%d" % [c.position.snapped(Vector3.ONE * 0.01), c.get_mesh_instance().mesh.surface_get_array_len(0)])
+			lines.append("%s verts=%d" % [c.position.snapped(Vector3.ONE * 0.01), c.get_mesh().surface_get_array_len(0)])
 	lines.sort()
 	var f := FileAccess.open(path, FileAccess.WRITE)
 	f.store_string("\n".join(lines))
