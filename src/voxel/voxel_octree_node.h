@@ -29,16 +29,23 @@ class VoxelOctreeNode : public OctreeNode<VoxelOctreeNode>
     // Dual contouring uses it to place vertices on sharp features.
     uint32_t _normal = 0;
     int8_t LoD = 0;
-    // Written by the build worker only (builds and edits), so plain bits are safe.
+    // Written by the build worker and the pool threads of a parallel build or
+    // edit: marking an edit's ancestors shares them between threads.
     enum Flags : uint8_t
     {
         FlagGenerated = 1,    // already generated from the SDF
         FlagEdited = 2,       // this node or a descendant was changed by an edit
         FlagPrunePending = 4, // LOD got coarser: drop finer detail once meshed
     };
-    uint8_t _flags = 0;
-    bool has_flag(uint8_t f) const { return (_flags & f) != 0; }
-    void set_flag(uint8_t f, bool on) { _flags = on ? (_flags | f) : (_flags & ~f); }
+    std::atomic<uint8_t> _flags{0};
+    bool has_flag(uint8_t f) const { return (_flags.load(std::memory_order_relaxed) & f) != 0; }
+    void set_flag(uint8_t f, bool on)
+    {
+        if (on)
+            _flags.fetch_or(f, std::memory_order_relaxed);
+        else
+            _flags.fetch_and(uint8_t(~f), std::memory_order_relaxed);
+    }
     // _isDirty and _isMaterialized propagate to the parent, which during a
     // parallel build is shared by subtrees running on different threads.
     std::atomic<bool> _isDirty{false}; // if true, needs to recalculate value from children
@@ -62,6 +69,12 @@ class VoxelOctreeNode : public OctreeNode<VoxelOctreeNode>
     std::atomic<int32_t> _enqueuedBelow{0};
     void set_enqueued(bool value);
     void set_chunk(JarVoxelChunk *chunk);
+  public:
+    struct EditContext;
+
+  private:
+    // Edits the children; false if finish_modify is left for later (`ctx`).
+    bool modify_children(JarVoxelVolume &terrain, const ModifySettings &settings, EditContext *ctx);
     void get_shown_chunks_replaced_below(std::vector<VoxelOctreeNode *> &result);
     // A chunk shown or queued among the descendants (not this node).
     bool subtree_has_chunk_below() const
@@ -161,7 +174,18 @@ class VoxelOctreeNode : public OctreeNode<VoxelOctreeNode>
     VoxelOctreeNode *node_at(float voxelSize, const glm::vec3 &point);
     // Whether an edit changed anything in the deepest node enclosing `bounds`.
     bool edited_around(float voxelSize, const Bounds &bounds);
-    void modify_sdf_in_bounds(JarVoxelVolume &terrain, const ModifySettings &settings);
+    // Large edits, like builds: the build worker walks the top of the tree
+    // (the nodes it leaves `shared`), the subtrees below `forkSize` (`forks`)
+    // run on the pool, then the shared nodes finish, children first.
+    struct EditContext
+    {
+        int forkSize = 0;
+        std::vector<VoxelOctreeNode *> forks;
+        std::vector<VoxelOctreeNode *> shared;
+    };
+    void modify_sdf_in_bounds(JarVoxelVolume &terrain, const ModifySettings &settings, EditContext *ctx = nullptr);
+    // What an edit does to a node after its children.
+    void finish_modify(JarVoxelVolume &terrain, const ModifySettings &settings);
     void update_chunk(JarVoxelVolume &terrain, ChunkMeshData *chunkMeshData);
 
     void delete_chunk();

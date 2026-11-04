@@ -125,6 +125,13 @@ class JarVoxelVolume : public Node3D
     float field_at(const glm::vec3 &point);
     glm::vec3 field_normal(const glm::vec3 &point);
     int _acquiredSinceCommit = 0;
+    // Edits at least this many voxels across run on the pool, in about 64
+    // parts, and no frame waits for them. Smaller ones take a millisecond or
+    // two: a frame waits for those, and waking threads would cost more.
+    static constexpr float ParallelEditVoxels = 32.0f;
+    bool _queuedLargeEdit = false; // main thread
+    bool is_large_edit(const ModifySettings &settings) const;
+    void apply_edit(const ModifySettings &settings); // build worker
     JarVoxelChunk *create_chunk();
     void refill_pool(); // main thread, every frame
 

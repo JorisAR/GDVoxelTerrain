@@ -282,7 +282,7 @@ void JarVoxelVolume::build_worker()
             {
                 const VoxelStats::Scope stage(VoxelStats::WorkerEdit);
                 for (const ModifySettings &settings : edits)
-                    _voxelRoot->modify_sdf_in_bounds(*this, settings);
+                    apply_edit(settings);
             }
             const VoxelStats::Scope stage(rebuild ? VoxelStats::WorkerBuild : VoxelStats::WorkerEdit);
             if (rebuild)
@@ -316,6 +316,31 @@ void JarVoxelVolume::build_worker()
         }
         _buildDoneCv.notify_all();
     }
+}
+
+bool JarVoxelVolume::is_large_edit(const ModifySettings &settings) const
+{
+    const glm::vec3 size = settings.bounds.get_size();
+    return std::max(size.x, std::max(size.y, size.z)) >= ParallelEditVoxels * _voxelSize;
+}
+
+void JarVoxelVolume::apply_edit(const ModifySettings &settings)
+{
+    if (!is_large_edit(settings))
+    {
+        _voxelRoot->modify_sdf_in_bounds(*this, settings);
+        return;
+    }
+    const glm::vec3 size = settings.bounds.get_size();
+    const float parts = std::max(size.x, std::max(size.y, size.z)) / (4.0f * _voxelSize); // nodes about this large
+    VoxelOctreeNode::EditContext context;
+    context.forkSize = std::clamp(int(std::floor(std::log2(parts))) + 1, 1, int(_voxelRoot->_size));
+    _voxelRoot->modify_sdf_in_bounds(*this, settings, &context);
+    JobSystem::get_pool().parallel_for(context.forks.size(), [this, &settings, &context](size_t i) {
+        context.forks[i]->modify_sdf_in_bounds(*this, settings);
+    });
+    for (auto node = context.shared.rbegin(); node != context.shared.rend(); ++node)
+        (*node)->finish_modify(*this, settings);
 }
 
 void JarVoxelVolume::build_octree()
@@ -528,6 +553,7 @@ void JarVoxelVolume::queue_edit(const Ref<JarSignedDistanceField> &sdf, SDF::Ope
     // when no build or meshing task is reading it (see process()).
     if (!paintOnly)
         _everEdited = true;
+    _queuedLargeEdit = _queuedLargeEdit || is_large_edit(settings);
     _modifySettingsQueue.push(settings);
 }
 
@@ -1068,6 +1094,10 @@ void JarVoxelVolume::process()
             const VoxelStats::Scope wait(VoxelStats::MainEditWait);
             const auto start = std::chrono::steady_clock::now();
             process_modify_queue();
+            const bool large = _queuedLargeEdit;
+            _queuedLargeEdit = false;
+            if (large)
+                return; // far more than the wait: it shows when it is done
             std::unique_lock<std::mutex> lock(_buildMutex);
             if (!_buildDoneCv.wait_for(lock, std::chrono::microseconds(EditWaitMicroseconds),
                                        [this] { return !_isBuilding; }))

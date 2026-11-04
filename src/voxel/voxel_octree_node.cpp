@@ -351,7 +351,37 @@ bool VoxelOctreeNode::has_surface(const JarVoxelVolume &terrain, const float val
     return std::abs(value) < (1 << _size) * voxel * 1.44224957f * 1.75f + 1.5f * (1 << std::max<int>(LoD, 0)) * voxel;
 }
 
-void VoxelOctreeNode::modify_sdf_in_bounds(JarVoxelVolume &terrain, const ModifySettings &settings)
+bool VoxelOctreeNode::modify_children(JarVoxelVolume &terrain, const ModifySettings &settings, EditContext *ctx)
+{
+    if (is_leaf())
+        return true;
+    if (ctx == nullptr)
+    {
+        for (auto &child : *_children)
+            child.modify_sdf_in_bounds(terrain, settings);
+        return true;
+    }
+    ctx->shared.push_back(this);
+    for (auto &child : *_children)
+    {
+        if (_size == ctx->forkSize)
+            ctx->forks.push_back(&child);
+        else
+            child.modify_sdf_in_bounds(terrain, settings, ctx);
+    }
+    return false;
+}
+
+void VoxelOctreeNode::finish_modify(JarVoxelVolume &terrain, const ModifySettings &settings)
+{
+    _meshedEmpty = false; // values changed
+    if (is_chunk(terrain))
+        queue_update(terrain, true);
+    else if (!settings.paintOnly && _chunk != nullptr)
+        delete_chunk();
+}
+
+void VoxelOctreeNode::modify_sdf_in_bounds(JarVoxelVolume &terrain, const ModifySettings &settings, EditContext *ctx)
 {
     auto bounds = get_bounds(terrain.get_voxel_size());
     if (!settings.bounds.intersects(bounds))
@@ -383,12 +413,8 @@ void VoxelOctreeNode::modify_sdf_in_bounds(JarVoxelVolume &terrain, const Modify
             if (_parent != nullptr)
                 _parent->set_dirty(true); // parents average the weights
         }
-        if (!is_leaf())
-            for (auto &child : *_children)
-                child.modify_sdf_in_bounds(terrain, settings);
-        _meshedEmpty = false;
-        if (is_chunk(terrain))
-            queue_update(terrain, true);
+        if (modify_children(terrain, settings, ctx))
+            finish_modify(terrain, settings);
         return;
     }
 
@@ -400,7 +426,9 @@ void VoxelOctreeNode::modify_sdf_in_bounds(JarVoxelVolume &terrain, const Modify
     // (exact, from both fields' gradients) for dual contouring.
     if (std::abs(new_value - old_value) > 1e-5f)
     {
-        const glm::vec3 oldNormal = has_normal() ? get_normal() : terrain.get_sdf_ptr()->normal(_center);
+        glm::vec3 oldNormal(0.0f);
+        if (SDF::uses_first_normal(settings.operation, old_value, sdf_value, k))
+            oldNormal = has_normal() ? get_normal() : terrain.get_sdf_ptr()->normal(_center);
         float combined;
         glm::vec3 normal;
         SDF::apply_operation(settings.operation, old_value, oldNormal, sdf_value, settings.gradient(_center), k,
@@ -444,15 +472,8 @@ void VoxelOctreeNode::modify_sdf_in_bounds(JarVoxelVolume &terrain, const Modify
 
     if (is_leaf())
         mark_materialized();
-    else // recurse down the tree
-        for (auto &child : *_children)
-            child.modify_sdf_in_bounds(terrain, settings);
-
-    _meshedEmpty = false; // values changed
-    if (is_chunk(terrain))
-        queue_update(terrain, true);
-    else if (_chunk != nullptr)
-        delete_chunk();
+    if (modify_children(terrain, settings, ctx))
+        finish_modify(terrain, settings);
 }
 
 void VoxelOctreeNode::update_chunk(JarVoxelVolume &terrain, ChunkMeshData *chunkMeshData)

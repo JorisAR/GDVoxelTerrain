@@ -106,6 +106,7 @@ func _run(camera: Node3D) -> void:
 	_check("unbounded edit rejected", not volume.is_building())
 	await _cleanup()
 	await _skip_outside()
+	await _large_edits()
 	_finish()
 
 ## Flies `viewer` away in steps and waits at the end.
@@ -229,6 +230,45 @@ func _skip_outside() -> void:
 		worst = maxf(worst, absf(heights[0][i] - heights[1][i]))
 	_check("skipping changes no surface", worst < 0.005, "largest difference %.4f m" % worst)
 	_check("skipping visits fewer nodes", visits[0] > 0 and visits[0] < 0.7 * visits[1], "%d instead of %d" % visits)
+
+## Large edits run on the pool: the shape, the mesh and the materials must
+## come out as from a single thread. No frame waits for them.
+func _large_edits() -> void:
+	var holder := Node.new()
+	add_child(holder)
+	var world := TestWorld.flat(holder, Vector3(0, 40, 0))
+	var v: JarVoxelVolume = world.volume
+	await _settle_on(v)
+	var ground: float = v.raycast(Vector3(0, 300, 0), Vector3(0, -300, 0)).position.y
+	var pit := Vector3(0, ground, 0)
+	v.sphere_edit(pit, 28.0, false, 5)
+	await _settle_on(v)
+	var bottom := v.raycast(pit + Vector3.UP * 50.0, pit + Vector3.DOWN * 50.0)
+	_check("large dig", not bottom.is_empty() and absf(bottom.position.y - (ground - 28.0)) < 0.3,
+		"floor %s, expected %.2f" % [bottom.get("position"), ground - 28.0])
+	var rim := pit + Vector3(28, 0, 0)
+	var r := Topology.analyze(v, v.project_to_surface(rim).position, 30.0)
+	_check("large dig: mesh closed", r.open == 0 and r.triangles > 1000, "%d open edges in %d triangles" % [r.open, r.triangles])
+
+	v.sphere_edit(pit + Vector3(14, -14, 0), 20.0, true)
+	await _settle_on(v)
+	_check("large add over it", v.get_distance(pit + Vector3(14, -14, 0)) < -15.0 and v.get_distance(pit + Vector3(-18, -8, 0)) > 3.0,
+		"%.2f inside, %.2f across the pit" % [v.get_distance(pit + Vector3(14, -14, 0)), v.get_distance(pit + Vector3(-18, -8, 0))])
+	r = Topology.analyze(v, v.project_to_surface(pit + Vector3(-5, -20, 0)).position, 30.0)
+	_check("large add: mesh closed", r.open == 0 and r.triangles > 1000, "%d open edges in %d triangles" % [r.open, r.triangles])
+
+	var brush := JarSphereSdf.new()
+	brush.radius = 24.0
+	var spot := pit + Vector3(70, 0, 0)
+	var before := _ground_height(spot)
+	volume = v
+	v.paint(brush, Transform3D(Basis(), Vector3(spot.x, before, spot.z)), 5)
+	await _settle_on(v)
+	var weights := _material_weights_near(Vector3(spot.x, before, spot.z), 6.0)
+	_check("large paint", weights.size() > 0 and weights.min() > 0.9 and absf(_ground_height(spot) - before) < 0.05,
+		"weights %s" % [weights.slice(0, 3)])
+	holder.queue_free()
+	await get_tree().process_frame
 
 func _finish() -> void:
 	print("Edit tests: %s" % ("ALL PASSED" if _failures == 0 else "%d FAILED" % _failures))

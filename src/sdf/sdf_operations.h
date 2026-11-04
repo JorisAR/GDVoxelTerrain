@@ -46,6 +46,30 @@ static inline float apply_operation(Operation op, float a, float b, float k = 1.
     }
 }
 
+// Whether the normal of `a` counts in apply_operation below: it may cost much
+// more to find than the operation itself (terrain normals were 70% of an edit),
+// and where the operation replaces `a`, it does not.
+static inline bool uses_first_normal(Operation op, float a, float b, float k)
+{
+    switch (op)
+    {
+    case SDF_OPERATION_UNION:
+        return a < b;
+    case SDF_OPERATION_SUBTRACTION:
+        return a > -b;
+    case SDF_OPERATION_INTERSECTION:
+        return a > b;
+    case SDF_OPERATION_SMOOTH_UNION:
+        return 0.5f + 0.5f * (b - a) / k > 0.0f;
+    case SDF_OPERATION_SMOOTH_SUBTRACTION:
+        return 0.5f - 0.5f * (b + a) / k < 1.0f;
+    case SDF_OPERATION_SMOOTH_INTERSECTION:
+        return 0.5f - 0.5f * (b - a) / k > 0.0f;
+    default:
+        return true;
+    }
+}
+
 static inline void apply_operation(
     Operation op,
     float a, const glm::vec3& na,
