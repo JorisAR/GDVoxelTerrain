@@ -22,6 +22,11 @@ class JarCylinderSdf : public JarSignedDistanceField
     void set_height(float h) { set_and_notify(_height, h); }
     float get_height() const { return _height; }
 
+    bool is_distance_bound() const override
+    {
+        return true;
+    }
+
     float distance(const glm::vec3 &pos) const override
     {
         const glm::vec3 p = pos - _center;

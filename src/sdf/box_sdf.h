@@ -21,6 +21,11 @@ class JarBoxSdf : public JarSignedDistanceField
     void set_rounding(float r) { set_and_notify(_rounding, std::max(0.0f, r)); }
     float get_rounding() const { return _rounding; }
 
+    bool is_distance_bound() const override
+    {
+        return true;
+    }
+
     float distance(const glm::vec3 &pos) const override
     {
         const float r = std::min(_rounding, std::min(_extent.x, std::min(_extent.y, _extent.z)));

@@ -34,6 +34,9 @@ struct ModifySettings
     float distanceScale = 1.0f;         // SDF-local distance -> volume-local distance
     SDF::Operation operation = SDF::SDF_OPERATION_UNION;
     float smoothness = 0.0f;            // blend radius for smooth ops; <= 0 uses the voxel size
+    // Nodes farther than this from the shape can be skipped, subtree and all;
+    // negative: never (see JarVoxelVolume::queue_edit).
+    float skipBeyond = -1.0f;
     // Material index (0..3) painted onto voxels this edit touches. Becomes a
     // one-hot weight in the node color, which the mesher interpolates into
     // vertex COLOR and the chunk shader blends as materials. -1 = leave the

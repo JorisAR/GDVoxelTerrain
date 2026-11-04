@@ -60,6 +60,11 @@ class JarOffsetSdf : public JarModifierSdf
     void set_shell_thickness(float v) { set_and_notify(_shellThickness, std::max(0.0f, v)); }
     float get_shell_thickness() const { return _shellThickness; }
 
+    bool is_distance_bound() const override
+    {
+        return _sdf.is_valid() && _sdf->is_distance_bound();
+    }
+
     float distance(const glm::vec3 &pos) const override
     {
         float d = child_distance(pos) - _offset;

@@ -25,6 +25,11 @@ class JarConeSdf : public JarSignedDistanceField
     void set_top_radius(float r) { set_and_notify(_topRadius, std::max(0.0f, r)); }
     float get_top_radius() const { return _topRadius; }
 
+    bool is_distance_bound() const override
+    {
+        return true;
+    }
+
     float distance(const glm::vec3 &pos) const override
     {
         // Inigo Quilez, capped cone.

@@ -23,6 +23,11 @@ class JarTorusSdf : public JarSignedDistanceField
     void set_minor_radius(float r) { set_and_notify(_minorRadius, r); }
     float get_minor_radius() const { return _minorRadius; }
 
+    bool is_distance_bound() const override
+    {
+        return true;
+    }
+
     virtual float distance(const glm::vec3 &pos) const override
     {
         glm::vec3 p = pos - _center;

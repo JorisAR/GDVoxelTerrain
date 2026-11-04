@@ -46,6 +46,15 @@ class JarSignedDistanceField : public Resource
     // Signed distance in the field's local space: negative inside.
     virtual float distance(const glm::vec3 &pos) const = 0;
 
+    // Whether distance() changes by at most 1 per meter everywhere (exact
+    // distances do, estimates and displaced fields may not): a value d then
+    // guarantees no surface within |d| of the point, and edits can skip whole
+    // octree nodes the shape cannot reach. Anything unsure stays false.
+    virtual bool is_distance_bound() const
+    {
+        return false;
+    }
+
     // Local-space box enclosing everything where distance() <= 0, or
     // Bounds::infinite() for unbounded fields (planes, terrain). Edits use it to
     // limit the region they touch.

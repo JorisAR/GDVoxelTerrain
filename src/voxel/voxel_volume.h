@@ -227,6 +227,9 @@ class JarVoxelVolume : public Node3D
     void spawn_debug_spheres_in_bounds(const Vector3 &position, const float range);
 
     void force_update_lod();
+    // Nodes in the octree (walks all of them: for checks, not every frame);
+    // 0 while the octree changes.
+    int get_node_count() const;
 
     // Surface queries in global space, from the volume's field itself, not
     // its meshes or colliders: they work at any LOD, far from any viewer, and

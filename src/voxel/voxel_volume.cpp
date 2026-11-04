@@ -234,6 +234,7 @@ void JarVoxelVolume::_bind_methods()
     ClassDB::bind_method(D_METHOD("spawn_debug_spheres_in_bounds", "position", "range"),
                          &JarVoxelVolume::spawn_debug_spheres_in_bounds);
     ClassDB::bind_method(D_METHOD("force_update_lod"), &JarVoxelVolume::force_update_lod);
+    ClassDB::bind_method(D_METHOD("get_node_count"), &JarVoxelVolume::get_node_count);
     ClassDB::bind_method(D_METHOD("get_distance", "position"), &JarVoxelVolume::get_distance);
     ClassDB::bind_method(D_METHOD("project_to_surface", "position"), &JarVoxelVolume::project_to_surface);
     ClassDB::bind_method(D_METHOD("raycast", "from", "to"), &JarVoxelVolume::raycast);
@@ -510,6 +511,15 @@ void JarVoxelVolume::queue_edit(const Ref<JarSignedDistanceField> &sdf, SDF::Ope
         return;
     }
     settings.bounds = region;
+    // Adding and removing change nothing away from the shape, so where its
+    // distances can be trusted, nodes out of its reach (the region's margin:
+    // meshes depend on the samples around them) are skipped, not just those
+    // outside its box. A round dig's box is mostly outside it.
+    const bool nearShape = paintOnly || operation == SDF::SDF_OPERATION_UNION || operation == SDF::SDF_OPERATION_SUBTRACTION ||
+                       operation == SDF::SDF_OPERATION_SMOOTH_UNION ||
+                       operation == SDF::SDF_OPERATION_SMOOTH_SUBTRACTION;
+    if (nearShape && sdf->is_distance_bound())
+        settings.skipBeyond = margin;
     // Features standing where the shape changes the ground go away, for good.
     if (!paintOnly && _featureManager)
         _featureManager->remove_edited(settings, _voxelSize + std::max(0.0f, smoothness));
@@ -609,6 +619,11 @@ void JarVoxelVolume::get_chunks_touching(const Bounds &bounds, std::vector<Voxel
 {
     if (_voxelRoot)
         _voxelRoot->get_chunks_touching(*this, bounds, result);
+}
+
+int JarVoxelVolume::get_node_count() const
+{
+    return _voxelRoot && !_isBuilding ? _voxelRoot->get_count() : 0;
 }
 
 bool JarVoxelVolume::is_building() const

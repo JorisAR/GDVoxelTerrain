@@ -23,6 +23,11 @@ class JarPlaneSdf : public JarSignedDistanceField
     void set_d(float d) { set_and_notify(_d, d); }
     float get_d() const { return _d; }
 
+    bool is_distance_bound() const override
+    {
+        return true;
+    }
+
     float distance(const glm::vec3 &pos) const override
     {
         return glm::dot(_normal, pos) + _d;

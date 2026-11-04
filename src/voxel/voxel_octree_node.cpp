@@ -1,4 +1,5 @@
 #include "voxel_octree_node.h"
+#include "voxel_stats.h"
 #include "voxel_volume.h"
 #include <algorithm>
 #include <cmath>
@@ -16,6 +17,8 @@ VoxelOctreeNode::VoxelOctreeNode(VoxelOctreeNode *parent, const glm::vec3 center
         LoD = _parent->LoD;
         _value = _parent->get_value();
         set_flag(FlagGenerated, _parent->has_flag(FlagGenerated));
+        // Made from an edited leaf: what it copied exists nowhere else.
+        set_flag(FlagEdited, _parent->has_flag(FlagEdited));
         _materials = _parent->_materials;
         _normal = _parent->_normal;
     }
@@ -353,6 +356,12 @@ void VoxelOctreeNode::modify_sdf_in_bounds(JarVoxelVolume &terrain, const Modify
     auto bounds = get_bounds(terrain.get_voxel_size());
     if (!settings.bounds.intersects(bounds))
         return;
+    VoxelStats::add_count(VoxelStats::EditNodes);
+    const float sdf_value = settings.sample(_center);
+    // Half the node's diagonal, rounded up: nothing in it is nearer than this
+    // to the shape, so nothing in it can change.
+    if (settings.skipBeyond >= 0.0f && sdf_value > 0.87f * edge_length(terrain.get_voxel_size()) + settings.skipBeyond)
+        return;
 
     LoD = terrain.desired_lod(*this);
     if (!has_flag(FlagGenerated))
@@ -364,7 +373,7 @@ void VoxelOctreeNode::modify_sdf_in_bounds(JarVoxelVolume &terrain, const Modify
     if (settings.paintOnly)
     {
         // Full strength inside the brush, fading out over one voxel outside it.
-        const float inside = -settings.sample(_center) / terrain.get_voxel_size();
+        const float inside = -sdf_value / terrain.get_voxel_size();
         if (inside > -1.0f && settings.material >= 0)
         {
             _materials = MaterialWeights::mix(_materials, settings.material,
@@ -384,7 +393,6 @@ void VoxelOctreeNode::modify_sdf_in_bounds(JarVoxelVolume &terrain, const Modify
     }
 
     float old_value = get_value();
-    float sdf_value = settings.sample(_center);
     const float k = settings.smoothness > 0.0f ? settings.smoothness : terrain.get_voxel_size();
     float new_value = SDF::apply_operation(settings.operation, old_value, sdf_value, k);
 
@@ -487,14 +495,16 @@ bool VoxelOctreeNode::subtree_has_chunk() const
 }
 
 // Drops descendants finer than `lod` (keeping nodes of size `lod` as leaves),
-// except in edited subtrees, whose detail exists nowhere else. Pruned nodes are
-// regenerated from the SDF if the viewer comes back. Their values are the
-// averages the current mesh was built from, so the mesh does not change.
+// except edited nodes, whose detail exists nowhere else; around them it goes
+// on (stopping at the first edited node kept everything under a coarse chunk
+// for one small dig: 2.4 million nodes). Pruned nodes are regenerated from the
+// SDF if the viewer comes back. Their values are the averages the current
+// mesh was built from, so the mesh does not change.
 void VoxelOctreeNode::prune_finer_than(int lod)
 {
-    if (is_leaf() || has_flag(FlagEdited))
+    if (is_leaf())
         return;
-    if (_size > lod)
+    if (_size > lod || has_flag(FlagEdited))
     {
         for (auto &child : *_children)
             child.prune_finer_than(lod);

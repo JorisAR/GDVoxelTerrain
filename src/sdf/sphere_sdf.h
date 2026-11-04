@@ -17,6 +17,11 @@ class JarSphereSdf : public JarSignedDistanceField
     void set_radius(float r) { set_and_notify(_radius, r); }
     float get_radius() const { return _radius; }
 
+    bool is_distance_bound() const override
+    {
+        return true;
+    }
+
     float distance(const glm::vec3 &pos) const override
     {
         return glm::length(pos - _center) - _radius;

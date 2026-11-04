@@ -13,7 +13,8 @@ const char *const StageNames[StageCount] = {
     "volume",  "upload", "commit",  "colliders", "chunk create",    "edit wait", "details", "features",
     "extensions", "universe", "layers", "build", "edit",     "mesh",      "collider data", "extension", "details",
     "features"};
-const char *const CountNames[CountCount] = {"chunks meshed", "chunks committed", "chunks created", "colliders built"};
+const char *const CountNames[CountCount] = {"chunks meshed", "chunks committed", "chunks created", "colliders built",
+                                             "edit nodes"};
 const char *const GaugeNames[GaugeCount] = {"mesh queue", "collider queue"};
 
 bool is_main(int stage)

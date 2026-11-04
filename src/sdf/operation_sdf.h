@@ -30,6 +30,15 @@ class JarOperationSdf : public JarSignedDistanceField
     void set_smoothness(float k) { set_and_notify(_smoothness, k); }
     float get_smoothness() const { return _smoothness; }
 
+    bool is_distance_bound() const override
+    {
+        const SDF::Operation op = static_cast<SDF::Operation>(_operation);
+        const bool sharp = op == SDF::SDF_OPERATION_UNION || op == SDF::SDF_OPERATION_SUBTRACTION ||
+                           op == SDF::SDF_OPERATION_INTERSECTION;
+        return sharp && _sdf_a.is_valid() && _sdf_b.is_valid() && _sdf_a->is_distance_bound() &&
+               _sdf_b->is_distance_bound();
+    }
+
     float distance(const glm::vec3 &pos) const override
     {
         const bool ha = _sdf_a.is_valid();

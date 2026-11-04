@@ -104,7 +104,131 @@ func _run(camera: Node3D) -> void:
 	# 6. Unbounded SDFs are rejected by edit() instead of editing the whole world.
 	volume.edit(JarPlaneSdf.new(), JarVoxelVolume.SDF_OPERATION_UNION, Transform3D())
 	_check("unbounded edit rejected", not volume.is_building())
+	await _cleanup()
+	await _skip_outside()
 	_finish()
+
+## Flies `viewer` away in steps and waits at the end.
+func _fly_to(volume: JarVoxelVolume, viewer: Node3D, target: Vector3) -> void:
+	var start: Vector3 = volume.to_local(viewer.global_position)
+	for step in range(1, 5):
+		viewer.global_position = volume.to_global(start.lerp(target, step / 4.0))
+		await _settle_on(volume)
+
+func _settle_on(target: JarVoxelVolume) -> void:
+	var idle := 0
+	var start := Time.get_ticks_msec()
+	while idle < 30 and Time.get_ticks_msec() - start < 60000:
+		await get_tree().physics_frame
+		idle = idle + 1 if not target.is_building() and not target.is_meshing() else 0
+
+## Edited detail is kept when the viewer leaves, and only that: the same flight
+## with one small dig ends with about the same octree (stopping at edited nodes
+## kept 2.4 million more for it), and everything edited is there on the way
+## back, also where a later edit split an edited leaf.
+func _cleanup() -> void:
+	var counts := []
+	for dig in [false, true]:
+		var holder := Node.new()
+		add_child(holder)
+		var world := TestWorld.flat(holder, Vector3(0, 40, 0))
+		var v: JarVoxelVolume = world.volume
+		await _settle_on(v)
+		var ground: float = v.raycast(Vector3(0, 300, 0), Vector3(0, -300, 0)).position.y
+		if dig:
+			v.sphere_edit(Vector3(0, ground, 0), 1.5, false)
+			await _settle_on(v)
+		await _fly_to(v, world.viewer, Vector3(4800, 40, 0))
+		counts.append(v.get_node_count())
+		holder.queue_free()
+		await get_tree().process_frame
+	_check("cleanup: a small dig keeps little", counts[1] - counts[0] < 20000 and counts[0] > 0,
+		"%d nodes without it, %d with" % counts)
+
+	var holder := Node.new()
+	add_child(holder)
+	var world := TestWorld.flat(holder, Vector3(0, 40, 0))
+	var v: JarVoxelVolume = world.volume
+	await _settle_on(v)
+	var ground: float = v.raycast(Vector3(0, 300, 0), Vector3(0, -300, 0)).position.y
+	var pit := Vector3(0, ground, 0)
+	v.sphere_edit(pit, 24.0, false) # deep inside it, large air leaves
+	await _settle_on(v)
+	var side := pit + Vector3(14, -6, 0)
+	# From afar, where a leaf's band of samples is wide: the edit splits air
+	# leaves, whose children copy an edited value.
+	await _fly_to(v, world.viewer, Vector3(1500, 40, 0))
+	var fill := pit + Vector3(-12, -16, 0)
+	v.sphere_edit(fill, 3.0, true)
+	await _settle_on(v)
+	await _fly_to(v, world.viewer, Vector3(4800, 40, 0))
+	await _fly_to(v, world.viewer, Vector3(0, 40, 0))
+	var refilled := 0
+	var inside := 0
+	for x in [-1.0, 0.0, 1.0]:
+		for y in [0.0, 1.0]:
+			for z in [-1.0, 0.0, 1.0]:
+				var offset := Vector3(x, y, z)
+				if offset == Vector3.ZERO:
+					continue
+				var point := fill + offset.normalized() * 6.0
+				if point.distance_to(pit) < 23.0: # inside the pit
+					inside += 1
+					refilled += 1 if v.get_distance(point) <= 0.0 else 0
+	_check("cleanup: air around a later edit stays air", refilled == 0 and inside > 8, "%d of %d points solid again" % [refilled, inside])
+	_check("cleanup: the pit is still dug", v.get_distance(side) > 2.0, "%.2f m from ground" % v.get_distance(side))
+	var bottom := v.raycast(pit + Vector3(14, 30, 0), pit + Vector3(14, -40, 0))
+	_check("cleanup: its floor is where it was", not bottom.is_empty() and bottom.position.y < ground - 12.0,
+		"%s, ground %.2f" % [bottom.get("position"), ground])
+	var added := v.get_distance(pit + Vector3(-12, -16, 0))
+	_check("cleanup: what was added inside it stays", added < 0.0, "%.2f" % added)
+	holder.queue_free()
+	await get_tree().process_frame
+
+## Edits skip what the shape cannot reach when its distances can be trusted:
+## the same edits through a wrapper that makes them walk everything (it
+## changes no distance) give the same surface, with far fewer nodes visited.
+func _skip_outside() -> void:
+	var heights := []
+	var visits := []
+	for trusted in [true, false]:
+		var holder := Node.new()
+		add_child(holder)
+		var world := TestWorld.flat(holder, Vector3(0, 40, 0))
+		var v: JarVoxelVolume = world.volume
+		await _settle_on(v)
+		var ground: float = v.raycast(Vector3(0, 300, 0), Vector3(0, -300, 0)).position.y
+		var visited := 0
+		var edits := [[Vector3(0, ground, 0), 7.0, false], [Vector3(10, ground + 2, 4), 5.0, true],
+			[Vector3(-6, ground - 2, -8), 9.0, false]]
+		for e in edits:
+			var sphere := JarSphereSdf.new()
+			sphere.radius = e[1]
+			var shape: JarSignedDistanceField = sphere
+			if not trusted:
+				shape = JarDisplaceSdf.new() # no noise: the same distances
+				shape.sdf = sphere
+			v.edit(shape, JarVoxelVolume.SDF_OPERATION_UNION if e[2] else JarVoxelVolume.SDF_OPERATION_SUBTRACTION,
+				Transform3D(Basis(), e[0]))
+			var idle := 0
+			while idle < 30:
+				await get_tree().process_frame
+				visited += JarVoxelStats.get_frame().counts["edit nodes"]
+				idle = idle + 1 if not v.is_building() and not v.is_meshing() else 0
+		var sampled := PackedFloat32Array()
+		for x in range(-24, 25, 4):
+			for z in range(-24, 25, 4):
+				var hit := v.raycast(Vector3(x + 0.3, 200, z + 0.3), Vector3(x + 0.3, -200, z + 0.3))
+				sampled.append(hit.position.y if hit else INF)
+		heights.append(sampled)
+		visits.append(visited)
+		holder.queue_free()
+		await get_tree().process_frame
+	var worst := 0.0
+	for i in heights[0].size():
+		worst = maxf(worst, absf(heights[0][i] - heights[1][i]))
+	_check("skipping changes no surface", worst < 0.005, "largest difference %.4f m" % worst)
+	_check("skipping visits fewer nodes", visits[0] > 0 and visits[0] < 0.7 * visits[1], "%d instead of %d" % visits)
 
 func _finish() -> void:
 	print("Edit tests: %s" % ("ALL PASSED" if _failures == 0 else "%d FAILED" % _failures))

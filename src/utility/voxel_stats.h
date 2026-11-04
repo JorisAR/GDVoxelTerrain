@@ -51,6 +51,7 @@ enum Count
     ChunksCommitted,
     ChunksCreated,
     CollidersBuilt,
+    EditNodes, // octree nodes edits visited
     CountCount
 };
 

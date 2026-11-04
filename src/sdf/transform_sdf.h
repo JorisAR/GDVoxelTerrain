@@ -40,6 +40,11 @@ class JarTransformSdf : public JarSignedDistanceField
     }
     Transform3D get_transform() const { return _transform; }
 
+    bool is_distance_bound() const override
+    {
+        return _sdf.is_valid() && _sdf->is_distance_bound(); // scaled by the smallest axis
+    }
+
     float distance(const glm::vec3 &pos) const override
     {
         if (_sdf.is_null())
