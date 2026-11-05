@@ -28,8 +28,3 @@ material_override = ExtResource("1_mgn52")
 visibility_range_begin = 63.0
 visibility_range_end = 383.0
 mesh = ExtResource("3_4bd42")
-
-[node name="mesh-impostor2" type="MeshInstance3D" parent="."]
-visibility_range_begin = 384.0
-mesh = ExtResource("3_nfbey")
-skeleton = NodePath("")
