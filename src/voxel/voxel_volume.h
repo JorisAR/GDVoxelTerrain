@@ -133,6 +133,8 @@ class JarVoxelVolume : public Node3D
     void apply_edit(const ModifySettings &settings); // build worker
     JarVoxelChunk *create_chunk();
     void refill_pool(); // main thread, every frame
+    std::vector<JarVoxelChunk *> _parking; // hidden, not parked yet
+    static constexpr int ParkMicroseconds = 1000;
 
     // PERFORMANCE
     int _updatedCollidersPerSecond = 0; // 0 = uncapped (time budget only)
@@ -201,6 +203,7 @@ class JarVoxelVolume : public Node3D
     void pool_release(JarVoxelChunk *chunk);
     // Main thread: hide (and pool) the chunks released so far, now.
     void process_pool();
+    void park_chunks(); // main thread, every frame, within a budget
 
     // Script-facing operations (GDScript sees them as JarVoxelVolume.Operation).
     enum Operation

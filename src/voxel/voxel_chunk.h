@@ -167,6 +167,12 @@ class JarVoxelChunk : public Node3D
     void deactivate()
     {
         set_visible(false);
+        park();
+    }
+    // The rest of deactivate(): spread over frames after a big commit, which
+    // only hides what it replaced at once (see JarVoxelVolume::process_pool).
+    void park()
+    {
         if (collision_shape)
             set_collider_active(false);
         // Out of the volume's transform: Godot then skips it (and its mesh

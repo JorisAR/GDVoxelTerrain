@@ -10,6 +10,7 @@
 #include "up_field.h"
 #include <godot_cpp/classes/shape3d.hpp>
 #include <atomic>
+#include <deque>
 #include <glm/glm.hpp>
 #define GLM_ENABLE_EXPERIMENTAL
 #include <glm/gtx/hash.hpp>
@@ -88,6 +89,7 @@ class FeatureManager
     };
     struct Cell
     {
+        bool started = false; // its generation job was started
         bool ready = false;
         std::vector<std::vector<Placed>> perFeature;
         std::vector<Node3D *> groups;    // one node per feature, null when hidden
@@ -140,6 +142,7 @@ class FeatureManager
     bool _scanRunning = false;
     bool _dirtyVisibility = false;
     std::vector<glm::ivec3> _toShow; // cells whose groups need (re)building
+    std::deque<glm::ivec3> _toGenerate; // nearest first
 
     void refresh_features();
     void start_scan(const std::vector<glm::vec3> &viewers);

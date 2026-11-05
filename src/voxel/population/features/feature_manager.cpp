@@ -74,6 +74,7 @@ void FeatureManager::reset()
         free_groups(cell);
     _cells.clear();
     _toShow.clear();
+    _toGenerate.clear();
     _scanViewers.clear();
     {
         // Results of running jobs belong to the old settings: drop them.
@@ -205,7 +206,19 @@ void FeatureManager::process()
         update_visibility(viewers);
     }
 
-    // Build pending groups within the frame budget.
+    // Start jobs and build pending groups within the frame budget.
+    const auto generateUntil = std::chrono::steady_clock::now() + std::chrono::microseconds(1000);
+    while (!_toGenerate.empty() && std::chrono::steady_clock::now() < generateUntil)
+    {
+        const glm::ivec3 key = _toGenerate.front();
+        _toGenerate.pop_front();
+        auto it = _cells.find(key);
+        if (it != _cells.end() && !it->second.started)
+        {
+            it->second.started = true;
+            start_generation(key);
+        }
+    }
     const auto deadline =
         std::chrono::steady_clock::now() + std::chrono::microseconds(static_cast<int64_t>(BudgetMicroseconds));
     while (!_toShow.empty() && std::chrono::steady_clock::now() < deadline)
@@ -232,6 +245,17 @@ void FeatureManager::start_scan(const std::vector<glm::vec3> &viewers)
         {
             const VoxelStats::Scope stage(VoxelStats::WorkerFeatures);
             keys = scan_cells(viewers, range, cellSize, sdf);
+            // Nearest first, so features appear around the player before the
+            // horizon. Sorted here: thousands of cells took 15-20 ms on the
+            // main thread.
+            std::vector<std::pair<float, glm::ivec3>> sorted;
+            sorted.reserve(keys.size());
+            for (const glm::ivec3 &key : keys)
+                sorted.emplace_back(nearest_distance(viewers, (glm::vec3(key) + 0.5f) * cellSize), key);
+            std::sort(sorted.begin(), sorted.end(),
+                      [](const auto &a, const auto &b) { return a.first < b.first; });
+            for (size_t i = 0; i < keys.size(); ++i)
+                keys[i] = sorted[i].second;
         }
         {
             std::lock_guard<std::mutex> lock(shared->mutex);
@@ -326,14 +350,11 @@ void FeatureManager::apply_results()
             else
                 ++it;
         }
-        // Nearest first, so features appear around the player before the horizon.
-        std::sort(scanned.begin(), scanned.end(), [&](const glm::ivec3 &a, const glm::ivec3 &b) {
-            return nearest_distance(_scanViewers, cell_bounds(a).get_center()) <
-                   nearest_distance(_scanViewers, cell_bounds(b).get_center());
-        });
+        // Started over frames: thousands of cells at once took 15-20 ms.
+        _toGenerate.clear();
         for (const glm::ivec3 &key : scanned)
-            if (_cells.emplace(key, Cell()).second)
-                start_generation(key);
+            if (!_cells[key].started)
+                _toGenerate.push_back(key);
         _dirtyVisibility = true;
     }
 }

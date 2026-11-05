@@ -448,10 +448,24 @@ void JarVoxelVolume::process_pool()
         std::lock_guard<std::mutex> lock(_poolMutex);
         released.swap(_releasedChunks);
     }
+    // Hidden now, as what replaced them shows; parking thousands in the frame
+    // of a commit took 7-8 ms.
     for (JarVoxelChunk *c : released)
     {
         chunk_gone(c);
-        c->deactivate();
+        c->set_visible(false);
+        _parking.push_back(c);
+    }
+}
+
+void JarVoxelVolume::park_chunks()
+{
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::microseconds(ParkMicroseconds);
+    while (!_parking.empty() && std::chrono::steady_clock::now() < deadline)
+    {
+        JarVoxelChunk *c = _parking.back();
+        _parking.pop_back();
+        c->park();
         _freeChunks.push_back(c);
     }
 }
@@ -861,6 +875,7 @@ void JarVoxelVolume::teardown()
         _releasedChunks.clear();
     }
     _freeChunks.clear();
+    _parking.clear();
     _pendingColliders.clear();
     _initialBuildRequested = false;
 }
@@ -985,6 +1000,7 @@ void JarVoxelVolume::process()
     }
     if (!_meshComputeScheduler)
         return; // initialize() failed (missing chunk scene / sdf)
+    park_chunks();
     refill_pool(); // also while building: the next commit needs them
     if (_isBuilding)
         return;
