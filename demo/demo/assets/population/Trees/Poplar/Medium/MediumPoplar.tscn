@@ -3,7 +3,6 @@
 [ext_resource type="Material" uid="uid://cfwekwy5qcx3u" path="res://demo/assets/population/Trees/Poplar/PoplarMaterial.tres" id="1_mgn52"]
 [ext_resource type="ArrayMesh" uid="uid://cxq7ml6lyg2vv" path="res://demo/assets/population/Trees/Poplar/Medium/medium_tree.obj" id="2_aoddj"]
 [ext_resource type="ArrayMesh" uid="uid://btopvttgblnn2" path="res://demo/assets/population/Trees/Poplar/Medium/medium_tree_lod1.obj" id="3_4bd42"]
-[ext_resource type="QuadMesh" uid="uid://brtovvf5idxeq" path="res://demo/assets/population/Trees/Poplar/Medium/Imposter/MediumPoplar_mesh.tres" id="3_nfbey"]
 [ext_resource type="ArrayMesh" uid="uid://dh2is5h11nrbq" path="res://demo/assets/population/Trees/Poplar/Medium/medium_tree_trunk.obj" id="5_vbr4i"]
 
 [sub_resource type="CapsuleShape3D" id="CapsuleShape3D_l4xv8"]
