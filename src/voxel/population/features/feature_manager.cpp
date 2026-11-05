@@ -451,12 +451,18 @@ void FeatureManager::add_impostor(Template &t, const JarTerrainFeature &feature)
     if (impostor.is_null())
         return;
     const float distance = feature.effective_impostor_distance();
+    // The scene's LODs up to there: what is shown last reaches the impostor,
+    // wherever the scene ended it.
     std::vector<Template::Part> parts;
+    float last = 0.0f;
+    for (const Template::Part &part : t.parts)
+        if (part.begin < distance)
+            last = std::max(last, part.end);
     for (Template::Part &part : t.parts)
     {
         if (part.begin >= distance)
-            continue; // the scene's own far LODs and impostors
-        part.end = part.end > 0.0f ? std::min(part.end, distance) : distance;
+            continue;
+        part.end = part.end <= 0.0f || part.end >= last ? distance : part.end;
         parts.push_back(part);
     }
     parts.push_back({impostor, Ref<Material>(), Transform3D(), distance, 0.0f,

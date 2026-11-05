@@ -3,7 +3,6 @@
 [ext_resource type="Material" uid="uid://bm6ae8b8xv31" path="res://demo/assets/population/Trees/Pine/PineMaterial.tres" id="1_0kqwo"]
 [ext_resource type="ArrayMesh" uid="uid://dlubbja2mjnal" path="res://demo/assets/population/Trees/Pine/Small/small_pine.obj" id="2_d3l7d"]
 [ext_resource type="ArrayMesh" uid="uid://ceuv6ro545ftq" path="res://demo/assets/population/Trees/Pine/Small/small_pine_lod_1.obj" id="3_0uq8b"]
-[ext_resource type="QuadMesh" uid="uid://cobybljic7wxe" path="res://demo/assets/population/Trees/Pine/Small/Imposter/SmallPine_mesh.tres" id="3_ybo1i"]
 [ext_resource type="ArrayMesh" uid="uid://drhmdftftn0rk" path="res://demo/assets/population/Trees/Pine/Small/small_pine_trunk.obj" id="5_di3qs"]
 
 [sub_resource type="CapsuleShape3D" id="CapsuleShape3D_l4xv8"]
@@ -29,8 +28,3 @@ material_override = ExtResource("1_0kqwo")
 visibility_range_begin = 63.0
 visibility_range_end = 383.0
 mesh = ExtResource("3_0uq8b")
-
-[node name="mesh-impostor" type="MeshInstance3D" parent="."]
-visibility_range_begin = 384.0
-mesh = ExtResource("3_ybo1i")
-skeleton = NodePath("")

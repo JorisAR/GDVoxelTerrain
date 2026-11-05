@@ -28,6 +28,10 @@ window/size/viewport_height=1080
 
 project/assembly_name="godotTerrainTest"
 
+[editor_plugins]
+
+enabled=PackedStringArray("res://addons/jar_voxel_terrain/plugin.cfg")
+
 [filesystem]
 
 import/blender/enabled=false
@@ -121,7 +125,3 @@ global_cell_noise_dist={
 "type": "sampler2D",
 "value": "res://addons/jar_voxel_terrain/textures/noise/CellNoiseDist.tres"
 }
-
-[editor_plugins]
-
-enabled=PackedStringArray("res://addons/jar_voxel_terrain/plugin.cfg")

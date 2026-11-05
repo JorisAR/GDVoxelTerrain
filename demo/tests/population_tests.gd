@@ -11,6 +11,7 @@ func _ready() -> void:
 	await _test_biomes()
 	await _test_table()
 	await _test_impostor()
+	await _test_panel()
 	await _test_toggles()
 	await _test_detail_resolution()
 	await _test_detail_sphere()
@@ -464,6 +465,32 @@ func _test_table() -> void:
 	world.viewer.queue_free()
 	await get_tree().process_frame
 
+## The population panel's edits end up in the table.
+func _test_panel() -> void:
+	var feature := _box_feature(0.01)
+	var other := _box_feature(0.01)
+	var world := TestWorld.flat(self, Vector3(3, 30, 5), func(v: JarVoxelVolume):
+		TestWorld.populate(v, [feature, other]))
+	var volume: JarVoxelVolume = world.volume
+	var panel: VBoxContainer = load("res://addons/jar_voxel_terrain/population_panel.gd").new()
+	add_child(panel)
+	panel.set_population(_pop(volume))
+	var table: JarPopulationTable = _pop(volume).table
+	panel.set_cell(0, "Tundra", "0.3")
+	_check("panel: cell written", is_equal_approx(table.rows[0].biomes.get("Tundra", 0.0), 0.3))
+	panel.set_cell(0, "Tundra", "")
+	_check("panel: empty cell removed", not table.rows[0].biomes.has("Tundra"))
+	panel.move_row(0, 1)
+	_check("panel: row moved", table.rows[1].asset == feature)
+	panel.set_group(1, "Trees")
+	_check("panel: group", table.rows[1].group == "Trees")
+	panel.add_file("res://demo/planet/grass.tres")
+	_check("panel: file added", table.rows.size() == 3 and table.rows[2].biomes.has("*"))
+	panel.queue_free()
+	volume.queue_free()
+	world.viewer.queue_free()
+	await get_tree().process_frame
+
 ## A baked impostor takes over from its distance, with or without one set.
 func _test_impostor() -> void:
 	var feature := _box_feature(0.01)
@@ -481,8 +508,8 @@ func _test_impostor() -> void:
 			meshes[n.multimesh.mesh] = n
 	_check("impostor drawn beyond the mesh", meshes.has(quad) and meshes.has(feature.mesh))
 	if meshes.has(quad):
-		_check("impostor starts where the mesh ends", is_equal_approx(meshes[quad].visibility_range_begin, 30.0)
-			and is_equal_approx(meshes[feature.mesh].visibility_range_end, 30.0),
+		_check("impostor starts where the mesh ends", is_equal_approx(meshes[quad].visibility_range_begin, 100.0)
+			and is_equal_approx(meshes[feature.mesh].visibility_range_end, 100.0),
 			"%f, %f" % [meshes[quad].visibility_range_begin, meshes[feature.mesh].visibility_range_end])
 	volume.queue_free()
 	world.viewer.queue_free()

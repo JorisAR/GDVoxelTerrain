@@ -29,6 +29,7 @@ uniform bool dither = false;
 uniform float scale = 1.0; // half the frame size, object space
 uniform bool use_baked_normals = false;
 uniform float baked_normal_amount : hint_range(0.0, 1.0) = 0.8; // the rest is the rounded normal
+uniform float baked_occlusion : hint_range(0.0, 1.0) = 1.0; // in the normals' alpha
 // Unused here; kept so baked materials load without warnings.
 uniform float depth_scale = 0.0;
 uniform float normalmap_depth = 1.0;
@@ -162,6 +163,11 @@ void fragment() {
 		vec3 baked = baked_normal(frame0, uv0, dir0) * weights.x + baked_normal(frame1, uv1, dir1) * weights.y +
 				baked_normal(frame2, uv2, dir2) * weights.z;
 		n = normalize(mix(n, normalize(baked), baked_normal_amount));
+		float occlusion = sample_frame(imposterTextureNormal, frame0, uv0).a * weights.x +
+				sample_frame(imposterTextureNormal, frame1, uv1).a * weights.y +
+				sample_frame(imposterTextureNormal, frame2, uv2).a * weights.z;
+		AO = mix(1.0, occlusion, baked_occlusion);
+		AO_LIGHT_AFFECT = 0.6;
 	}
 	NORMAL = normalize((VIEW_MATRIX * (MODEL_MATRIX * vec4(n, 0.0))).xyz);
 	ALBEDO = color.rgb * albedo.rgb;

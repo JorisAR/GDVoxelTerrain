@@ -49,7 +49,7 @@ class JarTerrainFeature : public JarTerrainPopulator
     float draw_distance = 500.0f;  // meters
     bool cast_shadows = true;
     Ref<Mesh> impostor;
-    float impostor_distance = 0.0f; // meters; 0: where its pixels get as large as the screen's
+    float impostor_distance = 0.0f; // meters; 0: from its size
 
   public:
     Ref<Mesh> get_mesh() const { return mesh; }
@@ -82,13 +82,12 @@ class JarTerrainFeature : public JarTerrainPopulator
     void set_impostor(const Ref<Mesh> &value) { impostor = value; }
     float get_impostor_distance() const { return impostor_distance; }
     void set_impostor_distance(float value) { impostor_distance = std::max(0.0f, value); }
-    // Where the impostor starts: 3 times its size unless set (a 256 pixel
-    // frame is about as sharp as the screen there).
+    // Where the impostor starts: 10 times its size unless set.
     float effective_impostor_distance() const
     {
         if (impostor_distance > 0.0f || impostor.is_null())
             return impostor_distance;
-        return 3.0f * float(impostor->get_aabb().get_longest_axis_size());
+        return 10.0f * float(impostor->get_aabb().get_longest_axis_size());
     }
 
   protected:

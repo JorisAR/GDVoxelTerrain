@@ -6,7 +6,7 @@ extends RefCounted
 ## scene's own materials, whatever their shaders) into two atlases: albedo
 ## unshaded, and normals as the renderer sees them (normal maps included).
 ## Normals stay relative to each frame's camera; impostor.gdshader turns them
-## back, per pixel. Needs a window and the Forward+ renderer (the normal buffer).
+## back, per pixel; their alpha holds ambient occlusion. Needs a window and the Forward+ renderer (the normal buffer).
 
 const SHADER := preload("res://addons/jar_voxel_terrain/shaders/impostor.gdshader")
 
@@ -99,6 +99,9 @@ func bake(source: Node3D, parent: Node, compress := false) -> QuadMesh:
 	viewport.size = Vector2i.ONE * frame_size * supersampling
 	viewport.own_world_3d = true
 	viewport.world_3d = World3D.new()
+	var environment := Environment.new()
+	environment.ssao_enabled = true
+	viewport.world_3d.environment = environment
 	viewport.transparent_bg = true
 	viewport.render_target_update_mode = SubViewport.UPDATE_DISABLED
 	parent.add_child(viewport)
@@ -114,6 +117,9 @@ func bake(source: Node3D, parent: Node, compress := false) -> QuadMesh:
 	var bounds := _bounds(meshes, root)
 	var center := bounds.get_center()
 	var radius := bounds.size.length() * 0.5
+	environment.ssao_radius = radius * 0.15
+	environment.ssao_intensity = 1.2
+	environment.ssao_power = 1.0
 	var camera := Camera3D.new()
 	camera.projection = Camera3D.PROJECTION_ORTHOGONAL
 	camera.size = radius * 2.0
@@ -135,6 +141,8 @@ func bake(source: Node3D, parent: Node, compress := false) -> QuadMesh:
 			var color: Image = await _capture(viewport)
 			viewport.debug_draw = Viewport.DEBUG_DRAW_NORMAL_BUFFER
 			var normals: Image = await _capture(viewport)
+			viewport.debug_draw = Viewport.DEBUG_DRAW_SSAO
+			var occlusion: Image = await _capture(viewport)
 			# Only where the object is, then spread outwards: filtered
 			# edges and mipmaps must not pull in the empty background.
 			normals.convert(Image.FORMAT_RGB8)
@@ -145,6 +153,13 @@ func bake(source: Node3D, parent: Node, compress := false) -> QuadMesh:
 			masked.fix_alpha_edges()
 			color.resize(frame_size, frame_size, Image.INTERPOLATE_BILINEAR)
 			masked.resize(frame_size, frame_size, Image.INTERPOLATE_BILINEAR)
+			occlusion.resize(frame_size, frame_size, Image.INTERPOLATE_BILINEAR)
+			occlusion.convert(Image.FORMAT_L8)
+			var from := occlusion.get_data()
+			var to := masked.get_data()
+			for i in from.size():
+				to[i * 4 + 3] = from[i]
+			masked = Image.create_from_data(frame_size, frame_size, false, Image.FORMAT_RGBA8, to)
 			var at := Vector2i(x, y) * frame_size
 			albedo.blit_rect(color, Rect2i(0, 0, frame_size, frame_size), at)
 			normal.blit_rect(masked, Rect2i(0, 0, frame_size, frame_size), at)

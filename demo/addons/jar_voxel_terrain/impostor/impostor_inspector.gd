@@ -8,7 +8,7 @@ func _can_handle(object: Object) -> bool:
 func _parse_begin(object: Object) -> void:
 	var button := Button.new()
 	button.text = "Bake impostor" if object is JarTerrainFeature else "Bake all impostors"
-	button.pressed.connect(_bake.bind(object, button))
+	button.pressed.connect(bake.bind(object, button))
 	add_custom_control(button)
 
 func _features(object: Object) -> Array[JarTerrainFeature]:
@@ -21,7 +21,8 @@ func _features(object: Object) -> Array[JarTerrainFeature]:
 				result.append(row.asset)
 	return result
 
-func _bake(object: Object, button: Button) -> void:
+## Also the 3D editor's toolbar button.
+func bake(object: Object, button: Button) -> void:
 	var text := button.text
 	button.disabled = true
 	var features := _features(object)

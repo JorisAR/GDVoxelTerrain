@@ -1,14 +1,14 @@
-[gd_resource type="JarPopulationTable" format=3 uid="uid://cjarplanetpop1"]
+[gd_resource type="JarPopulationTable" format=3 uid="uid://dt06d66l3u2ci"]
 
-[ext_resource type="JarTerrainFeature" uid="uid://2dvalovk54ou" path="res://demo/planet/rock.tres" id="1"]
-[ext_resource type="JarTerrainFeature" uid="uid://bjhffms4m1hay" path="res://demo/planet/pine.tres" id="2"]
-[ext_resource type="JarTerrainFeature" uid="uid://buqkk75rsywt7" path="res://demo/planet/broadleaf_large.tres" id="3"]
-[ext_resource type="JarTerrainFeature" uid="uid://cv2l3s85f2k8k" path="res://demo/planet/broadleaf.tres" id="4"]
-[ext_resource type="JarTerrainFeature" uid="uid://bwqai7nepg1v1" path="res://demo/planet/birch.tres" id="5"]
-[ext_resource type="JarTerrainFeature" uid="uid://orb1lwt4uinu" path="res://demo/planet/bush.tres" id="6"]
-[ext_resource type="JarTerrainFeature" uid="uid://dstsdy4017c0s" path="res://demo/planet/pine_sparse.tres" id="7"]
-[ext_resource type="JarTerrainFeature" uid="uid://q33lgxadlw2i" path="res://demo/planet/rock_field.tres" id="8"]
-[ext_resource type="JarTerrainFeature" uid="uid://bovoy1cx63prq" path="res://demo/planet/broadleaf_savanna.tres" id="9"]
+[ext_resource type="JarTerrainFeature" uid="uid://bg0sxbv05qw8a" path="res://demo/planet/rock.tres" id="1"]
+[ext_resource type="JarTerrainFeature" uid="uid://byge0swntgspp" path="res://demo/planet/pine.tres" id="2"]
+[ext_resource type="JarTerrainFeature" uid="uid://bsyyhyf4t54tw" path="res://demo/planet/broadleaf_large.tres" id="3"]
+[ext_resource type="JarTerrainFeature" uid="uid://2d55h3xcqdoe" path="res://demo/planet/broadleaf.tres" id="4"]
+[ext_resource type="JarTerrainFeature" uid="uid://cpr0cgxpq8tnr" path="res://demo/planet/birch.tres" id="5"]
+[ext_resource type="JarTerrainFeature" uid="uid://ddysvvvc2ejni" path="res://demo/planet/bush.tres" id="6"]
+[ext_resource type="JarTerrainFeature" uid="uid://bnl5rpy8pihyl" path="res://demo/planet/pine_sparse.tres" id="7"]
+[ext_resource type="JarTerrainFeature" uid="uid://c7p1x1uimu3uq" path="res://demo/planet/rock_field.tres" id="8"]
+[ext_resource type="JarTerrainFeature" uid="uid://wqk77iy6ack8" path="res://demo/planet/broadleaf_savanna.tres" id="9"]
 [ext_resource type="JarTerrainDetail" uid="uid://b07o6puiiv3ht" path="res://demo/planet/grass.tres" id="10"]
 [ext_resource type="JarTerrainDetail" uid="uid://bi8dl4k1gc8kr" path="res://demo/planet/grass_tall.tres" id="11"]
 [ext_resource type="JarTerrainDetail" uid="uid://kgkqqc8u7o3o" path="res://demo/planet/poppies.tres" id="12"]
@@ -17,65 +17,95 @@
 [ext_resource type="JarTerrainDetail" uid="uid://cudfru0whs7mb" path="res://demo/planet/lupine.tres" id="15"]
 
 [resource]
-rows = Array[Dictionary]([
-{
-"group": "Rocks",
+rows = Array[Dictionary]([{
 "asset": ExtResource("1"),
-"biomes": { "*": 1.0 }
+"biomes": {
+"*": 1.0
+},
+"group": "Rocks"
 }, {
-"group": "Trees",
 "asset": ExtResource("2"),
-"biomes": { "Temperate forest": 1.0 }
+"biomes": {
+"Temperate forest": 1.0
+},
+"group": "Trees"
 }, {
-"group": "Trees",
 "asset": ExtResource("3"),
-"biomes": { "Temperate forest": 1.0 }
+"biomes": {
+"Temperate forest": 1.0
+},
+"group": "Trees"
 }, {
-"group": "Trees",
 "asset": ExtResource("4"),
-"biomes": { "Temperate forest": 1.0 }
+"biomes": {
+"Temperate forest": 1.0
+},
+"group": "Trees"
 }, {
-"group": "Trees",
 "asset": ExtResource("5"),
-"biomes": { "Temperate forest": 1.0 }
+"biomes": {
+"Temperate forest": 1.0
+},
+"group": "Trees"
 }, {
-"group": "Bushes",
 "asset": ExtResource("6"),
-"biomes": { "Temperate forest": 1.0, "Dry steppe": 1.0 }
+"biomes": {
+"Dry steppe": 1.0,
+"Temperate forest": 1.0
+},
+"group": "Bushes"
 }, {
-"group": "Trees",
 "asset": ExtResource("7"),
-"biomes": { "Alpine tundra": 1.0 }
+"biomes": {
+"Alpine tundra": 1.0
+},
+"group": "Trees"
 }, {
-"group": "Rocks",
 "asset": ExtResource("8"),
-"biomes": { "Alpine tundra": 1.0 }
+"biomes": {
+"Alpine tundra": 1.0
+},
+"group": "Rocks"
 }, {
-"group": "Trees",
 "asset": ExtResource("9"),
-"biomes": { "Dry steppe": 1.0 }
+"biomes": {
+"Dry steppe": 1.0
+},
+"group": "Trees"
 }, {
-"group": "Ground",
 "asset": ExtResource("10"),
-"biomes": { "*": 1.0 }
+"biomes": {
+"*": 1.0
+},
+"group": "Ground"
 }, {
-"group": "Ground",
 "asset": ExtResource("11"),
-"biomes": { "Temperate forest": 1.0 }
+"biomes": {
+"Temperate forest": 1.0
+},
+"group": "Ground"
 }, {
-"group": "Flowers",
 "asset": ExtResource("12"),
-"biomes": { "Temperate forest": 1.0 }
+"biomes": {
+"Temperate forest": 1.0
+},
+"group": "Flowers"
 }, {
-"group": "Flowers",
 "asset": ExtResource("13"),
-"biomes": { "Temperate forest": 1.0 }
+"biomes": {
+"Temperate forest": 1.0
+},
+"group": "Flowers"
 }, {
-"group": "Flowers",
 "asset": ExtResource("14"),
-"biomes": { "Temperate forest": 1.0 }
+"biomes": {
+"Temperate forest": 1.0
+},
+"group": "Flowers"
 }, {
-"group": "Flowers",
 "asset": ExtResource("15"),
-"biomes": { "Temperate forest": 1.0 }
+"biomes": {
+"Temperate forest": 1.0
+},
+"group": "Flowers"
 }])
