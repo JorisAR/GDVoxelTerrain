@@ -73,15 +73,15 @@ class MeshComputeScheduler
     std::vector<int> _freeEntries;
     std::unordered_map<const VoxelOctreeNode *, int> _entryOf;
     std::deque<int> _urgent; // edit chunks
-    struct ByLod
+    // The LOD is kept here: an entry can be shown (and freed) while still
+    // queued, when an edit put its group first, and be reused.
+    struct NormalItem
     {
-        const std::vector<Entry> *entries;
-        bool operator()(int a, int b) const
-        {
-            return (*entries)[a].node->get_lod() > (*entries)[b].node->get_lod(); // finest first
-        }
+        int lod;
+        int id;
+        bool operator<(const NormalItem &other) const { return lod > other.lod; } // finest first
     };
-    std::priority_queue<int, std::vector<int>, ByLod> _normal{ByLod{&_entries}};
+    std::priority_queue<NormalItem> _normal;
     std::atomic<int> _pendingTotal{0}; // entries alive
 
     std::atomic<int> _activeTasks{0};

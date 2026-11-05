@@ -107,6 +107,7 @@ func _run(camera: Node3D) -> void:
 	await _cleanup()
 	await _skip_outside()
 	await _large_edits()
+	await _digs_while_moving()
 	_finish()
 
 ## Flies `viewer` away in steps and waits at the end.
@@ -267,6 +268,30 @@ func _large_edits() -> void:
 	var weights := _material_weights_near(Vector3(spot.x, before, spot.z), 6.0)
 	_check("large paint", weights.size() > 0 and weights.min() > 0.9 and absf(_ground_height(spot) - before) < 0.05,
 		"weights %s" % [weights.slice(0, 3)])
+	holder.queue_free()
+	await get_tree().process_frame
+
+## Digs ahead of a moving viewer, so edits land in LOD updates still being
+## meshed: their whole group goes first, ahead of the queue it was in.
+func _digs_while_moving() -> void:
+	var holder := Node.new()
+	add_child(holder)
+	var world := TestWorld.flat(holder, Vector3(0, 30, 0))
+	var v: JarVoxelVolume = world.volume
+	var viewer: Node3D = world.viewer
+	await _settle_on(v)
+	var digs := 0
+	for frame in 900:
+		viewer.global_position.x += 1.5
+		if frame % 12 == 0:
+			var hit := v.raycast(viewer.global_position + Vector3(12, 40, 0), viewer.global_position + Vector3(12, -200, 0))
+			if not hit.is_empty():
+				v.sphere_edit(hit.position, 2.5, false)
+				digs += 1
+		await get_tree().process_frame
+	await _settle_on(v)
+	var spot := viewer.global_position
+	_check("digs while moving", digs > 30 and not v.raycast(spot + Vector3(0, 40, 0), spot + Vector3(0, -200, 0)).is_empty(), "%d digs" % digs)
 	holder.queue_free()
 	await get_tree().process_frame
 

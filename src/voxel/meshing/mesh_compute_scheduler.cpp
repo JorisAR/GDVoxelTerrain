@@ -58,7 +58,7 @@ void MeshComputeScheduler::close_batch(const JarVoxelVolume &terrain)
             if (incoming.urgent)
                 _urgent.push_back(id);
             else
-                _normal.push(id);
+                _normal.push({incoming.node->get_lod(), id});
         }
         else
             requeue(it->second, incoming.urgent); // an edit changed a chunk not shown yet
@@ -163,11 +163,12 @@ void MeshComputeScheduler::requeue(int id, bool urgent)
         _entries[find(id)].notReady++;
         break;
     }
-    // Duplicates are harmless: dispatch() skips entries no longer Queued.
+    // Duplicates are harmless: dispatch() skips entries no longer Queued,
+    // and meshing one early (its id reused) only changes the order.
     if (urgent)
         _urgent.push_back(id);
     else
-        _normal.push(id);
+        _normal.push({entry.node->get_lod(), id});
 }
 
 void MeshComputeScheduler::dispatch(JarVoxelVolume &terrain)
@@ -185,7 +186,7 @@ void MeshComputeScheduler::dispatch(JarVoxelVolume &terrain)
         }
         else
         {
-            id = _normal.top();
+            id = _normal.top().id;
             _normal.pop();
         }
         Entry &entry = _entries[id];
@@ -290,7 +291,7 @@ void MeshComputeScheduler::process(JarVoxelVolume &terrain, bool dispatchTasks, 
             // A fresh edit: its chunks alone first, then wait for them.
             std::deque<int> urgent;
             urgent.swap(_urgent);
-            std::priority_queue<int, std::vector<int>, ByLod> normal{ByLod{&_entries}};
+            std::priority_queue<NormalItem> normal;
             std::swap(normal, _normal);
             _urgent.swap(urgent);
             dispatch(terrain);
