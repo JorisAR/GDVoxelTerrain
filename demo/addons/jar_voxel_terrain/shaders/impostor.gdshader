@@ -5,8 +5,9 @@ shader_type spatial;
 // the three frames nearest to the view direction; each frame is looked up
 // where the view ray crosses that frame's plane, so frames line up while the
 // view turns. Lighting uses a rounded normal (facing the camera, bending
-// outwards towards the silhouette, a little up), like a canopy: the baked
-// normal maps cannot be relied on (the bakes here hold no normals).
+// outwards towards the silhouette, a little up), like a canopy, blended with
+// the baked normals of JarImpostorBaker's bakes (`use_baked_normals`; relative
+// to each frame's camera). Bakes of other tools hold no usable normals.
 //
 // The uniform names match the materials of the Octahedral Impostors baker for
 // Godot, so its baked QuadMeshes can use this shader as they are. As a
@@ -26,12 +27,14 @@ uniform bool isFullSphere = false;
 uniform float alpha_clamp : hint_range(0.0, 1.0) = 0.5;
 uniform bool dither = false;
 uniform float scale = 1.0; // half the frame size, object space
+uniform bool use_baked_normals = false;
+uniform float baked_normal_amount : hint_range(0.0, 1.0) = 0.8; // the rest is the rounded normal
 // Unused here; kept so baked materials load without warnings.
 uniform float depth_scale = 0.0;
 uniform float normalmap_depth = 1.0;
 uniform float aabb_max = 1.0;
 uniform sampler2D imposterTextureAlbedo : source_color, filter_linear_mipmap;
-uniform sampler2D imposterTextureNormal : hint_normal, filter_linear_mipmap;
+uniform sampler2D imposterTextureNormal : filter_linear_mipmap;
 uniform sampler2D imposterTextureDepth : filter_linear_mipmap;
 uniform sampler2D imposterTextureOrm : filter_linear_mipmap;
 
@@ -42,6 +45,9 @@ varying vec3 weights;
 varying vec2 uv0;
 varying vec2 uv1;
 varying vec2 uv2;
+varying vec3 dir0; // the three frames' view directions
+varying vec3 dir1;
+varying vec3 dir2;
 varying vec3 quad_right; // object space
 varying vec3 quad_down;
 varying vec3 quad_out;
@@ -122,14 +128,25 @@ void vertex() {
 	frame1 = base + (upper ? vec2(1.0, 0.0) : vec2(0.0, 1.0));
 	frame2 = base + 1.0;
 	weights = vec3(min(1.0 - f.x, 1.0 - f.y), abs(f.x - f.y), min(f.x, f.y));
-	uv0 = frame_uv(grid_to_direction(frame0 / last), eye, point);
-	uv1 = frame_uv(grid_to_direction(frame1 / last), eye, point);
-	uv2 = frame_uv(grid_to_direction(frame2 / last), eye, point);
+	dir0 = grid_to_direction(frame0 / last);
+	dir1 = grid_to_direction(frame1 / last);
+	dir2 = grid_to_direction(frame2 / last);
+	uv0 = frame_uv(dir0, eye, point);
+	uv1 = frame_uv(dir1, eye, point);
+	uv2 = frame_uv(dir2, eye, point);
 	JAR_POPULATION_VERTEX
 }
 
 vec4 sample_frame(sampler2D atlas, vec2 frame, vec2 uv) {
 	return texture(atlas, (frame + clamp(uv, 0.0, 1.0)) / imposterFrames);
+}
+
+// A baked normal, from its frame's camera space to object space.
+vec3 baked_normal(vec2 frame, vec2 uv, vec3 z) {
+	vec3 x, y;
+	frame_axes(z, x, y);
+	vec3 n = sample_frame(imposterTextureNormal, frame, uv).rgb * 2.0 - 1.0;
+	return x * n.x - y * n.y + z * n.z;
 }
 
 void fragment() {
@@ -141,6 +158,11 @@ void fragment() {
 		discard;
 	vec2 c = (UV - 0.5) * 2.0;
 	vec3 n = normalize(quad_right * c.x + quad_down * c.y + quad_out * 0.8 + vec3(0.0, 0.4, 0.0));
+	if (use_baked_normals) {
+		vec3 baked = baked_normal(frame0, uv0, dir0) * weights.x + baked_normal(frame1, uv1, dir1) * weights.y +
+				baked_normal(frame2, uv2, dir2) * weights.z;
+		n = normalize(mix(n, normalize(baked), baked_normal_amount));
+	}
 	NORMAL = normalize((VIEW_MATRIX * (MODEL_MATRIX * vec4(n, 0.0))).xyz);
 	ALBEDO = color.rgb * albedo.rgb;
 	SPECULAR = specular;
