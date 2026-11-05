@@ -1,12 +1,13 @@
-[gd_resource type="JarTerrainFeature" format=3 uid="uid://dstsdy4017c0s"]
+[gd_resource type="JarTerrainFeature" format=3]
 
-[ext_resource type="PackedScene" uid="uid://cn4kufx0ulban" path="res://demo/assets/population/Trees/Pine/Small/SmallPine.tscn" id="1_scene"]
+[ext_resource type="QuadMesh" path="res://demo/planet/pine_sparse_impostor.res" id="1_86n5d"]
+[ext_resource type="PackedScene" path="res://demo/assets/population/Trees/Pine/Small/SmallPine.tscn" id="1_scene"]
 
 [resource]
 scene = ExtResource("1_scene")
-density = 0.01
 footprint = 2.5
 draw_distance = 1200.0
+impostor = ExtResource("1_86n5d")
 minimum_scale = 0.4
 maximum_scale = 0.8
 sink = 0.3

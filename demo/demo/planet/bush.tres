@@ -1,6 +1,7 @@
-[gd_resource type="JarTerrainFeature" format=3 uid="uid://orb1lwt4uinu"]
+[gd_resource type="JarTerrainFeature" format=3]
 
-[ext_resource type="PackedScene" uid="uid://dt0eay6liiqyd" path="res://demo/assets/population/Trees/Bush/Small/small_bush.tscn" id="1_scene"]
+[ext_resource type="QuadMesh" path="res://demo/planet/bush_impostor.res" id="1_c16nm"]
+[ext_resource type="PackedScene" path="res://demo/assets/population/Trees/Bush/Small/small_bush.tscn" id="1_scene"]
 [ext_resource type="FastNoiseLite" path="res://demo/planet/forest_noise.tres" id="2_forest"]
 
 [resource]
@@ -8,6 +9,7 @@ scene = ExtResource("1_scene")
 density = 0.02
 footprint = 1.5
 draw_distance = 300.0
+impostor = ExtResource("1_c16nm")
 minimum_scale = 0.35
 maximum_scale = 0.7
 minimum_height = 3.0

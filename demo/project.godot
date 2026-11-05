@@ -121,3 +121,7 @@ global_cell_noise_dist={
 "type": "sampler2D",
 "value": "res://addons/jar_voxel_terrain/textures/noise/CellNoiseDist.tres"
 }
+
+[editor_plugins]
+
+enabled=PackedStringArray("res://addons/jar_voxel_terrain/plugin.cfg")

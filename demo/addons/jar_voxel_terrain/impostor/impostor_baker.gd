@@ -1,3 +1,4 @@
+@tool
 class_name JarImpostorBaker
 extends RefCounted
 ## Bakes octahedral impostors with nothing but Godot: a scene's most detailed
@@ -8,6 +9,9 @@ extends RefCounted
 ## back, per pixel. Needs a window and the Forward+ renderer (the normal buffer).
 
 const SHADER := preload("res://addons/jar_voxel_terrain/shaders/impostor.gdshader")
+
+## Called with the fraction done while baking.
+signal progress(amount: float)
 
 var frames := 10 ## per atlas side
 var frame_size := 256 ## pixels
@@ -52,9 +56,45 @@ func _capture(viewport: SubViewport) -> Image:
 	image.convert(Image.FORMAT_RGBA8)
 	return image
 
-## Bakes `scene` under `parent` (any node in the tree). Returns the impostor as
-## a mesh with its material.
-func bake(scene: PackedScene, parent: Node) -> QuadMesh:
+## What a feature looks like: its scene, or its mesh.
+static func _feature_source(feature: JarTerrainFeature) -> Node3D:
+	if feature.scene != null:
+		return feature.scene.instantiate()
+	if feature.mesh == null:
+		return null
+	var node := MeshInstance3D.new()
+	node.mesh = feature.mesh
+	node.material_override = feature.material
+	return node
+
+## Bakes `feature` and saves it (compressed, one file) next to its resource,
+## or `folder` if the feature is not a file of its own. Returns an error.
+func bake_feature(feature: JarTerrainFeature, parent: Node, folder := "") -> Error:
+	var source := _feature_source(feature)
+	if source == null:
+		return ERR_INVALID_DATA
+	var base := feature.resource_path.get_basename()
+	if feature.resource_path == "" or feature.resource_path.contains("::"):
+		if folder == "":
+			source.free()
+			return ERR_FILE_BAD_PATH
+		base = folder.path_join(feature.resource_name if feature.resource_name != "" else "feature")
+	var quad := await bake(source, parent, true)
+	var path := base + "_impostor.res"
+	var error := ResourceSaver.save(quad, path, ResourceSaver.FLAG_COMPRESS)
+	if error != OK:
+		return error
+	feature.impostor = load(path)
+	if feature.resource_path != "" and not feature.resource_path.contains("::"):
+		error = ResourceSaver.save(feature)
+	return error
+
+## Bakes `source` (freed afterwards) under `parent` (any node in the tree).
+## Returns the impostor as a mesh with its material.
+func bake(source: Node3D, parent: Node, compress := false) -> QuadMesh:
+	# The editor only draws on changes unless told otherwise.
+	var low_processor := OS.low_processor_usage_mode
+	OS.low_processor_usage_mode = false
 	var viewport := SubViewport.new()
 	viewport.size = Vector2i.ONE * frame_size * supersampling
 	viewport.own_world_3d = true
@@ -62,11 +102,13 @@ func bake(scene: PackedScene, parent: Node) -> QuadMesh:
 	viewport.transparent_bg = true
 	viewport.render_target_update_mode = SubViewport.UPDATE_DISABLED
 	parent.add_child(viewport)
-	var root: Node3D = scene.instantiate()
+	var root := source
 	viewport.add_child(root)
 	var meshes := _source_meshes(root)
-	for n: GeometryInstance3D in root.find_children("*", "GeometryInstance3D", true, false):
-		n.visible = n in meshes
+	for n: Node3D in root.find_children("*", "GeometryInstance3D", true, false) + [root]:
+		if not n is GeometryInstance3D:
+			continue
+		n.visible = n in meshes or n == root
 		n.visibility_range_begin = 0.0
 		n.visibility_range_end = 0.0
 	var bounds := _bounds(meshes, root)
@@ -106,9 +148,14 @@ func bake(scene: PackedScene, parent: Node) -> QuadMesh:
 			var at := Vector2i(x, y) * frame_size
 			albedo.blit_rect(color, Rect2i(0, 0, frame_size, frame_size), at)
 			normal.blit_rect(masked, Rect2i(0, 0, frame_size, frame_size), at)
+			progress.emit(float(y * frames + x + 1) / float(frames * frames))
 	viewport.queue_free()
+	OS.low_processor_usage_mode = low_processor
 	albedo.generate_mipmaps()
 	normal.generate_mipmaps()
+	if compress:
+		albedo.compress(Image.COMPRESS_BPTC, Image.COMPRESS_SOURCE_SRGB)
+		normal.compress(Image.COMPRESS_BPTC, Image.COMPRESS_SOURCE_GENERIC)
 
 	var material := ShaderMaterial.new()
 	material.shader = SHADER

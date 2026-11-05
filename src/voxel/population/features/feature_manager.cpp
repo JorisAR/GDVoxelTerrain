@@ -391,6 +391,7 @@ FeatureManager::Template FeatureManager::make_template(const Ref<JarTerrainFeatu
             t.parts.push_back({feature->get_mesh(), feature->get_material(), Transform3D(), 0.0f, 0.0f,
                                feature->get_cast_shadows() ? GeometryInstance3D::SHADOW_CASTING_SETTING_ON
                                                            : GeometryInstance3D::SHADOW_CASTING_SETTING_OFF});
+        add_impostor(t, **feature);
         return t;
     }
     if (feature->get_scene_mode() == JarTerrainFeature::SCENE_MODE_NODES)
@@ -440,7 +441,27 @@ FeatureManager::Template FeatureManager::make_template(const Ref<JarTerrainFeatu
     };
     visit(root, Transform3D()); // the root's own transform does not count
     memdelete(root);
+    add_impostor(t, **feature);
     return t;
+}
+
+void FeatureManager::add_impostor(Template &t, const JarTerrainFeature &feature)
+{
+    const Ref<Mesh> impostor = feature.get_impostor();
+    if (impostor.is_null())
+        return;
+    const float distance = feature.effective_impostor_distance();
+    std::vector<Template::Part> parts;
+    for (Template::Part &part : t.parts)
+    {
+        if (part.begin >= distance)
+            continue; // the scene's own far LODs and impostors
+        part.end = part.end > 0.0f ? std::min(part.end, distance) : distance;
+        parts.push_back(part);
+    }
+    parts.push_back({impostor, Ref<Material>(), Transform3D(), distance, 0.0f,
+                     GeometryInstance3D::SHADOW_CASTING_SETTING_OFF});
+    t.parts = std::move(parts);
 }
 
 Node3D *FeatureManager::build_colliders(const Template &t, const std::vector<Placed> &placed) const

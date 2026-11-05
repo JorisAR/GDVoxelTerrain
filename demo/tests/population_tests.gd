@@ -10,6 +10,7 @@ func _ready() -> void:
 	await _test_details()
 	await _test_biomes()
 	await _test_table()
+	await _test_impostor()
 	await _test_toggles()
 	await _test_detail_resolution()
 	await _test_detail_sphere()
@@ -460,6 +461,30 @@ func _test_table() -> void:
 	_check("table: density multiplier", half > 0.1 * named and half < 0.5 * named, "%d of %d" % [half, named])
 	_check("table: biome not named grows nothing", other == 0, str(other))
 	world.volume.queue_free()
+	world.viewer.queue_free()
+	await get_tree().process_frame
+
+## A baked impostor takes over from its distance, with or without one set.
+func _test_impostor() -> void:
+	var feature := _box_feature(0.01)
+	var quad := QuadMesh.new()
+	quad.size = Vector2(10, 10)
+	feature.impostor = quad
+	_check("impostor distance from its size", is_equal_approx(feature.impostor_distance, 0.0))
+	var world := TestWorld.flat(self, Vector3(3, 30, 5), func(v: JarVoxelVolume):
+		TestWorld.populate(v, [feature]))
+	var volume: JarVoxelVolume = world.volume
+	await _settle(volume)
+	var meshes := {}
+	for n: MultiMeshInstance3D in volume.find_children("*", "MultiMeshInstance3D", true, false):
+		if not n.get_parent() is JarVoxelChunk:
+			meshes[n.multimesh.mesh] = n
+	_check("impostor drawn beyond the mesh", meshes.has(quad) and meshes.has(feature.mesh))
+	if meshes.has(quad):
+		_check("impostor starts where the mesh ends", is_equal_approx(meshes[quad].visibility_range_begin, 30.0)
+			and is_equal_approx(meshes[feature.mesh].visibility_range_end, 30.0),
+			"%f, %f" % [meshes[quad].visibility_range_begin, meshes[feature.mesh].visibility_range_end])
+	volume.queue_free()
 	world.viewer.queue_free()
 	await get_tree().process_frame
 

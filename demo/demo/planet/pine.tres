@@ -1,6 +1,7 @@
-[gd_resource type="JarTerrainFeature" format=3 uid="uid://bjhffms4m1hay"]
+[gd_resource type="JarTerrainFeature" format=3]
 
-[ext_resource type="PackedScene" uid="uid://b13h7c6q6po5a" path="res://demo/assets/population/Trees/Pine/Large/LargePine.tscn" id="1_scene"]
+[ext_resource type="QuadMesh" path="res://demo/planet/pine_impostor.res" id="1_6xvdf"]
+[ext_resource type="PackedScene" path="res://demo/assets/population/Trees/Pine/Large/LargePine.tscn" id="1_scene"]
 [ext_resource type="FastNoiseLite" path="res://demo/planet/forest_noise.tres" id="2_forest"]
 
 [resource]
@@ -8,16 +9,17 @@ scene = ExtResource("1_scene")
 density = 0.014
 footprint = 3.0
 draw_distance = 1200.0
+impostor = ExtResource("1_6xvdf")
 minimum_scale = 0.6
 maximum_scale = 0.95
 sink = 0.4
 minimum_height = 4.0
 maximum_height = 300.0
 height_falloff = 40.0
+maximum_slope = 32.0
 slope_falloff = 8.0
 mask_noise = ExtResource("2_forest")
 mask_threshold = 0.08
 mask_falloff = 0.25
 cluster_spacing = 120.0
 cluster_radius = 45.0
-maximum_slope = 32.0

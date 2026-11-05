@@ -1,11 +1,13 @@
-[gd_resource type="JarTerrainFeature" format=3 uid="uid://2dvalovk54ou"]
+[gd_resource type="JarTerrainFeature" format=3]
 
-[ext_resource type="PackedScene" uid="uid://bkw6yyxcqcujg" path="res://demo/assets/population/Rocks/Rock/rock.tscn" id="1_scene"]
+[ext_resource type="QuadMesh" path="res://demo/planet/rock_impostor.res" id="1_bj8jy"]
+[ext_resource type="PackedScene" path="res://demo/assets/population/Rocks/Rock/rock.tscn" id="1_scene"]
 
 [resource]
 scene = ExtResource("1_scene")
 density = 0.006
 draw_distance = 600.0
+impostor = ExtResource("1_bj8jy")
 minimum_scale = 0.2
 maximum_scale = 0.7
 align_with_normal = true

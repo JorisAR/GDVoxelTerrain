@@ -21,6 +21,10 @@ using namespace godot;
 // SCENE_MODE_NODES the scene is instantiated per feature instead (scripts,
 // lights, anything else), which costs far more.
 //
+// A baked `impostor` (see JarImpostorBaker; the Bake button of the inspector)
+// replaces everything from `impostor_distance` on, and anything a scene shows
+// beyond that distance.
+//
 // Materials that include addons/jar_voxel_terrain/shaders/jar_population.gdshaderinc
 // switch LODs per instance and can blend with the ground's color.
 class JarTerrainFeature : public JarTerrainPopulator
@@ -44,6 +48,8 @@ class JarTerrainFeature : public JarTerrainPopulator
     float footprint = 2.0f;        // meters kept free of other features
     float draw_distance = 500.0f;  // meters
     bool cast_shadows = true;
+    Ref<Mesh> impostor;
+    float impostor_distance = 0.0f; // meters; 0: where its pixels get as large as the screen's
 
   public:
     Ref<Mesh> get_mesh() const { return mesh; }
@@ -72,6 +78,18 @@ class JarTerrainFeature : public JarTerrainPopulator
     void set_draw_distance(float value) { draw_distance = std::max(1.0f, value); }
     bool get_cast_shadows() const { return cast_shadows; }
     void set_cast_shadows(bool value) { cast_shadows = value; }
+    Ref<Mesh> get_impostor() const { return impostor; }
+    void set_impostor(const Ref<Mesh> &value) { impostor = value; }
+    float get_impostor_distance() const { return impostor_distance; }
+    void set_impostor_distance(float value) { impostor_distance = std::max(0.0f, value); }
+    // Where the impostor starts: 3 times its size unless set (a 256 pixel
+    // frame is about as sharp as the screen there).
+    float effective_impostor_distance() const
+    {
+        if (impostor_distance > 0.0f || impostor.is_null())
+            return impostor_distance;
+        return 3.0f * float(impostor->get_aabb().get_longest_axis_size());
+    }
 
   protected:
     // A scene replaces the mesh settings.
@@ -102,6 +120,8 @@ class JarTerrainFeature : public JarTerrainPopulator
         BIND_FEATURE(footprint, Variant::FLOAT, PROPERTY_HINT_RANGE, "0,50,0.1,or_greater,suffix:m");
         BIND_FEATURE(draw_distance, Variant::FLOAT, PROPERTY_HINT_RANGE, "1,5000,1,or_greater,suffix:m");
         BIND_FEATURE(cast_shadows, Variant::BOOL, PROPERTY_HINT_NONE, "");
+        BIND_FEATURE(impostor, Variant::OBJECT, PROPERTY_HINT_RESOURCE_TYPE, "Mesh");
+        BIND_FEATURE(impostor_distance, Variant::FLOAT, PROPERTY_HINT_RANGE, "0,2000,1,or_greater,suffix:m");
 #undef BIND_FEATURE
         BIND_ENUM_CONSTANT(SCENE_MODE_BATCHED);
         BIND_ENUM_CONSTANT(SCENE_MODE_NODES);

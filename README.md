@@ -139,6 +139,8 @@ for f in population.get_features_near(hit_position, 2.0):
 	volume.remove_features(f.transform.origin, 0.5)
 ```
 
+Features can bake their own impostor: enable the *JAR Voxel Terrain* plugin (Project Settings, Plugins), then press *Bake impostor* on a `JarTerrainFeature`, or *Bake all impostors* on a `JarVoxelPopulation`. Baking needs the Forward+ renderer and takes about 5 seconds per feature. The bake is saved next to the feature and takes over from `impostor_distance` (0: 3 times its size).
+
 The demos use a generated low-poly pine and rock (`demo/demo/assets/population/features/`).
 
 ### Biomes

@@ -149,6 +149,7 @@ class FeatureManager
     void build_groups(const glm::ivec3 &key, Cell &cell, const std::vector<glm::vec3> &viewers);
     Node3D *build_colliders(const Template &t, const std::vector<Placed> &placed) const;
     static Template make_template(const Ref<JarTerrainFeature> &feature);
+    static void add_impostor(Template &t, const JarTerrainFeature &feature);
     void free_groups(Cell &cell);
     bool is_removed(const glm::vec3 &position) const;
     Bounds cell_bounds(const glm::ivec3 &key) const;

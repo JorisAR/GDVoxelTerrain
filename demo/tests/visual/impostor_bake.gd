@@ -12,14 +12,14 @@ func _ready() -> void:
 	sphere.pack(m)
 	var baker := JarImpostorBaker.new()
 	baker.frames = 4
-	var probe: QuadMesh = await baker.bake(sphere, self)
+	var probe: QuadMesh = await baker.bake(sphere.instantiate(), self)
 	var img: Image = probe.material.get_shader_parameter("imposterTextureNormal").get_image()
 	var s := baker.frame_size
 	print("center ", img.get_pixel(s / 2, s / 2), " right ", img.get_pixel(s - s / 4, s / 2), " top ", img.get_pixel(s / 2, s / 4))
 	baker = JarImpostorBaker.new()
 	var scene: PackedScene = load(OS.get_environment("TREE"))
 	var start := Time.get_ticks_msec()
-	var quad: QuadMesh = await baker.bake(scene, self)
+	var quad: QuadMesh = await baker.bake(scene.instantiate(), self)
 	print("baked in ", Time.get_ticks_msec() - start, " ms")
 	var mesh_tree: Node3D = scene.instantiate()
 	var new_tree := MeshInstance3D.new()
