@@ -458,6 +458,14 @@ void JarVoxelVolume::process_pool()
     }
 }
 
+void JarVoxelVolume::discard_mesh_data(ChunkMeshData *data)
+{
+    if (data == nullptr)
+        return;
+    data->uploaded.unref(); // its last owner may be a chunk: the mesh stays on the main thread
+    _discarded.push_back(data);
+}
+
 void JarVoxelVolume::park_chunks()
 {
     const auto deadline = std::chrono::steady_clock::now() + std::chrono::microseconds(ParkMicroseconds);
@@ -600,6 +608,12 @@ void JarVoxelVolume::notify_meshes_committed()
 {
     _poolReserve = std::clamp(std::max(_poolReserve, _acquiredSinceCommit), MinPoolReserve, MaxPoolReserve);
     _acquiredSinceCommit = 0;
+    if (!_discarded.empty())
+        JobSystem::get_pool().enqueue_background([discarded = std::move(_discarded)]() {
+            for (ChunkMeshData *data : discarded)
+                delete data;
+        });
+    _discarded.clear();
     std::shared_lock<std::shared_mutex> lock(_extensionsMutex);
     for (VolumeExtension *extension : _extensions)
         extension->meshes_committed(*this);

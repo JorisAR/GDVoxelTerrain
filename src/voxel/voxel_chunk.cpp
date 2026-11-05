@@ -178,9 +178,11 @@ void JarVoxelChunk::update_chunk(JarVoxelVolume &terrain, VoxelOctreeNode *node,
 {
     _chunk_mesh_data.reset(chunk_mesh_data);
     sample_gradients = chunk_mesh_data->gradients;
-    concave_polygon_shape =
-        Ref<ConcavePolygonShape3D>(Object::cast_to<ConcavePolygonShape3D>(*collision_shape->get_shape()));
-    material = Ref<ShaderMaterial>(Object::cast_to<ShaderMaterial>(*mesh_instance->get_material_override()));
+    if (concave_polygon_shape.is_null())
+        concave_polygon_shape =
+            Ref<ConcavePolygonShape3D>(Object::cast_to<ConcavePolygonShape3D>(*collision_shape->get_shape()));
+    if (material.is_null())
+        material = Ref<ShaderMaterial>(Object::cast_to<ShaderMaterial>(*mesh_instance->get_material_override()));
     lod = chunk_mesh_data->lod;
     boundaries = chunk_mesh_data->boundaries;
     mesh_version = chunk_mesh_data->mesh_version;
@@ -244,7 +246,7 @@ void JarVoxelChunk::update_chunk(JarVoxelVolume &terrain, VoxelOctreeNode *node,
         set_collider_active(false);
         // The CPU copy of the mesh is only needed for a collider that is still
         // to be built (update_collision_mesh releases it); the renderer has its own.
-        _chunk_mesh_data.reset();
+        terrain.discard_mesh_data(_chunk_mesh_data.release());
     }
 
     // Ref<StandardMaterial3D> stitch_material;

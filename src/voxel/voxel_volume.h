@@ -134,6 +134,7 @@ class JarVoxelVolume : public Node3D
     JarVoxelChunk *create_chunk();
     void refill_pool(); // main thread, every frame
     std::vector<JarVoxelChunk *> _parking; // hidden, not parked yet
+    std::vector<ChunkMeshData *> _discarded; // until the commit ends
     static constexpr int ParkMicroseconds = 1000;
 
     // PERFORMANCE
@@ -203,6 +204,9 @@ class JarVoxelVolume : public Node3D
     void pool_release(JarVoxelChunk *chunk);
     // Main thread: hide (and pool) the chunks released so far, now.
     void process_pool();
+    // Main thread: frees it on a worker. Freeing the arrays of thousands of
+    // meshes took 10-12 ms of a big commit.
+    void discard_mesh_data(ChunkMeshData *data);
     void park_chunks(); // main thread, every frame, within a budget
 
     // Script-facing operations (GDScript sees them as JarVoxelVolume.Operation).
