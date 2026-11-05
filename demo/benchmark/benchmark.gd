@@ -33,8 +33,12 @@ func _ready() -> void:
 		terrain.meshing_algorithm = JarVoxelVolume.MESHING_DUAL_CONTOURING
 	terrain.manifold = OS.get_environment("MANIFOLD") == "1"
 	if OS.get_environment("FEATURES") == "1":
-		terrain.population_terrain_features = [load("res://demo/planet/pine.tres"),
-			load("res://demo/planet/rock.tres")]
+		var population := JarVoxelPopulation.new()
+		population.name = "Population"
+		population.table = JarPopulationTable.new()
+		population.table.add(load("res://demo/planet/pine.tres"))
+		population.table.add(load("res://demo/planet/rock.tres"))
+		terrain.add_child(population)
 	planet.add_child(terrain)
 	camera = JarVoxelViewer.new()
 	camera.position = Vector3(-5, 20, 200)
@@ -125,8 +129,8 @@ func _report(label: String, usec: int, frames: int, worst: int, extra := "") -> 
 	for c in terrain.get_children():
 		if c is JarVoxelChunk and c.visible:
 			chunks += 1
-	if not terrain.population_terrain_features.is_empty():
-		extra += " features=%d" % terrain.get_features_near(camera.global_position, 2000.0).size()
+	if terrain.has_node("Population"):
+		extra += " features=%d" % terrain.get_node("Population").get_features_near(camera.global_position, 2000.0).size()
 	print("RESULT %s ms=%.1f frames=%d worst_frame_ms=%.1f chunks=%d %s" % [
 		label, usec / 1000.0, frames, worst / 1000.0, chunks, extra])
 

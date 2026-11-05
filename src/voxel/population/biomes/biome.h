@@ -1,17 +1,15 @@
 #ifndef JAR_BIOME_H
 #define JAR_BIOME_H
 
-#include "terrain_detail.h"
-#include "terrain_feature.h"
 #include <godot_cpp/classes/resource.hpp>
 #include <godot_cpp/variant/typed_array.hpp>
 
 using namespace godot;
 
-// One biome: where it occurs (a point in climate space: temperature and
-// moisture, see JarBiomeMap) and what it looks like: its own features and
-// details, and the materials its ground rules use (ground, cliff, shore,
-// seabed, peaks; -1 keeps the shader's setting).
+// One biome: its name (resource_name, what a JarPopulationTable grows things
+// in), where it occurs on a climate map (see JarClimateBiomeMap) and the
+// materials its ground rules use (ground, cliff, shore, seabed, peaks; -1 keeps
+// the shader's setting).
 class JarBiome : public Resource
 {
     GDCLASS(JarBiome, Resource);
@@ -19,8 +17,6 @@ class JarBiome : public Resource
   private:
     float temperature = 0.0f; // -1 cold .. 1 hot
     float moisture = 0.0f;    // -1 dry .. 1 wet
-    TypedArray<JarTerrainFeature> features;
-    TypedArray<JarTerrainDetail> details;
     int ground_material = -1;
     int cliff_material = -1;
     int shore_material = -1;
@@ -32,10 +28,6 @@ class JarBiome : public Resource
     void set_temperature(float v) { temperature = v; emit_changed(); }
     float get_moisture() const { return moisture; }
     void set_moisture(float v) { moisture = v; emit_changed(); }
-    TypedArray<JarTerrainFeature> get_features() const { return features; }
-    void set_features(const TypedArray<JarTerrainFeature> &v) { features = v; emit_changed(); }
-    TypedArray<JarTerrainDetail> get_details() const { return details; }
-    void set_details(const TypedArray<JarTerrainDetail> &v) { details = v; emit_changed(); }
     int get_ground_material() const { return ground_material; }
     void set_ground_material(int v) { ground_material = v; emit_changed(); }
     int get_cliff_material() const { return cliff_material; }
@@ -57,11 +49,6 @@ class JarBiome : public Resource
         ADD_GROUP("Climate", "");
         BIND_BIOME(temperature, Variant::FLOAT, PROPERTY_HINT_RANGE, "-1,1,0.01");
         BIND_BIOME(moisture, Variant::FLOAT, PROPERTY_HINT_RANGE, "-1,1,0.01");
-        ADD_GROUP("Population", "");
-        BIND_BIOME(features, Variant::ARRAY, PROPERTY_HINT_TYPE_STRING,
-                   String::num(Variant::OBJECT) + "/" + String::num(PROPERTY_HINT_RESOURCE_TYPE) + ":JarTerrainFeature");
-        BIND_BIOME(details, Variant::ARRAY, PROPERTY_HINT_TYPE_STRING,
-                   String::num(Variant::OBJECT) + "/" + String::num(PROPERTY_HINT_RESOURCE_TYPE) + ":JarTerrainDetail");
         ADD_GROUP("Ground Materials", "");
         BIND_BIOME(ground_material, Variant::INT, PROPERTY_HINT_RANGE, "-1,254,1");
         BIND_BIOME(cliff_material, Variant::INT, PROPERTY_HINT_RANGE, "-1,254,1");

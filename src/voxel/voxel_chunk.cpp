@@ -217,12 +217,12 @@ void JarVoxelChunk::update_chunk(JarVoxelVolume &terrain, VoxelOctreeNode *node,
         detail_inputs.indices = chunk_mesh_data->mesh_array[Mesh::ARRAY_INDEX];
         detail_inputs.painted = chunk_mesh_data->painted;
         detail_inputs.center = position;
-        terrain.track_details(this);
+        terrain.chunk_meshed(this);
     }
     else
     {
         detail_inputs = DetailInputs();
-        terrain.untrack_details(this);
+        terrain.chunk_gone(this);
     }
 
     // Colliders last: building one releases the mesh data (chunk_mesh_data),

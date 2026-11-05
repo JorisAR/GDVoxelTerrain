@@ -1,0 +1,31 @@
+[gd_resource type="JarPopulationTable" format=3 uid="uid://cjarflatpop1"]
+
+[ext_resource type="JarTerrainFeature" uid="uid://bjhffms4m1hay" path="res://demo/planet/pine.tres" id="1"]
+[ext_resource type="JarTerrainFeature" uid="uid://cv2l3s85f2k8k" path="res://demo/planet/broadleaf.tres" id="2"]
+[ext_resource type="JarTerrainFeature" uid="uid://2dvalovk54ou" path="res://demo/planet/rock.tres" id="3"]
+[ext_resource type="JarTerrainFeature" uid="uid://orb1lwt4uinu" path="res://demo/planet/bush.tres" id="4"]
+[ext_resource type="JarTerrainDetail" uid="uid://b07o6puiiv3ht" path="res://demo/planet/grass.tres" id="5"]
+
+[resource]
+rows = Array[Dictionary]([
+{
+"group": "Trees",
+"asset": ExtResource("1"),
+"biomes": { "*": 1.0 }
+}, {
+"group": "Trees",
+"asset": ExtResource("2"),
+"biomes": { "*": 1.0 }
+}, {
+"group": "Rocks",
+"asset": ExtResource("3"),
+"biomes": { "*": 1.0 }
+}, {
+"group": "Bushes",
+"asset": ExtResource("4"),
+"biomes": { "*": 1.0 }
+}, {
+"group": "Ground",
+"asset": ExtResource("5"),
+"biomes": { "*": 1.0 }
+}])

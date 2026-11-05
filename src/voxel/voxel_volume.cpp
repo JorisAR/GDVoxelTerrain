@@ -1,5 +1,5 @@
 #include "voxel_volume.h"
-#include "detail_scheduler.h"
+#include "voxel_population.h"
 #include "block_mesher.h"
 #include "terrain_material_palette.h"
 #include <godot_cpp/classes/resource_loader.hpp>
@@ -166,13 +166,6 @@ void JarVoxelVolume::_bind_methods()
     ClassDB::bind_method(D_METHOD("get_editor_preview"), &JarVoxelVolume::get_editor_preview);
     ClassDB::bind_method(D_METHOD("set_editor_preview", "value"), &JarVoxelVolume::set_editor_preview);
     ADD_PROPERTY(PropertyInfo(Variant::BOOL, "editor_preview_enabled"), "set_editor_preview", "get_editor_preview");
-    ClassDB::bind_method(D_METHOD("get_preview_features"), &JarVoxelVolume::get_preview_features);
-    ClassDB::bind_method(D_METHOD("set_preview_features", "value"), &JarVoxelVolume::set_preview_features);
-    ADD_PROPERTY(PropertyInfo(Variant::BOOL, "editor_preview_features"), "set_preview_features",
-                 "get_preview_features");
-    ClassDB::bind_method(D_METHOD("get_preview_details"), &JarVoxelVolume::get_preview_details);
-    ClassDB::bind_method(D_METHOD("set_preview_details", "value"), &JarVoxelVolume::set_preview_details);
-    ADD_PROPERTY(PropertyInfo(Variant::BOOL, "editor_preview_details"), "set_preview_details", "get_preview_details");
     ClassDB::bind_method(D_METHOD("get_preview_colliders"), &JarVoxelVolume::get_preview_colliders);
     ClassDB::bind_method(D_METHOD("set_preview_colliders", "value"), &JarVoxelVolume::set_preview_colliders);
     ADD_PROPERTY(PropertyInfo(Variant::BOOL, "editor_preview_colliders"), "set_preview_colliders",
@@ -183,40 +176,11 @@ void JarVoxelVolume::_bind_methods()
                  "set_preview_min_lod", "get_preview_min_lod");
 
     ADD_GROUP("Population", "population_");
-    ClassDB::bind_method(D_METHOD("get_features_enabled"), &JarVoxelVolume::get_features_enabled);
-    ClassDB::bind_method(D_METHOD("set_features_enabled", "value"), &JarVoxelVolume::set_features_enabled);
-    ADD_PROPERTY(PropertyInfo(Variant::BOOL, "population_features_enabled"), "set_features_enabled",
-                 "get_features_enabled");
-    ClassDB::bind_method(D_METHOD("get_details_enabled"), &JarVoxelVolume::get_details_enabled);
-    ClassDB::bind_method(D_METHOD("set_details_enabled", "value"), &JarVoxelVolume::set_details_enabled);
-    ADD_PROPERTY(PropertyInfo(Variant::BOOL, "population_details_enabled"), "set_details_enabled",
-                 "get_details_enabled");
-    ClassDB::bind_method(D_METHOD("get_terrain_features"), &JarVoxelVolume::get_terrain_features);
-    ClassDB::bind_method(D_METHOD("set_terrain_features", "value"), &JarVoxelVolume::set_terrain_features);
-    ADD_PROPERTY(PropertyInfo(Variant::ARRAY, "population_terrain_features", PROPERTY_HINT_TYPE_STRING,
-                              String::num(Variant::OBJECT) + "/" + String::num(PROPERTY_HINT_RESOURCE_TYPE) +
-                                  ":JarTerrainFeature"),
-                 "set_terrain_features", "get_terrain_features");
-    ClassDB::bind_method(D_METHOD("get_feature_cell_size"), &JarVoxelVolume::get_feature_cell_size);
-    ClassDB::bind_method(D_METHOD("set_feature_cell_size", "value"), &JarVoxelVolume::set_feature_cell_size);
-    ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "population_feature_cell_size", PROPERTY_HINT_RANGE,
-                              "8,512,1,or_greater,suffix:m"),
-                 "set_feature_cell_size", "get_feature_cell_size");
-    ClassDB::bind_method(D_METHOD("remove_features", "global_position", "radius"), &JarVoxelVolume::remove_features);
-    ClassDB::bind_method(D_METHOD("get_features_near", "global_position", "radius"),
-                         &JarVoxelVolume::get_features_near);
-    ClassDB::bind_method(D_METHOD("regenerate_population"), &JarVoxelVolume::regenerate_population);
     ClassDB::bind_method(D_METHOD("get_biome_map"), &JarVoxelVolume::get_biome_map);
     ClassDB::bind_method(D_METHOD("set_biome_map", "value"), &JarVoxelVolume::set_biome_map);
     ADD_PROPERTY(PropertyInfo(Variant::OBJECT, "population_biome_map", PROPERTY_HINT_RESOURCE_TYPE, "JarBiomeMap"),
                  "set_biome_map", "get_biome_map");
     ClassDB::bind_method(D_METHOD("get_biome_weights_at", "global_position"), &JarVoxelVolume::get_biome_weights_at);
-    ClassDB::bind_method(D_METHOD("get_terrain_details"), &JarVoxelVolume::get_terrain_details);
-    ClassDB::bind_method(D_METHOD("set_terrain_details", "value"), &JarVoxelVolume::set_terrain_details);
-    ADD_PROPERTY(PropertyInfo(Variant::ARRAY, "population_terrain_details", PROPERTY_HINT_TYPE_STRING,
-                              String::num(Variant::OBJECT) + "/" + String::num(PROPERTY_HINT_RESOURCE_TYPE) +
-                                  ":JarTerrainDetail"),
-                 "set_terrain_details", "get_terrain_details");
 
     BIND_ENUM_CONSTANT(SDF_OPERATION_UNION);
     BIND_ENUM_CONSTANT(SDF_OPERATION_SUBTRACTION);
@@ -253,8 +217,6 @@ JarVoxelVolume::~JarVoxelVolume()
     // Members are destroyed in reverse declaration order, which would free the
     // octree first. In-flight mesh tasks read the octree, so wait for them (by
     // destroying the scheduler) first.
-    _detailScheduler.reset();
-    _featureManager.reset();
     _meshComputeScheduler.reset();
     _voxelRoot.reset();
 }
@@ -488,7 +450,7 @@ void JarVoxelVolume::process_pool()
     }
     for (JarVoxelChunk *c : released)
     {
-        untrack_details(c);
+        chunk_gone(c);
         c->deactivate();
         _freeChunks.push_back(c);
     }
@@ -548,8 +510,12 @@ void JarVoxelVolume::queue_edit(const Ref<JarSignedDistanceField> &sdf, SDF::Ope
     if (nearShape && sdf->is_distance_bound())
         settings.skipBeyond = margin;
     // Features standing where the shape changes the ground go away, for good.
-    if (!paintOnly && _featureManager)
-        _featureManager->remove_edited(settings, _voxelSize + std::max(0.0f, smoothness));
+    if (!paintOnly)
+    {
+        std::shared_lock<std::shared_mutex> lock(_extensionsMutex);
+        for (VolumeExtension *extension : _extensions)
+            extension->edit_queued(*this, settings, _voxelSize + std::max(0.0f, smoothness));
+    }
 
     // Queued rather than applied immediately: the octree may only be mutated
     // when no build or meshing task is reading it (see process()).
@@ -661,7 +627,11 @@ bool JarVoxelVolume::is_building() const
 
 bool JarVoxelVolume::is_generating_details() const
 {
-    return _detailScheduler && _detailScheduler->busy();
+    std::shared_lock<std::shared_mutex> lock(_extensionsMutex);
+    for (const VolumeExtension *extension : _extensions)
+        if (extension->is_generating(*this))
+            return true;
+    return false;
 }
 
 bool JarVoxelVolume::is_meshing() const
@@ -867,16 +837,19 @@ void JarVoxelVolume::teardown()
         _workerEdits.clear();
     }
     _isBuilding = false;
-    if (_featureManager)
-        _featureManager->reset(); // frees its nodes
-    _featureManager.reset();      // waits for its jobs
-    _detailScheduler.reset();     // waits for its thread
+    {
+        std::shared_lock<std::shared_mutex> lock(_extensionsMutex);
+        for (VolumeExtension *extension : _extensions)
+            extension->volume_cleared(*this);
+    }
     _meshComputeScheduler.reset(); // waits for mesh tasks
     _voxelRoot.reset();
     // Everything the volume made: chunks (shown or pooled) and population nodes.
     for (int i = get_child_count() - 1; i >= 0; --i)
     {
         Node *child = get_child(i);
+        if (Object::cast_to<JarVoxelPopulation>(child) != nullptr)
+            continue; // added by a script: not made by the volume
         if (Object::cast_to<JarVoxelChunk>(child) != nullptr || child->get_owner() == nullptr)
         {
             remove_child(child);
@@ -897,31 +870,12 @@ bool JarVoxelVolume::is_previewing() const
     return _editorPreview && godot::Engine::get_singleton()->is_editor_hint();
 }
 
-void JarVoxelVolume::set_preview_features(bool value)
-{
-    _previewFeatures = value;
-    if (is_previewing() && _featureManager)
-        _featureManager->reset();
-}
-
-void JarVoxelVolume::set_preview_details(bool value)
-{
-    if (_previewDetails == value)
-        return;
-    _previewDetails = value;
-    if (!is_previewing())
-        return;
-    if (_detailScheduler)
-        _detailScheduler->reset();
-}
-
 void JarVoxelVolume::set_preview_colliders(bool value)
 {
     _previewColliders = value;
     if (is_previewing())
     {
-        if (_featureManager)
-            _featureManager->reset();
+        invalidate_population();
         remesh_all();
     }
 }
@@ -936,26 +890,6 @@ void JarVoxelVolume::set_preview_min_lod(int value)
     }
 }
 
-void JarVoxelVolume::set_features_enabled(bool value)
-{
-    if (_featuresEnabled == value)
-        return;
-    _featuresEnabled = value;
-    if (_featureManager)
-        _featureManager->reset();
-}
-
-// Off: details disappear at once and are no longer generated. On: they come
-// back near the viewers.
-void JarVoxelVolume::set_details_enabled(bool value)
-{
-    if (_detailsEnabled == value)
-        return;
-    _detailsEnabled = value;
-    if (_detailScheduler)
-        _detailScheduler->reset();
-}
-
 void JarVoxelVolume::_notification(int p_what)
 {
     if (p_what == NOTIFICATION_PREDELETE)
@@ -964,8 +898,6 @@ void JarVoxelVolume::_notification(int p_what)
         // destructor runs: stop everything that reads them first (a build
         // running while the scene was freed read freed chunks).
         stop_build_worker();
-        _detailScheduler.reset();
-        _featureManager.reset();
         _meshComputeScheduler.reset();
         return;
     }
@@ -1020,8 +952,6 @@ void JarVoxelVolume::initialize()
     _voxelLod.set_min_lod(is_previewing() ? _previewMinLod : 0);
     _meshComputeScheduler = std::make_unique<MeshComputeScheduler>();
     _voxelRoot = std::make_unique<VoxelOctreeNode>(_depth);
-    _featureManager = std::make_unique<FeatureManager>(*this);
-    _detailScheduler = std::make_unique<DetailScheduler>(*this);
     rebuild_materials();
     //_populationRoot = memnew(PopulationOctreeNode(_size));
     if (!_buildThread.joinable())
@@ -1047,16 +977,6 @@ void JarVoxelVolume::process()
     if (_materialsDirty && _voxelRoot)
         rebuild_materials();
     update_shader_frame();
-    if (_featureManager)
-    {
-        const VoxelStats::Scope features(VoxelStats::MainFeatures);
-        _featureManager->process(); // independent of the octree: runs during builds too
-    }
-    if (_detailScheduler)
-    {
-        const VoxelStats::Scope details(VoxelStats::MainDetails);
-        _detailScheduler->process(); // likewise (only touches chunks)
-    }
     {
         const VoxelStats::Scope extensions(VoxelStats::MainExtensions);
         std::shared_lock<std::shared_mutex> lock(_extensionsMutex);
@@ -1606,56 +1526,10 @@ int JarVoxelVolume::lod_at(const glm::vec3 &position) const
     return _voxelLod.lod_at(position);
 }
 
-std::vector<JarVoxelVolume::PopulationEntry<JarTerrainFeature>> JarVoxelVolume::population_features() const
-{
-    std::vector<PopulationEntry<JarTerrainFeature>> result;
-    if (!_featuresEnabled || (is_previewing() && !_previewFeatures))
-        return result;
-    for (int64_t i = 0; i < _terrainFeatures.size(); ++i)
-        result.push_back({_terrainFeatures[i], -1});
-    if (_biomeMap.is_valid())
-    {
-        const TypedArray<JarBiome> biomes = _biomeMap->get_biomes();
-        for (int64_t b = 0; b < biomes.size(); ++b)
-        {
-            Ref<JarBiome> biome = biomes[b];
-            if (biome.is_null())
-                continue;
-            const TypedArray<JarTerrainFeature> features = biome->get_features();
-            for (int64_t i = 0; i < features.size(); ++i)
-                result.push_back({features[i], int(b)});
-        }
-    }
-    return result;
-}
-
-std::vector<JarVoxelVolume::PopulationEntry<JarTerrainDetail>> JarVoxelVolume::population_details() const
-{
-    std::vector<PopulationEntry<JarTerrainDetail>> result;
-    if (!_detailsEnabled || (is_previewing() && !_previewDetails))
-        return result;
-    for (int64_t i = 0; i < _terrainDetails.size(); ++i)
-        result.push_back({_terrainDetails[i], -1});
-    if (_biomeMap.is_valid())
-    {
-        const TypedArray<JarBiome> biomes = _biomeMap->get_biomes();
-        for (int64_t b = 0; b < biomes.size(); ++b)
-        {
-            Ref<JarBiome> biome = biomes[b];
-            if (biome.is_null())
-                continue;
-            const TypedArray<JarTerrainDetail> details = biome->get_details();
-            for (int64_t i = 0; i < details.size(); ++i)
-                result.push_back({details[i], int(b)});
-        }
-    }
-    return result;
-}
-
 void JarVoxelVolume::on_biome_map_changed()
 {
     update_materials();
-    regenerate_population();
+    invalidate_population();
 }
 
 void JarVoxelVolume::set_biome_map(const Ref<JarBiomeMap> &value)
@@ -1667,8 +1541,7 @@ void JarVoxelVolume::set_biome_map(const Ref<JarBiomeMap> &value)
     if (_biomeMap.is_valid())
         _biomeMap->connect("changed", callback, Object::CONNECT_DEFERRED);
     update_materials(); // biome ground materials live in the palette
-    if (_featureManager)
-        _featureManager->reset();
+    invalidate_population();
     remesh_all(); // per-vertex biome weights and details
 }
 
@@ -1686,76 +1559,23 @@ Dictionary JarVoxelVolume::get_biome_weights_at(const Vector3 &global_position) 
     return result;
 }
 
-void JarVoxelVolume::set_terrain_features(const TypedArray<JarTerrainFeature> &features)
+void JarVoxelVolume::invalidate_population()
 {
-    _terrainFeatures = features;
-    if (_featureManager)
-        _featureManager->reset();
+    std::shared_lock<std::shared_mutex> lock(_extensionsMutex);
+    for (VolumeExtension *extension : _extensions)
+        extension->population_invalidated(*this);
 }
 
-void JarVoxelVolume::set_feature_cell_size(float value)
+void JarVoxelVolume::chunk_meshed(JarVoxelChunk *chunk)
 {
-    _featureCellSize = std::max(1.0f, value);
-    if (_featureManager)
-        _featureManager->reset();
+    std::shared_lock<std::shared_mutex> lock(_extensionsMutex);
+    for (VolumeExtension *extension : _extensions)
+        extension->chunk_meshed(*this, chunk);
 }
 
-void JarVoxelVolume::regenerate_population()
+void JarVoxelVolume::chunk_gone(JarVoxelChunk *chunk)
 {
-    if (_featureManager)
-        _featureManager->reset();
-    if (_detailScheduler)
-        _detailScheduler->reset();
-}
-
-void JarVoxelVolume::remove_features(const Vector3 &global_position, float radius)
-{
-    if (!_featureManager)
-        return;
-    const Vector3 local = to_local(global_position);
-    const glm::vec3 c(local.x, local.y, local.z);
-    _featureManager->remove_in(Bounds(c - glm::vec3(radius), c + glm::vec3(radius)));
-}
-
-TypedArray<Dictionary> JarVoxelVolume::get_features_near(const Vector3 &global_position, float radius) const
-{
-    TypedArray<Dictionary> result;
-    if (!_featureManager)
-        return result;
-    const Vector3 local = to_local(global_position);
-    for (const FeatureManager::Instance &instance :
-         _featureManager->instances_near(glm::vec3(local.x, local.y, local.z), radius))
-    {
-        Dictionary d;
-        d["feature"] = _featureManager->feature_at(instance.feature);
-        d["transform"] = get_global_transform() * instance.transform;
-        result.push_back(d);
-    }
-    return result;
-}
-
-void JarVoxelVolume::set_terrain_details(const TypedArray<JarTerrainDetail> &details)
-{
-    _terrainDetails = details;
-    if (_detailScheduler)
-        _detailScheduler->reset();
-}
-
-void JarVoxelVolume::track_details(JarVoxelChunk *chunk)
-{
-    if (_detailScheduler)
-        _detailScheduler->track(chunk);
-}
-
-void JarVoxelVolume::untrack_details(JarVoxelChunk *chunk)
-{
-    if (_detailScheduler)
-        _detailScheduler->untrack(chunk);
-    else
-        chunk->clear_details();
-}
-
-TypedArray<JarTerrainDetail> JarVoxelVolume::get_terrain_details() const
-{
-    return _terrainDetails;
+    std::shared_lock<std::shared_mutex> lock(_extensionsMutex);
+    for (VolumeExtension *extension : _extensions)
+        extension->chunk_gone(*this, chunk);
 }

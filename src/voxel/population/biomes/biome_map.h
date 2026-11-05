@@ -26,19 +26,45 @@ struct BiomeWeights
     }
 };
 
-// Decides which biome is where, from a simple climate model:
-//   temperature = temperature noise - lapse rate * height - latitude effect
-//   moisture    = moisture noise
-// Each biome sits at a point in (temperature, moisture) space; a position
-// belongs to the biomes nearest to its climate, blended smoothly over
-// `blend`, so biome borders are soft and follow the climate, not a grid.
-// Evaluated per point and thread-safe (read-only), like the terrain itself.
+// One layer of population: where it grows (a biome's index, -1 everywhere) and
+// a multiplier on its density.
+struct PopulationLayer
+{
+    int biome = -1;
+    float density = 1.0f;
+};
+
+// Decides which biome is where, evaluated per point on worker threads, so
+// read-only like the terrain itself. This base class is uniform: its first
+// biome everywhere. Other maps override evaluate().
 class JarBiomeMap : public Resource
 {
     GDCLASS(JarBiomeMap, Resource);
 
   private:
     TypedArray<JarBiome> biomes;
+
+  public:
+    TypedArray<JarBiome> get_biomes() const { return biomes; }
+    void set_biomes(const TypedArray<JarBiome> &v) { biomes = v; emit_changed(); }
+    int biome_count() const { return int(biomes.size()); }
+    virtual BiomeWeights evaluate(const glm::vec3 &position, const UpField &up) const { return BiomeWeights(); }
+
+  protected:
+    static void _bind_methods();
+};
+
+// Biomes from a simple climate model:
+//   temperature = temperature noise - lapse rate * height - latitude effect
+//   moisture    = moisture noise
+// Each biome sits at a point in (temperature, moisture) space; a position
+// belongs to the biomes nearest to its climate, blended smoothly over
+// `blend`, so biome borders are soft and follow the climate, not a grid.
+class JarClimateBiomeMap : public JarBiomeMap
+{
+    GDCLASS(JarClimateBiomeMap, JarBiomeMap);
+
+  private:
     Ref<FastNoiseLite> temperature_noise;
     Ref<FastNoiseLite> moisture_noise;
     float temperature_lapse = 0.2f; // temperature drop per 100 m above sea level
@@ -47,8 +73,6 @@ class JarBiomeMap : public Resource
     float blend = 0.25f; // climate distance over which biomes blend
 
   public:
-    TypedArray<JarBiome> get_biomes() const { return biomes; }
-    void set_biomes(const TypedArray<JarBiome> &v) { biomes = v; emit_changed(); }
     Ref<FastNoiseLite> get_temperature_noise() const { return temperature_noise; }
     void set_temperature_noise(const Ref<FastNoiseLite> &v) { temperature_noise = v; emit_changed(); }
     Ref<FastNoiseLite> get_moisture_noise() const { return moisture_noise; }
@@ -64,8 +88,7 @@ class JarBiomeMap : public Resource
 
     // Climate at a volume-space position: (temperature, moisture).
     glm::vec2 climate(const glm::vec3 &position, const UpField &up) const;
-    BiomeWeights evaluate(const glm::vec3 &position, const UpField &up) const;
-    int biome_count() const { return int(biomes.size()); }
+    BiomeWeights evaluate(const glm::vec3 &position, const UpField &up) const override;
 
   protected:
     static void _bind_methods();

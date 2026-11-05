@@ -22,6 +22,7 @@
 
 using namespace godot;
 
+class JarVoxelPopulation;
 class JarVoxelVolume;
 
 // Places JarTerrainFeatures on a volume's SDF surface (after the population
@@ -52,7 +53,7 @@ class FeatureManager
         glm::vec3 ground;      // linear color of the ground there
     };
 
-    explicit FeatureManager(JarVoxelVolume &volume);
+    FeatureManager(JarVoxelVolume &volume, const JarVoxelPopulation &population);
     ~FeatureManager(); // waits for running jobs
 
     void process(); // main thread, every frame
@@ -115,6 +116,7 @@ class FeatureManager
     };
 
     JarVoxelVolume &_volume;
+    const JarVoxelPopulation &_population;
     std::shared_ptr<Shared> _shared;
     std::unordered_map<glm::ivec3, Cell> _cells;
     // Edits and explicit removals (volume space). An edit removes only what it
@@ -129,7 +131,7 @@ class FeatureManager
     std::vector<Removal> _removed;
     void apply_removal(const Removal &removal);
     std::vector<Ref<JarTerrainFeature>> _features;
-    std::vector<int> _featureBiomes; // per feature: biome index, -1 = everywhere
+    std::vector<PopulationLayer> _layers; // per feature
     std::vector<Template> _templates; // per feature
     Ref<JarBiomeMap> _biomeMap;
     float _cellSize = 64.0f;
@@ -153,7 +155,7 @@ class FeatureManager
 
     static std::vector<Instance> generate_cell(const glm::ivec3 &key, float cellSize,
                                                const std::vector<Ref<JarTerrainFeature>> &features,
-                                               const std::vector<int> &featureBiomes, const Ref<JarBiomeMap> &biomes,
+                                               const std::vector<PopulationLayer> &layers, const Ref<JarBiomeMap> &biomes,
                                                const Ref<JarSignedDistanceField> &sdf, const UpField &up,
                                                const std::shared_ptr<const GroundPalette> &ground);
     static std::vector<glm::ivec3> scan_cells(const std::vector<glm::vec3> &viewers, float range, float cellSize,

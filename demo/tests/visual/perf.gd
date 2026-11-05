@@ -22,9 +22,11 @@ func _ready() -> void:
 	var disabled := OS.get_environment("DISABLE").split(",", false)
 	for v: JarVoxelVolume in scene.find_children("*", "JarVoxelVolume", true, false):
 		if "features" in disabled:
-			v.population_terrain_features = []
+			for p: JarVoxelPopulation in v.find_children("*", "JarVoxelPopulation", false, false):
+				p.features_enabled = false
 		if "details" in disabled:
-			v.population_terrain_details = []
+			for p: JarVoxelPopulation in v.find_children("*", "JarVoxelPopulation", false, false):
+				p.details_enabled = false
 	for name in ["Atmosphere", "Water", "Clouds"]:
 		if name.to_lower() in disabled:
 			for n in scene.find_children(name, "", true, false):

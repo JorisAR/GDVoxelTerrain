@@ -43,9 +43,9 @@ class ChunkDetailGenerator
 
     // Thread-safe given read-only details: one MultiMesh buffer per detail,
     // with chunk-relative transforms. details[i] grows everywhere for
-    // biomes[i] == -1, else weighted by that biome.
+    // layers[i].biome == -1, else weighted by that biome.
     std::vector<PackedFloat32Array> generate_detail_buffers(const std::vector<Ref<JarTerrainDetail>> &details,
-                                                            const std::vector<int> &detailBiomes,
+                                                            const std::vector<PopulationLayer> &detailLayers,
                                                             const Ref<JarBiomeMap> &biomeMap,
                                                             const std::shared_ptr<const GroundPalette> &ground,
                                                             const DetailInputs &inputs) const;

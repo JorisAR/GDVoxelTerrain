@@ -4,11 +4,10 @@
 #include "mesh_compute_scheduler.h"
 #include "modify_settings.h"
 #include "signed_distance_field.h"
-#include "terrain_detail.h"
 #include "terrain_material.h"
-#include "terrain_feature.h"
 #include "biome_map.h"
-#include "feature_manager.h"
+#include "volume_extension.h"
+#include "bounds.h"
 #include "ground_palette.h"
 #include "up_field.h"
 #include "voxel_lod.h"
@@ -37,7 +36,6 @@ using namespace godot;
 
 class JarVoxelChunk;
 
-class DetailScheduler;
 
 class JarVoxelVolume : public Node3D
 {
@@ -70,6 +68,7 @@ class JarVoxelVolume : public Node3D
     void apply_rendering_to_chunks();
     void on_terrain_material_changed();
     void on_biome_map_changed();
+    void invalidate_population();
     void rebuild_materials(); // main thread
     // The terrain shader's per-volume inputs (world to volume space, up field)
     // on the runtime material, when they changed. Main thread, every frame.
@@ -154,20 +153,11 @@ class JarVoxelVolume : public Node3D
     float _lod_automatic_update_distance = 64.0f;
 
     // POPULATION
-    TypedArray<JarTerrainDetail> _terrainDetails;
-    TypedArray<JarTerrainFeature> _terrainFeatures;
-    bool _featuresEnabled = true;
-    bool _detailsEnabled = true;
     bool _editorPreview = false; // build and show the terrain in the editor
     // What the editor preview builds (cheaper than the game by default).
-    bool _previewFeatures = false;
-    bool _previewDetails = false;
     bool _previewColliders = false;
     int _previewMinLod = 1;
     Ref<JarBiomeMap> _biomeMap;
-    float _featureCellSize = 64.0f;
-    std::unique_ptr<FeatureManager> _featureManager;
-    std::unique_ptr<DetailScheduler> _detailScheduler;
     UpField _upField; // manual settings (UP_MODE_AXIS / UP_MODE_RADIAL)
     int _upMode = UP_MODE_AUTO;
 
@@ -419,37 +409,17 @@ class JarVoxelVolume : public Node3D
     // LOD
     float distance_to_nearest_viewer(const glm::vec3 &position) const;
     // Full-detail chunks with new mesh data / none any more (main thread).
-    void track_details(JarVoxelChunk *chunk);
-    void untrack_details(JarVoxelChunk *chunk);
+    void chunk_meshed(JarVoxelChunk *chunk);
+    void chunk_gone(JarVoxelChunk *chunk);
     int desired_lod(const VoxelOctreeNode &node);
     int lod_at(const glm::vec3 &position) const;
 
     // POPULATION
-    // Population in effect: the volume's own features / details (biome -1,
-    // everywhere) followed by those of each biome of the biome map (weighted by
-    // that biome). Indices into these lists identify features and details.
-    template <typename T> struct PopulationEntry
-    {
-        Ref<T> item;
-        int biome;
-    };
-    std::vector<PopulationEntry<JarTerrainFeature>> population_features() const;
-    std::vector<PopulationEntry<JarTerrainDetail>> population_details() const;
     Ref<JarBiomeMap> get_biome_map() const { return _biomeMap; }
     void set_biome_map(const Ref<JarBiomeMap> &value);
     Dictionary get_biome_weights_at(const Vector3 &global_position) const;
-    void set_terrain_features(const TypedArray<JarTerrainFeature> &features);
-    TypedArray<JarTerrainFeature> get_terrain_features() const { return _terrainFeatures; }
-    bool get_features_enabled() const { return _featuresEnabled; }
-    void set_features_enabled(bool value);
-    bool get_details_enabled() const { return _detailsEnabled; }
-    void set_details_enabled(bool value);
     bool get_editor_preview() const { return _editorPreview; }
     void set_editor_preview(bool value);
-    bool get_preview_features() const { return _previewFeatures; }
-    void set_preview_features(bool value);
-    bool get_preview_details() const { return _previewDetails; }
-    void set_preview_details(bool value);
     bool get_preview_colliders() const { return _previewColliders; }
     void set_preview_colliders(bool value);
     int get_preview_min_lod() const { return _previewMinLod; }
@@ -458,13 +428,6 @@ class JarVoxelVolume : public Node3D
     bool is_previewing() const;
     // Whether chunks and features get colliders (not in a preview without them).
     bool colliders_enabled() const { return !is_previewing() || _previewColliders; }
-    void set_feature_cell_size(float value);
-    float get_feature_cell_size() const { return _featureCellSize; }
-    void remove_features(const Vector3 &global_position, float radius);
-    TypedArray<Dictionary> get_features_near(const Vector3 &global_position, float radius) const;
-    void regenerate_population();
-    void set_terrain_details(const TypedArray<JarTerrainDetail> &details);
-    TypedArray<JarTerrainDetail> get_terrain_details() const;
 };
 
 VARIANT_ENUM_CAST(JarVoxelVolume::Operation);

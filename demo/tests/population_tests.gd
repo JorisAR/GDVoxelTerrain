@@ -9,6 +9,7 @@ func _ready() -> void:
 	await _test_features()
 	await _test_details()
 	await _test_biomes()
+	await _test_table()
 	await _test_toggles()
 	await _test_detail_resolution()
 	await _test_detail_sphere()
@@ -34,12 +35,12 @@ func _box_feature(density: float) -> JarTerrainFeature:
 func _test_features() -> void:
 	var feature := _box_feature(0.01)
 	var world := TestWorld.flat(self, Vector3(3, 30, 5), func(v: JarVoxelVolume):
-		v.population_terrain_features = [feature])
+		TestWorld.populate(v, [feature]))
 	var volume: JarVoxelVolume = world.volume
 	var viewer: Node3D = world.viewer
 	await _settle(volume)
 	var center := Vector3(viewer.position.x, 0, viewer.position.z)
-	var found := volume.get_features_near(center, 150.0)
+	var found := _pop(volume).get_features_near(center, 150.0)
 	_check("features generated", found.size() > 0, "%d within 150 m" % found.size())
 
 	# On the surface (the flat test terrain is a heightfield: compare heights).
@@ -52,7 +53,7 @@ func _test_features() -> void:
 	# Density: about density * area on gentle ground (the 2D distance matters
 	# on a heightfield; the 3D query radius slightly undercounts slopes).
 	var expected := 0.01 * PI * 100.0 * 100.0
-	var count := volume.get_features_near(center, 100.0).size()
+	var count := _pop(volume).get_features_near(center, 100.0).size()
 	_check("feature density", count > expected * 0.6 and count < expected * 1.4, "%d within 100 m, expected ~%.0f" % [count, expected])
 
 	# Rendered: multimesh instances under the volume.
@@ -62,25 +63,25 @@ func _test_features() -> void:
 	_check("features rendered", rendered >= found.size(), "%d instances in multimeshes" % rendered)
 
 	# Deterministic: regenerating gives the same features.
-	var before := _origins(volume.get_features_near(center, 60.0))
-	volume.regenerate_population()
+	var before := _origins(_pop(volume).get_features_near(center, 60.0))
+	_pop(volume).regenerate()
 	await _settle(volume)
-	var after := _origins(volume.get_features_near(center, 60.0))
+	var after := _origins(_pop(volume).get_features_near(center, 60.0))
 	_check("features deterministic", before == after and before.size() > 0, "%d before, %d after" % [before.size(), after.size()])
 
 	# An edit removes the features it touches, also after regenerating.
-	var target: Vector3 = volume.get_features_near(center, 60.0)[0].transform.origin
+	var target: Vector3 = _pop(volume).get_features_near(center, 60.0)[0].transform.origin
 	volume.sphere_edit(target, 3.0, false)
 	await _settle(volume)
-	_check("edit removes feature", volume.get_features_near(target, 0.5).is_empty())
-	volume.regenerate_population()
+	_check("edit removes feature", _pop(volume).get_features_near(target, 0.5).is_empty())
+	_pop(volume).regenerate()
 	await _settle(volume)
-	_check("removal persists", volume.get_features_near(target, 0.5).is_empty())
+	_check("removal persists", _pop(volume).get_features_near(target, 0.5).is_empty())
 
 	# Edits nearby that leave a feature's ground alone keep it: a hole beside
 	# it, a blob of earth above it (their bounding boxes do contain it).
 	var kept: Array[Vector3] = []
-	for f in volume.get_features_near(center + Vector3(-40, 0, 0), 30.0):
+	for f in _pop(volume).get_features_near(center + Vector3(-40, 0, 0), 30.0):
 		var o: Vector3 = f.transform.origin
 		if kept.all(func(k): return k.distance_to(o) > 15.0) and o.distance_to(target) > 15.0:
 			kept.append(o)
@@ -89,35 +90,35 @@ func _test_features() -> void:
 	volume.sphere_edit(kept[0] + Vector3(5, 0, 0), 2.0, false)
 	volume.sphere_edit(kept[1] + Vector3(0, 6, 0), 2.0, true)
 	await _settle(volume)
-	_check("nearby edits keep features", kept.all(func(k): return not volume.get_features_near(k, 0.5).is_empty()))
-	volume.regenerate_population()
+	_check("nearby edits keep features", kept.all(func(k): return not _pop(volume).get_features_near(k, 0.5).is_empty()))
+	_pop(volume).regenerate()
 	await _settle(volume)
-	_check("nearby edits keep features after regenerating", kept.all(func(k): return not volume.get_features_near(k, 0.5).is_empty()))
+	_check("nearby edits keep features after regenerating", kept.all(func(k): return not _pop(volume).get_features_near(k, 0.5).is_empty()))
 
 	# remove_features() for gameplay (e.g. chopping a tree).
-	var other: Vector3 = volume.get_features_near(center + Vector3(40, 0, 0), 60.0)[0].transform.origin
-	volume.remove_features(other, 0.5)
-	_check("remove_features", volume.get_features_near(other, 0.5).is_empty())
+	var other: Vector3 = _pop(volume).get_features_near(center + Vector3(40, 0, 0), 60.0)[0].transform.origin
+	_pop(volume).remove_features(other, 0.5)
+	_check("remove_features", _pop(volume).get_features_near(other, 0.5).is_empty())
 
 	# Rules: nothing passes a 0 degree slope limit on noise terrain, nor a height
 	# range above the terrain; a mask removes about half.
 	feature.maximum_slope = 0.0
-	volume.regenerate_population()
+	_pop(volume).regenerate()
 	await _settle(volume)
-	_check("slope rule", volume.get_features_near(center, 100.0).size() == 0)
+	_check("slope rule", _pop(volume).get_features_near(center, 100.0).size() == 0)
 	feature.maximum_slope = 90.0
 	feature.minimum_height = 500.0
-	volume.regenerate_population()
+	_pop(volume).regenerate()
 	await _settle(volume)
-	_check("height rule", volume.get_features_near(center, 100.0).size() == 0)
+	_check("height rule", _pop(volume).get_features_near(center, 100.0).size() == 0)
 	feature.minimum_height = -100000.0
 	var mask := FastNoiseLite.new()
 	mask.frequency = 0.02
 	feature.mask_noise = mask
 	feature.mask_threshold = 0.0
-	volume.regenerate_population()
+	_pop(volume).regenerate()
 	await _settle(volume)
-	var masked := volume.get_features_near(center, 100.0).size()
+	var masked := _pop(volume).get_features_near(center, 100.0).size()
 	_check("mask rule", masked > count * 0.2 and masked < count * 0.8, "%d of %d kept" % [masked, count])
 
 	# Layers: a second feature placed after the first keeps clear of its
@@ -127,11 +128,11 @@ func _test_features() -> void:
 	feature.footprint = 6.0
 	var small := _box_feature(0.02)
 	small.footprint = 2.0
-	volume.population_terrain_features = [feature, small]
+	TestWorld.populate(volume, [feature, small])
 	await _settle(volume)
 	var big_ones := []
 	var small_ones := []
-	for f in volume.get_features_near(center, 100.0):
+	for f in _pop(volume).get_features_near(center, 100.0):
 		(big_ones if f.feature == feature else small_ones).append(f.transform.origin)
 	var too_close := 0
 	for a in small_ones:
@@ -143,15 +144,15 @@ func _test_features() -> void:
 
 	# Clusters: the same density, gathered into groves, is much lumpier
 	# (index of dispersion of counts in 20 m bins).
-	volume.population_terrain_features = [feature]
+	TestWorld.populate(volume, [feature])
 	feature.footprint = 2.0
 	await _settle(volume)
-	var even := _dispersion(volume.get_features_near(center, 100.0), center)
+	var even := _dispersion(_pop(volume).get_features_near(center, 100.0), center)
 	feature.cluster_spacing = 60.0
 	feature.cluster_radius = 12.0
-	volume.regenerate_population()
+	_pop(volume).regenerate()
 	await _settle(volume)
-	var clustered := _dispersion(volume.get_features_near(center, 100.0), center)
+	var clustered := _dispersion(_pop(volume).get_features_near(center, 100.0), center)
 	_check("clusters", clustered > even * 2.0, "dispersion %.2f clustered vs %.2f even" % [clustered, even])
 
 	world.volume.queue_free()
@@ -186,7 +187,7 @@ func _test_details() -> void:
 	detail.density = 2.0
 	detail.maximum_slope = 90.0
 	var world := TestWorld.flat(self, Vector3(3, 30, 5), func(v: JarVoxelVolume):
-		v.population_terrain_details = [detail])
+		TestWorld.populate(v, [detail]))
 	var volume: JarVoxelVolume = world.volume
 	await _settle(volume)
 	var origins := {}
@@ -218,20 +219,20 @@ func _test_toggles() -> void:
 	detail.maximum_slope = 90.0
 	var feature := _box_feature(0.01)
 	var world := TestWorld.flat(self, Vector3(3, 30, 5), func(v: JarVoxelVolume):
-		v.population_terrain_features = [feature]
-		v.population_terrain_details = [detail])
+		TestWorld.populate(v, [feature])
+		TestWorld.populate(v, [detail]))
 	var volume: JarVoxelVolume = world.volume
 	await _settle(volume)
 	var before := _population_counts(volume)
-	volume.population_features_enabled = false
-	volume.population_details_enabled = false
+	_pop(volume).features_enabled = false
+	_pop(volume).details_enabled = false
 	for i in 3:
 		await get_tree().process_frame
 	var off := _population_counts(volume)
 	_check("toggles off remove population", before.x > 0 and before.y > 0 and off == Vector2i.ZERO,
 		"features %d -> %d, details %d -> %d" % [before.x, off.x, before.y, off.y])
-	volume.population_features_enabled = true
-	volume.population_details_enabled = true
+	_pop(volume).features_enabled = true
+	_pop(volume).details_enabled = true
 	await _settle(volume)
 	var on := _population_counts(volume)
 	_check("toggles on bring it back", on.x == before.x and on.y > before.y * 0.9,
@@ -255,7 +256,7 @@ func _test_detail_resolution() -> void:
 	for voxel in [1.0, 0.5]:
 		var world := TestWorld.flat(self, center + Vector3(0, 12, 0), func(v: JarVoxelVolume):
 			v.voxel_size = voxel
-			v.population_terrain_details = [detail])
+			TestWorld.populate(v, [detail]))
 		var volume: JarVoxelVolume = world.volume
 		await _settle(volume)
 		var points := []
@@ -310,7 +311,7 @@ func _test_detail_sphere() -> void:
 	volume.chunk_scene = TestWorld.CHUNK_SCENE
 	volume.extent = 1024.0
 	volume.sdf = sdf
-	volume.population_terrain_details = [detail]
+	TestWorld.populate(volume, [detail])
 	holder.add_child(volume)
 	var spots := {center = Vector3(0, 1, 0), seam = Vector3(1, 1, 0).normalized(), corner = Vector3(1, 1, 1).normalized()}
 	for name in spots:
@@ -382,7 +383,7 @@ func _test_planet_orientation() -> void:
 	volume.chunk_scene = TestWorld.CHUNK_SCENE
 	volume.extent = 1024.0
 	volume.sdf = sdf
-	volume.population_terrain_features = [upright, aligned]
+	TestWorld.populate(volume, [upright, aligned])
 	holder.add_child(volume)
 	var viewer := JarVoxelViewer.new()
 	var spot := Vector3(1.0, 0.4, 0.7).normalized() * 430.0
@@ -391,7 +392,7 @@ func _test_planet_orientation() -> void:
 	await _settle(volume)
 	var worst := [0.0, 0.0]
 	var counts := [0, 0]
-	for f in volume.get_features_near(spot, 120.0):
+	for f in _pop(volume).get_features_near(spot, 120.0):
 		var t: Transform3D = f.transform
 		var i := 1 if f.feature == aligned else 0
 		var target: Vector3 = sdf.sample_normal(t.origin) if i == 1 else volume.get_up_direction_at(t.origin)
@@ -429,6 +430,39 @@ func _settle(volume: JarVoxelVolume) -> void:
 		await get_tree().process_frame
 		idle = idle + 1 if not volume.is_building() and not volume.is_meshing() and not volume.is_generating_details() else 0
 
+func _pop(volume: JarVoxelVolume) -> JarVoxelPopulation:
+	return TestWorld.population(volume)
+
+## Rows of a table: "*", a density multiplier, a uniform map, biomes not named.
+func _test_table() -> void:
+	var feature := _box_feature(0.01)
+	var biome := JarBiome.new()
+	biome.resource_name = "Only"
+	var map := JarBiomeMap.new()
+	map.biomes = [biome]
+	var world := TestWorld.flat(self, Vector3(3, 30, 5), func(v: JarVoxelVolume):
+		v.population_biome_map = map
+		TestWorld.populate(v, [feature]))
+	var volume: JarVoxelVolume = world.volume
+	var center := Vector3(3, 0, 5)
+	var count := func(biomes: Dictionary) -> int:
+		var table := JarPopulationTable.new()
+		table.add(feature, biomes)
+		_pop(volume).table = table
+		await _settle(volume)
+		return _pop(volume).get_features_near(center, 150.0).size()
+	var everywhere: int = await count.call({"*": 1.0})
+	var named: int = await count.call({"Only": 1.0})
+	var half: int = await count.call({"Only": 0.25})
+	var other: int = await count.call({"Other": 1.0, "*": 0.0})
+	_check("table: everywhere", everywhere > 20, str(everywhere))
+	_check("table: a named biome in a uniform map", named == everywhere, "%d, %d" % [named, everywhere])
+	_check("table: density multiplier", half > 0.1 * named and half < 0.5 * named, "%d of %d" % [half, named])
+	_check("table: biome not named grows nothing", other == 0, str(other))
+	world.volume.queue_free()
+	world.viewer.queue_free()
+	await get_tree().process_frame
+
 ## Two biomes (cold / warm), each with its own feature: weights sum to 1, and
 ## each feature only grows where its biome is.
 func _test_biomes() -> void:
@@ -440,13 +474,17 @@ func _test_biomes() -> void:
 	warm.temperature = 0.6
 	var cold_feature := _box_feature(0.01)
 	var warm_feature := _box_feature(0.01)
-	cold.features = [cold_feature]
-	warm.features = [warm_feature]
-	var map := JarBiomeMap.new()
+	cold.resource_name = "Cold"
+	warm.resource_name = "Warm"
+	var map := JarClimateBiomeMap.new()
 	map.temperature_noise = temperature
 	map.biomes = [cold, warm]
 	var world := TestWorld.flat(self, Vector3(3, 30, 5), func(v: JarVoxelVolume):
-		v.population_biome_map = map)
+		v.population_biome_map = map
+		var table := JarPopulationTable.new()
+		table.add(cold_feature, {"Cold": 1.0})
+		table.add(warm_feature, {"Warm": 1.0})
+		TestWorld.population(v).table = table)
 	var volume: JarVoxelVolume = world.volume
 	await _settle(volume)
 	var center := Vector3(3, 0, 5)
@@ -460,7 +498,7 @@ func _test_biomes() -> void:
 	_check("biome weights sum to 1", sums_ok)
 	var counts := {cold_feature: 0, warm_feature: 0}
 	var misplaced := 0
-	for f in volume.get_features_near(center, 150.0):
+	for f in _pop(volume).get_features_near(center, 150.0):
 		counts[f.feature] += 1
 		var biome: JarBiome = cold if f.feature == cold_feature else warm
 		var w: Dictionary = volume.get_biome_weights_at(f.transform.origin)

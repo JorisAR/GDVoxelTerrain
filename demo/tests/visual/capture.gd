@@ -23,8 +23,8 @@ func _ready() -> void:
 			v.voxel_size = float(OS.get_environment("VOXEL"))
 		if OS.get_environment("NOFEAT") == "1":
 			v.population_biome_map = null
-			v.population_terrain_features = []
-			v.population_terrain_details = []
+			for p: JarVoxelPopulation in v.find_children("*", "JarVoxelPopulation", false, false):
+				p.free()
 		if OS.get_environment("MESHER") != "": # otherwise the scene's own settings
 			v.meshing_algorithm = JarVoxelVolume.MESHING_DUAL_CONTOURING if OS.get_environment("MESHER") == "dc" else JarVoxelVolume.MESHING_SURFACE_NETS
 			v.manifold = OS.get_environment("MANIFOLD") == "1"

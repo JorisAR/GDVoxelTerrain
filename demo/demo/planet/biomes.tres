@@ -1,4 +1,4 @@
-[gd_resource type="JarBiomeMap" format=3 uid="uid://dt3ug1atfvmdb"]
+[gd_resource type="JarClimateBiomeMap" format=3 uid="uid://dt3ug1atfvmdb"]
 
 [ext_resource type="JarBiome" uid="uid://khfaq0u8m2va" path="res://demo/planet/temperate.tres" id="1"]
 [ext_resource type="JarBiome" uid="uid://bi4h1jyrnamyk" path="res://demo/planet/tundra.tres" id="2"]

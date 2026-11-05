@@ -5,7 +5,7 @@
 	</brief_description>
 	<description>
 		Details are generated on the mesh threads from the triangles of full-detail (LOD 0) chunks and drawn with one [MultiMesh] per chunk, so they cost little and follow edits automatically. They are not persistent: when a chunk is remeshed they are scattered again (deterministically, per triangle position). Details are not placed on painted ground (see [method JarVoxelVolume.paint]).
-		Add them to [member JarVoxelVolume.population_terrain_details]. For large objects that must be visible from afar and stay in place, use [JarTerrainFeature].
+		Add them to a [JarPopulationTable]. For large objects that must be visible from afar and stay in place, use [JarTerrainFeature].
 	</description>
 	<tutorials>
 	</tutorials>

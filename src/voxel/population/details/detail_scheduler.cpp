@@ -1,5 +1,6 @@
 #include "detail_scheduler.h"
 #include "voxel_chunk.h"
+#include "voxel_population.h"
 #include "voxel_volume.h"
 #include <algorithm>
 #include <chrono>
@@ -15,7 +16,8 @@ float chunk_reach(const JarVoxelVolume &volume)
 }
 } // namespace
 
-DetailScheduler::DetailScheduler(JarVoxelVolume &volume) : _volume(volume)
+DetailScheduler::DetailScheduler(JarVoxelVolume &volume, const JarVoxelPopulation &population)
+    : _volume(volume), _population(population)
 {
     _thread = std::thread([this] { worker(); });
 }
@@ -50,7 +52,7 @@ void DetailScheduler::worker()
             const VoxelStats::Scope stage(VoxelStats::WorkerDetails);
             ChunkDetailGenerator generator(job.up);
             buffers =
-                generator.generate_detail_buffers(*job.details, *job.biomes, job.biomeMap, job.ground, job.inputs);
+                generator.generate_detail_buffers(*job.details, *job.layers, job.biomeMap, job.ground, job.inputs);
         }
         std::lock_guard<std::mutex> lock(_mutex);
         _results.push_back({job.chunk, job.token, job.details, std::move(buffers)});
@@ -78,13 +80,13 @@ void DetailScheduler::reset()
 void DetailScheduler::refresh_details()
 {
     auto details = std::make_shared<std::vector<Ref<JarTerrainDetail>>>();
-    auto biomes = std::make_shared<std::vector<int>>();
+    auto layers = std::make_shared<std::vector<PopulationLayer>>();
     _maxDrawDistance = 0.0f;
     bool unlimited = false;
-    for (const auto &entry : _volume.population_details())
+    for (const auto &entry : _population.detail_entries())
     {
         details->push_back(entry.item);
-        biomes->push_back(entry.biome);
+        layers->push_back(entry.layer);
         if (entry.item.is_null())
             continue;
         const float draw = entry.item->get_draw_distance();
@@ -94,7 +96,7 @@ void DetailScheduler::refresh_details()
     if (unlimited)
         _maxDrawDistance = 0.0f;
     _details = details;
-    _detailBiomes = biomes;
+    _detailLayers = layers;
     _detailsDirty = false;
 }
 
@@ -158,7 +160,7 @@ void DetailScheduler::process()
         if (_inFlight >= MaxInFlight)
             break;
         chunk->detail_state = JarVoxelChunk::DETAILS_QUEUED;
-        _jobs.push_back({chunk, chunk->detail_token, chunk->detail_inputs, _details, _detailBiomes, biomeMap, ground, up});
+        _jobs.push_back({chunk, chunk->detail_token, chunk->detail_inputs, _details, _detailLayers, biomeMap, ground, up});
         _inFlight++;
     }
     _wake.notify_one();

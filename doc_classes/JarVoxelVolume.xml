@@ -41,14 +41,6 @@
 				Returns the biomes present at [param global_position] as a dictionary of [JarBiome] to weight (weights sum to 1). Empty without a [member population_biome_map].
 			</description>
 		</method>
-		<method name="get_features_near" qualifiers="const">
-			<return type="Dictionary[]" />
-			<param index="0" name="global_position" type="Vector3" />
-			<param index="1" name="radius" type="float" />
-			<description>
-				Returns the features whose base lies within [param radius] of [param global_position], as dictionaries with [code]feature[/code] (the [JarTerrainFeature]) and [code]transform[/code] (global [Transform3D]). Only generated features (near viewers) are listed.
-			</description>
-		</method>
 		<method name="get_height_at" qualifiers="const">
 			<return type="float" />
 			<param index="0" name="global_position" type="Vector3" />
@@ -91,7 +83,7 @@
 		<method name="is_generating_details" qualifiers="const">
 			<return type="bool" />
 			<description>
-				Returns [code]true[/code] while details ([member population_terrain_details] and the biomes' details) are still being generated for full-detail chunks near a viewer. Details are made on their own background thread, after the chunks are meshed, and only within their [member JarTerrainDetail.draw_distance].
+				Returns [code]true[/code] while details (see [JarVoxelPopulation]) are still being generated for full-detail chunks near a viewer. Details are made on their own background thread, after the chunks are meshed, and only within their [member JarTerrainDetail.draw_distance].
 			</description>
 		</method>
 		<method name="is_meshing" qualifiers="const">
@@ -130,24 +122,10 @@
 				Ray marches the volume's base [member sdf] from [param from] to [param to] (global space) and returns [code]{position, normal}[/code] of the first surface hit, or an empty dictionary. Edits are not included. Works at any distance, without colliders: useful for spawning on a planet or aiming far beyond the collider range.
 			</description>
 		</method>
-		<method name="regenerate_population">
-			<return type="void" />
-			<description>
-				Regenerates all features and details, e.g. after changing their settings at runtime. Removed features stay removed.
-			</description>
-		</method>
 		<method name="remesh_all">
 			<return type="void" />
 			<description>
 				Remeshes every chunk with the current meshing settings. Called automatically when [member meshing_algorithm], [member dual_contouring_feature_threshold] or [member cubic_voxels] change.
-			</description>
-		</method>
-		<method name="remove_features">
-			<return type="void" />
-			<param index="0" name="global_position" type="Vector3" />
-			<param index="1" name="radius" type="float" />
-			<description>
-				Removes the features whose base lies within a cube of half size [param radius] around [param global_position], permanently (they are not generated there again). Edits do this automatically for the region they change.
 			</description>
 		</method>
 		<method name="spawn_debug_spheres_in_bounds">
@@ -200,14 +178,8 @@
 		<member name="editor_preview_colliders" type="bool" setter="set_preview_colliders" getter="get_preview_colliders" default="false">
 			If [code]true[/code], the editor preview builds chunk and feature colliders too (needed only for physics in the editor).
 		</member>
-		<member name="editor_preview_details" type="bool" setter="set_preview_details" getter="get_preview_details" default="false">
-			If [code]true[/code], the editor preview shows details (grass...). Only while previewing; the game uses [member population_details_enabled].
-		</member>
 		<member name="editor_preview_enabled" type="bool" setter="set_editor_preview" getter="get_editor_preview" default="false">
 			If [code]true[/code], the volume builds and shows its terrain in the editor, around the editor's 3D camera (otherwise it only runs in the game), with the other [code]editor_preview_*[/code] settings. The generated chunks and population are not saved with the scene. Turning it off frees them.
-		</member>
-		<member name="editor_preview_features" type="bool" setter="set_preview_features" getter="get_preview_features" default="false">
-			If [code]true[/code], the editor preview shows features (trees, rocks...). Only while previewing; the game uses [member population_features_enabled].
 		</member>
 		<member name="editor_preview_min_lod" type="int" setter="set_preview_min_lod" getter="get_preview_min_lod" default="1">
 			Finest level of detail the editor preview builds: [code]0[/code] is full detail; each level up halves the resolution (and costs about a quarter as much near the camera).
@@ -252,22 +224,7 @@
 			Optional hard cap on how many chunk colliders are uploaded per second. [code]0[/code] means no cap: uploads are limited only by [member performance_collider_budget_ms].
 		</member>
 		<member name="population_biome_map" type="JarBiomeMap" setter="set_biome_map" getter="get_biome_map">
-			Biomes of this volume: each biome adds its own features and details where it occurs, and its own ground materials in the terrain shader. The volume's own [member population_terrain_features] and [member population_terrain_details] grow everywhere.
-		</member>
-		<member name="population_details_enabled" type="bool" setter="set_details_enabled" getter="get_details_enabled" default="true">
-			If [code]false[/code], no details are generated or shown (they disappear at once). Turning them back on remeshes the volume to bring them back.
-		</member>
-		<member name="population_feature_cell_size" type="float" setter="set_feature_cell_size" getter="get_feature_cell_size" default="64.0">
-			Edge length in meters of the cells features are generated in. Smaller cells follow the surface more closely and stream in finer steps; larger cells mean fewer, bigger jobs and nodes.
-		</member>
-		<member name="population_features_enabled" type="bool" setter="set_features_enabled" getter="get_features_enabled" default="true">
-			If [code]false[/code], no features are generated or shown, including the [JarBiome] features of [member population_biome_map]. Removed features stay removed when they come back.
-		</member>
-		<member name="population_terrain_details" type="JarTerrainDetail[]" setter="set_terrain_details" getter="get_terrain_details" default="[]">
-			[JarTerrainDetail]s scattered over full-detail chunks: grass, pebbles, small plants.
-		</member>
-		<member name="population_terrain_features" type="JarTerrainFeature[]" setter="set_terrain_features" getter="get_terrain_features" default="[]">
-			[JarTerrainFeature]s placed on the surface around viewers: trees, rocks, structures.
+			Which biome is where: used by the mesher and ground materials, and by a [JarVoxelPopulation] child for what grows there.
 		</member>
 		<member name="sdf" type="JarSignedDistanceField" setter="set_sdf" getter="get_sdf">
 			The signed distance field ([JarSignedDistanceField]) used to define terrain shape.

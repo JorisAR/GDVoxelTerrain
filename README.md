@@ -120,8 +120,10 @@ To customize, set the volume's `material` to your own `ShaderMaterial` (a copy o
 
 Volumes populate themselves with two kinds of objects (the approach is described in [Population of a Large-Scale Terrain](https://jorisar.nl/blog/Population/)):
 
-- **Details** (`JarTerrainDetail`, `population_terrain_details`): grass and other small things, scattered over the triangles of full-detail chunks on the mesh threads and drawn with a `MultiMesh` per chunk. Cheap, and they follow edits automatically.
-- **Features** (`JarTerrainFeature`, `population_terrain_features`): trees, rocks, structures. They are placed on the SDF surface (Poisson disc samples ray marched down onto it), independent of the mesh resolution, so they are visible from afar (`draw_distance`) and always stand in the same place. Use a `mesh` (instanced, cheapest) or a `scene` (for colliders and scripts). Features are generated on worker threads in cells around the viewers (`population_feature_cell_size`).
+Add a `JarVoxelPopulation` node as a child of the volume and give it a `JarPopulationTable`; without the node nothing of this runs.
+
+- **Details** (`JarTerrainDetail`): grass and other small things, scattered over the triangles of full-detail chunks on the mesh threads and drawn with a `MultiMesh` per chunk. Cheap, and they follow edits automatically.
+- **Features** (`JarTerrainFeature`): trees, rocks, structures. They are placed on the SDF surface (Poisson disc samples ray marched down onto it), independent of the mesh resolution, so they are visible from afar (`draw_distance`) and always stand in the same place. Use a `mesh` (instanced, cheapest) or a `scene` (for colliders and scripts). Features are generated on worker threads in cells around the viewers (`feature_cell_size` on the node).
 
 Both share placement rules, all of them probabilities so populations thin out naturally instead of stopping at hard lines:
 
@@ -129,11 +131,11 @@ Both share placement rules, all of them probabilities so populations thin out na
 - **Distribution:** a noise mask with a soft threshold (forests, meadows; `mask_invert` puts grass between the trees of a forest using the same noise) and clusters (groves of `cluster_radius` about `cluster_spacing` apart).
 - **Placement:** scale range, random rotation, alignment to the normal, sink.
 
-Features are placed as layers in list order, and each keeps the ones after it out of its `footprint`: list trees first, then rocks, then bushes, and they fill the gaps without overlapping. Edits remove the features standing where the shape changes, permanently; for gameplay there are `remove_features(position, radius)` and `get_features_near(position, radius)`:
+Features are placed as layers in table order, and each keeps the ones after it out of its `footprint`: list trees first, then rocks, then bushes, and they fill the gaps without overlapping. Edits remove the features standing where the shape changes, permanently; for gameplay there are `remove_features(position, radius)` and `get_features_near(position, radius)`:
 
 ```gdscript
 # Chop the tree the player is looking at.
-for f in volume.get_features_near(hit_position, 2.0):
+for f in population.get_features_near(hit_position, 2.0):
 	volume.remove_features(f.transform.origin, 0.5)
 ```
 
@@ -141,10 +143,17 @@ The demos use a generated low-poly pine and rock (`demo/demo/assets/population/f
 
 ### Biomes
 
-A `JarBiomeMap` (`population_biome_map`) places `JarBiome`s with a simple climate model: temperature from a noise, colder with height above sea level and towards a planet's poles, and moisture from a second noise. Each biome sits at a point in (temperature, moisture) space and positions belong to the biomes nearest their climate, blended smoothly, so borders follow the climate rather than a grid. A biome brings:
+A volume's `population_biome_map` decides which `JarBiome` is where. `JarBiomeMap` itself is uniform (its first biome everywhere). `JarClimateBiomeMap` uses a simple climate model: temperature from a noise, colder with height above sea level and towards a planet's poles, and moisture from a second noise. Each biome sits at a point in (temperature, moisture) space and positions belong to the biomes nearest their climate, blended smoothly, so borders follow the climate rather than a grid.
 
-- its own **features and details**, placed where it occurs and faded by how strongly it is present (the volume's own population grows everywhere);
-- its own **ground materials** for the shader's ground rules (ground, cliff, shore, seabed, peaks; `-1` keeps the shader's). The mesher passes per-vertex weights of the first 4 biomes in `CUSTOM1`.
+A biome brings its own **ground materials** for the shader's ground rules (ground, cliff, shore, seabed, peaks; `-1` keeps the shader's). The mesher passes per-vertex weights of the first 4 biomes in `CUSTOM1`.
+
+What grows in each biome is in the `JarPopulationTable`: one row per feature or detail, naming biomes by `resource_name`, each with a density multiplier. `"*"` is every other biome, or everywhere when alone:
+
+```
+{ "group": "Trees", "asset": ExtResource("pine"), "biomes": { "Temperate forest": 1.0, "Alpine tundra": 0.3 } }
+```
+
+From a script: `table.add(pine, {"Temperate forest": 1.0})`.
 
 `get_biome_weights_at(position)` tells scripts which biomes are where. The demo planet has a temperate forest (most of it), alpine tundra (high ground and poles) and a dry steppe (`demo/demo/planet/biomes.tres`).
 

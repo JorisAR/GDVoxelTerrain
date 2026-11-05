@@ -9,7 +9,7 @@
 		- [b]Rules[/b]: height range and maximum slope, each fading in over a falloff ([member height_falloff], [member slope_falloff]).
 		- [b]Distribution[/b]: a [member mask_noise] fading in around [member mask_threshold] (forests, meadows; [member mask_invert] for the opposite), and clusters: groves of radius [member cluster_radius] about [member cluster_spacing] apart.
 		The density settings are the density where all of these are 1 (inside a forest, at a cluster center).
-		These resources are read from worker threads while populating: change them between populations (see [method JarVoxelVolume.regenerate_population]).
+		These resources are read from worker threads while populating: change them between populations (see [method JarVoxelPopulation.regenerate]).
 	</description>
 	<tutorials>
 	</tutorials>

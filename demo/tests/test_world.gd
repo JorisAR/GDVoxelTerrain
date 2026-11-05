@@ -17,3 +17,24 @@ static func flat(parent: Node, viewer_position: Vector3, configure := Callable()
 	viewer.position = viewer_position
 	parent.add_child(viewer)
 	return {volume = volume, viewer = viewer}
+
+## The volume's population node, added if it has none.
+static func population(volume: JarVoxelVolume) -> JarVoxelPopulation:
+	var found := volume.find_children("*", "JarVoxelPopulation", false, false)
+	if not found.is_empty():
+		return found[0]
+	var node := JarVoxelPopulation.new()
+	node.table = JarPopulationTable.new()
+	volume.add_child(node)
+	return node
+
+## Makes `assets` (features or details) grow everywhere, replacing those of that kind.
+static func populate(volume: JarVoxelVolume, assets: Array) -> void:
+	var node := population(volume)
+	var table := JarPopulationTable.new()
+	for row: Dictionary in node.table.rows:
+		if row.asset.get_class() != assets[0].get_class():
+			table.add(row.asset, row.biomes)
+	for asset: Resource in assets:
+		table.add(asset)
+	node.table = table

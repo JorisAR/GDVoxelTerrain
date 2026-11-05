@@ -81,10 +81,11 @@ func _population_button(box: Control, text: String, toggled: Callable) -> CheckB
 
 func _set_population(features: Variant, details: Variant) -> void:
 	for volume: JarVoxelVolume in _volumes():
-		if features != null:
-			volume.population_features_enabled = features
-		if details != null:
-			volume.population_details_enabled = details
+		for population: JarVoxelPopulation in volume.find_children("*", "JarVoxelPopulation", false, false):
+			if features != null:
+				population.features_enabled = features
+			if details != null:
+				population.details_enabled = details
 
 func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventMouseMotion and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:

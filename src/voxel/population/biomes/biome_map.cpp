@@ -1,7 +1,7 @@
 #include "biome_map.h"
 #include <cmath>
 
-glm::vec2 JarBiomeMap::climate(const glm::vec3 &position, const UpField &up) const
+glm::vec2 JarClimateBiomeMap::climate(const glm::vec3 &position, const UpField &up) const
 {
     float t = temperature_noise.is_valid() ? temperature_noise->get_noise_3d(position.x, position.y, position.z) : 0.0f;
     const float m = moisture_noise.is_valid() ? moisture_noise->get_noise_3d(position.x, position.y, position.z) : 0.0f;
@@ -16,9 +16,10 @@ glm::vec2 JarBiomeMap::climate(const glm::vec3 &position, const UpField &up) con
     return glm::vec2(t, m);
 }
 
-BiomeWeights JarBiomeMap::evaluate(const glm::vec3 &position, const UpField &up) const
+BiomeWeights JarClimateBiomeMap::evaluate(const glm::vec3 &position, const UpField &up) const
 {
     BiomeWeights result;
+    const TypedArray<JarBiome> biomes = get_biomes();
     const int n = int(biomes.size());
     if (n <= 1)
         return result; // biome 0 everywhere (or none)
@@ -68,12 +69,19 @@ BiomeWeights JarBiomeMap::evaluate(const glm::vec3 &position, const UpField &up)
 
 void JarBiomeMap::_bind_methods()
 {
+    ClassDB::bind_method(D_METHOD("get_biomes"), &JarBiomeMap::get_biomes);
+    ClassDB::bind_method(D_METHOD("set_biomes", "value"), &JarBiomeMap::set_biomes);
+    ADD_PROPERTY(PropertyInfo(Variant::ARRAY, "biomes", PROPERTY_HINT_TYPE_STRING,
+                              String::num(Variant::OBJECT) + "/" + String::num(PROPERTY_HINT_RESOURCE_TYPE) + ":JarBiome"),
+                 "set_biomes", "get_biomes");
+}
+
+void JarClimateBiomeMap::_bind_methods()
+{
 #define BIND_MAP(m_name, m_type, m_hint, m_hint_text)                                                                  \
-    ClassDB::bind_method(D_METHOD("get_" #m_name), &JarBiomeMap::get_##m_name);                                        \
-    ClassDB::bind_method(D_METHOD("set_" #m_name, "value"), &JarBiomeMap::set_##m_name);                               \
+    ClassDB::bind_method(D_METHOD("get_" #m_name), &JarClimateBiomeMap::get_##m_name);                                        \
+    ClassDB::bind_method(D_METHOD("set_" #m_name, "value"), &JarClimateBiomeMap::set_##m_name);                               \
     ADD_PROPERTY(PropertyInfo(m_type, #m_name, m_hint, m_hint_text), "set_" #m_name, "get_" #m_name)
-    BIND_MAP(biomes, Variant::ARRAY, PROPERTY_HINT_TYPE_STRING,
-             String::num(Variant::OBJECT) + "/" + String::num(PROPERTY_HINT_RESOURCE_TYPE) + ":JarBiome");
     ADD_GROUP("Climate", "");
     BIND_MAP(temperature_noise, Variant::OBJECT, PROPERTY_HINT_RESOURCE_TYPE, "FastNoiseLite");
     BIND_MAP(moisture_noise, Variant::OBJECT, PROPERTY_HINT_RESOURCE_TYPE, "FastNoiseLite");

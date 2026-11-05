@@ -10,6 +10,7 @@
 #include <unordered_set>
 #include <vector>
 
+class JarVoxelPopulation;
 class JarVoxelVolume;
 class JarVoxelChunk;
 
@@ -20,7 +21,7 @@ class JarVoxelChunk;
 class DetailScheduler
 {
   public:
-    explicit DetailScheduler(JarVoxelVolume &volume);
+    DetailScheduler(JarVoxelVolume &volume, const JarVoxelPopulation &population);
     ~DetailScheduler(); // stops the thread (waits for the job it is running)
 
     // Main thread, every frame: show finished details, queue the chunks that
@@ -41,7 +42,7 @@ class DetailScheduler
         uint64_t token;
         DetailInputs inputs;
         std::shared_ptr<const std::vector<Ref<JarTerrainDetail>>> details;
-        std::shared_ptr<const std::vector<int>> biomes;
+        std::shared_ptr<const std::vector<PopulationLayer>> layers;
         Ref<JarBiomeMap> biomeMap;
         std::shared_ptr<const GroundPalette> ground;
         UpField up;
@@ -59,9 +60,10 @@ class DetailScheduler
     float range() const; // meters from a viewer within which chunks get details
 
     JarVoxelVolume &_volume;
+    const JarVoxelPopulation &_population;
     std::unordered_set<JarVoxelChunk *> _chunks; // full-detail chunks with mesh data
     std::shared_ptr<const std::vector<Ref<JarTerrainDetail>>> _details;
-    std::shared_ptr<const std::vector<int>> _detailBiomes;
+    std::shared_ptr<const std::vector<PopulationLayer>> _detailLayers;
     float _maxDrawDistance = 0.0f; // 0: no limit
     bool _detailsDirty = true;
     int _inFlight = 0;

@@ -2,6 +2,7 @@
 #include "voxel_stats.h"
 #include "job_system.h"
 #include "voxel_lod.h"
+#include "voxel_population.h"
 #include "voxel_volume.h"
 #include <chrono>
 #include <cmath>
@@ -35,7 +36,8 @@ void tangent_basis(const glm::vec3 &up, glm::vec3 &t1, glm::vec3 &t2)
 }
 } // namespace
 
-FeatureManager::FeatureManager(JarVoxelVolume &volume) : _volume(volume), _shared(std::make_shared<Shared>())
+FeatureManager::FeatureManager(JarVoxelVolume &volume, const JarVoxelPopulation &population)
+    : _volume(volume), _population(population), _shared(std::make_shared<Shared>())
 {
     refresh_features();
 }
@@ -51,19 +53,19 @@ FeatureManager::~FeatureManager()
 void FeatureManager::refresh_features()
 {
     _features.clear();
-    _featureBiomes.clear();
+    _layers.clear();
     _templates.clear();
     _range = 0.0f;
-    for (const auto &entry : _volume.population_features())
+    for (const auto &entry : _population.feature_entries())
     {
         _features.push_back(entry.item);
-        _featureBiomes.push_back(entry.biome);
+        _layers.push_back(entry.layer);
         _templates.push_back(make_template(entry.item));
         if (entry.item.is_valid())
             _range = std::max(_range, entry.item->get_draw_distance());
     }
     _biomeMap = _volume.get_biome_map();
-    _cellSize = _volume.get_feature_cell_size();
+    _cellSize = _population.get_feature_cell_size();
 }
 
 void FeatureManager::reset()
@@ -249,15 +251,15 @@ void FeatureManager::start_generation(const glm::ivec3 &key)
     shared->activeJobs++;
     const float cellSize = _cellSize;
     const std::vector<Ref<JarTerrainFeature>> features = _features;
-    const std::vector<int> featureBiomes = _featureBiomes;
+    const std::vector<PopulationLayer> layers = _layers;
     const Ref<JarBiomeMap> biomes = _biomeMap;
     const UpField up = _volume.get_up_field();
     const std::shared_ptr<const GroundPalette> ground = _volume.get_ground_palette();
-    JobSystem::get_pool().enqueue_background([shared, key, cellSize, features, featureBiomes, biomes, sdf, up, ground]() {
+    JobSystem::get_pool().enqueue_background([shared, key, cellSize, features, layers, biomes, sdf, up, ground]() {
         std::vector<Instance> instances;
         {
             const VoxelStats::Scope stage(VoxelStats::WorkerFeatures);
-            instances = generate_cell(key, cellSize, features, featureBiomes, biomes, sdf, up, ground);
+            instances = generate_cell(key, cellSize, features, layers, biomes, sdf, up, ground);
         }
         {
             std::lock_guard<std::mutex> lock(shared->mutex);
@@ -660,7 +662,7 @@ float find_surface_below(const JarSignedDistanceField &sdf, const glm::vec3 &top
 
 std::vector<FeatureManager::Instance> FeatureManager::generate_cell(
     const glm::ivec3 &key, float cellSize, const std::vector<Ref<JarTerrainFeature>> &features,
-    const std::vector<int> &featureBiomes, const Ref<JarBiomeMap> &biomes, const Ref<JarSignedDistanceField> &sdf,
+    const std::vector<PopulationLayer> &layers, const Ref<JarBiomeMap> &biomes, const Ref<JarSignedDistanceField> &sdf,
     const UpField &upField, const std::shared_ptr<const GroundPalette> &ground)
 {
     std::vector<Instance> result;
@@ -683,10 +685,11 @@ std::vector<FeatureManager::Instance> FeatureManager::generate_cell(
     // their footprint first (trees, then rocks between them, then bushes...).
     for (int f = 0; f < int(features.size()); ++f)
     {
-        if (features[f].is_null() || features[f]->get_density() <= 0.0f)
+        const PopulationLayer layer = f < int(layers.size()) ? layers[f] : PopulationLayer();
+        if (features[f].is_null() || features[f]->get_density() * layer.density <= 0.0f)
             continue;
         const JarTerrainFeature &feature = **features[f];
-        const float density = feature.get_density();
+        const float density = feature.get_density() * layer.density;
         const float footprint = feature.get_footprint();
 
         // Whole layers that cannot place anything here are skipped before any
@@ -694,7 +697,7 @@ std::vector<FeatureManager::Instance> FeatureManager::generate_cell(
         const float halfDiagonal = cellSize * 0.8660254f;
         if (!feature.clusters_reach(center, up, halfDiagonal))
             continue;
-        const int layerBiome = f < int(featureBiomes.size()) ? featureBiomes[f] : -1;
+        const int layerBiome = layer.biome;
         if (layerBiome >= 0 && biomes.is_valid())
         {
             // Biomes change over hundreds of meters: a 3x3 grid over the cell finds them.
@@ -764,7 +767,7 @@ std::vector<FeatureManager::Instance> FeatureManager::generate_cell(
                 continue;
             // Mask and clusters only depend on the position: test them on the
             // sample's projection before paying for the ray march.
-            const int biome = f < int(featureBiomes.size()) ? featureBiomes[f] : -1;
+            const int biome = layer.biome;
             // Biome features grow where their biome is, fading with its weight.
             const auto biome_weight = [&](const glm::vec3 &at) {
                 return biome < 0 || biomes.is_null() ? 1.0f : biomes->evaluate(at, upField).weight_of(biome);
