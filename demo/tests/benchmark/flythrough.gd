@@ -6,7 +6,9 @@ extends Node
 ##   godot --path demo res://tests/benchmark/flythrough.tscn
 ## Options (environment): SCENE, SPEEDS (m/s, comma separated), SECONDS (per
 ## speed), ALTITUDE (m), CLIMB (m/s: rises while flying, e.g. out to space),
-## FAST_NORMALS (1: the terrain's fast_normals, in memory only), OUT.
+## FAST_NORMALS (1: the terrain's fast_normals, in memory only), OUT,
+## EDITS (seconds between digs on the ground ahead: prints how long each took
+## to show, split by whether a build was running when it was made).
 
 var SCENE := _env("SCENE", "res://demo/planet.tscn")
 var SPEEDS := Array(_env("SPEEDS", "50,500").split(",")).map(func(s): return float(s))
@@ -14,6 +16,11 @@ var SECONDS := float(_env("SECONDS", "20"))
 var ALTITUDE := float(_env("ALTITUDE", "40"))
 var CLIMB := float(_env("CLIMB", "0"))
 var OUT := _env("OUT", "")
+var EDITS := float(_env("EDITS", "0"))
+
+var _dig := {} # the dig waiting to show: {start, building, chunks}
+var _next_dig := 0.0
+var _latencies := {} # phase -> {idle: [ms], building: [ms]}
 
 var _frames: Array[Dictionary] = []
 
@@ -48,6 +55,7 @@ func _ready() -> void:
 		var elapsed := 0.0
 		var last := Time.get_ticks_usec()
 		var previous_ms := 0.0
+		_next_dig = 0.0
 		while elapsed < SECONDS:
 			await get_tree().process_frame
 			var now := Time.get_ticks_usec()
@@ -69,10 +77,42 @@ func _ready() -> void:
 			player.look_at(look, to_global.basis * at)
 			var stats := JarVoxelStats.get_frame()
 			stats["frame"] = frame_ms
+			if EDITS > 0.0:
+				var near := dir.rotated(axis, angle + maxf(20.0, speed * 0.1) / sdf.radius)
+				_edit_step(volume, to_global * (near * (sdf.radius + sdf.sample_height(near * sdf.radius))), label, elapsed)
 			stats["phase"] = label if CLIMB == 0.0 else "%s, %d km up" % [label, int(altitude / 10000.0) * 10]
 			_frames.append(stats)
 	_report()
 	get_tree().quit()
+
+## Digs at `spot`, and times the next dig once this one's chunks changed.
+func _edit_step(volume: JarVoxelVolume, spot: Vector3, phase: String, elapsed: float) -> void:
+	if not _dig.is_empty():
+		for chunk: JarVoxelChunk in _dig.chunks:
+			if chunk.get_mesh() != _dig.chunks[chunk]:
+				var kind := "building" if _dig.building else "idle"
+				var ms: float = (Time.get_ticks_usec() - _dig.start) / 1000.0
+				_latencies.get_or_add(phase, {}).get_or_add(kind, []).append(ms)
+				_dig = {}
+				_next_dig = elapsed + EDITS
+				return
+		if (Time.get_ticks_usec() - _dig.start) > 5000000:
+			_dig = {} # nothing there to dig
+			_next_dig = elapsed + EDITS
+		return
+	if elapsed < _next_dig or elapsed < 1.0:
+		return
+	var chunks := {}
+	var local := volume.to_local(spot)
+	for chunk in volume.get_children():
+		if chunk is JarVoxelChunk and chunk.visible and chunk.get_center().distance_to(local) < 40.0:
+			chunks[chunk] = chunk.get_mesh()
+	if chunks.is_empty():
+		return
+	var sphere := JarSphereSdf.new()
+	sphere.radius = 2.5
+	_dig = {start = Time.get_ticks_usec(), building = volume.is_building(), chunks = chunks}
+	volume.edit(sphere, JarVoxelVolume.SDF_OPERATION_SUBTRACTION, Transform3D(Basis(), spot))
 
 func _report() -> void:
 	for phase in _phases():
@@ -107,6 +147,11 @@ func _report() -> void:
 				if f.main[stage] >= 0.5:
 					parts.append("%s %.1f" % [stage, f.main[stage]])
 			print("  %.1f ms: %s" % [f.frame, ", ".join(parts)])
+	for phase in _latencies:
+		for kind in _latencies[phase]:
+			var values: Array = _latencies[phase][kind]
+			print("digs, %s, %s: %d, ms p50 %.0f  p95 %.0f  max %.0f" % [
+				phase, kind, values.size(), _pct(values, 0.5), _pct(values, 0.95), values.max()])
 	if OUT != "":
 		_write_csv()
 

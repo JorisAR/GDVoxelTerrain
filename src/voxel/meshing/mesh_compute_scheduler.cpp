@@ -83,6 +83,12 @@ void MeshComputeScheduler::close_batch(const JarVoxelVolume &terrain)
             }
         }
     }
+    // An edit's chunks show with their group: the whole group goes first.
+    for (const Incoming &incoming : batch)
+        if (incoming.urgent)
+            for (const int member : _entries[find(_entryOf[incoming.node])].members)
+                if (_entries[member].state == Queued)
+                    _urgent.push_back(member);
 }
 
 int MeshComputeScheduler::find(int id)
