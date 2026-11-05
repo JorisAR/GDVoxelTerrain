@@ -9,9 +9,8 @@ func _ready() -> void:
 	await _test_features()
 	await _test_details()
 	await _test_biomes()
-	await _test_table()
+	await _test_layers()
 	await _test_impostor()
-	await _test_panel()
 	await _test_toggles()
 	await _test_detail_resolution()
 	await _test_detail_sphere()
@@ -435,8 +434,8 @@ func _settle(volume: JarVoxelVolume) -> void:
 func _pop(volume: JarVoxelVolume) -> JarVoxelPopulation:
 	return TestWorld.population(volume)
 
-## Rows of a table: "*", a density multiplier, a uniform map, biomes not named.
-func _test_table() -> void:
+## Layers: everywhere, by biome, a density multiplier, off, and their order.
+func _test_layers() -> void:
 	var feature := _box_feature(0.01)
 	var biome := JarBiome.new()
 	biome.resource_name = "Only"
@@ -447,46 +446,38 @@ func _test_table() -> void:
 		TestWorld.populate(v, [feature]))
 	var volume: JarVoxelVolume = world.volume
 	var center := Vector3(3, 0, 5)
-	var count := func(biomes: Dictionary) -> int:
-		var table := JarPopulationTable.new()
-		table.add(feature, biomes)
-		_pop(volume).table = table
+	var population := _pop(volume)
+	var layer: JarPopulationLayer = population.get_layers()[0]
+	var count := func() -> int:
+		await get_tree().process_frame
 		await _settle(volume)
-		return _pop(volume).get_features_near(center, 150.0).size()
-	var everywhere: int = await count.call({"*": 1.0})
-	var named: int = await count.call({"Only": 1.0})
-	var half: int = await count.call({"Only": 0.25})
-	var other: int = await count.call({"Other": 1.0, "*": 0.0})
-	_check("table: everywhere", everywhere > 20, str(everywhere))
-	_check("table: a named biome in a uniform map", named == everywhere, "%d, %d" % [named, everywhere])
-	_check("table: density multiplier", half > 0.1 * named and half < 0.5 * named, "%d of %d" % [half, named])
-	_check("table: biome not named grows nothing", other == 0, str(other))
-	world.volume.queue_free()
-	world.viewer.queue_free()
-	await get_tree().process_frame
-
-## The population panel's edits end up in the table.
-func _test_panel() -> void:
-	var feature := _box_feature(0.01)
-	var other := _box_feature(0.01)
-	var world := TestWorld.flat(self, Vector3(3, 30, 5), func(v: JarVoxelVolume):
-		TestWorld.populate(v, [feature, other]))
-	var volume: JarVoxelVolume = world.volume
-	var panel: VBoxContainer = load("res://addons/jar_voxel_terrain/population_panel.gd").new()
-	add_child(panel)
-	panel.set_population(_pop(volume))
-	var table: JarPopulationTable = _pop(volume).table
-	panel.set_cell(0, "Tundra", "0.3")
-	_check("panel: cell written", is_equal_approx(table.rows[0].biomes.get("Tundra", 0.0), 0.3))
-	panel.set_cell(0, "Tundra", "")
-	_check("panel: empty cell removed", not table.rows[0].biomes.has("Tundra"))
-	panel.move_row(0, 1)
-	_check("panel: row moved", table.rows[1].asset == feature)
-	panel.set_group(1, "Trees")
-	_check("panel: group", table.rows[1].group == "Trees")
-	panel.add_file("res://demo/planet/grass.tres")
-	_check("panel: file added", table.rows.size() == 3 and table.rows[2].biomes.has("*"))
-	panel.queue_free()
+		return population.get_features_near(center, 150.0).size()
+	var everywhere: int = await count.call()
+	layer.everywhere = false
+	var none: int = await count.call()
+	layer.set("biomes/Only", 1.0)
+	var named: int = await count.call()
+	layer.set("biomes/Only", 0.25)
+	var half: int = await count.call()
+	_check("layer: everywhere", everywhere > 20, str(everywhere))
+	_check("layer: no biome grows nothing", none == 0, str(none))
+	_check("layer: a biome of a uniform map", named == everywhere, "%d, %d" % [named, everywhere])
+	_check("layer: density multiplier", half > 0.1 * named and half < 0.5 * named, "%d of %d" % [half, named])
+	_check("layer: biome listed and saved", layer.get_property_list().any(func(p): return p.name == "biomes/Only"))
+	layer.enabled = false
+	_check("layer: off", await count.call() == 0)
+	layer.enabled = true
+	layer.set_biome("Gone", 1.0)
+	_check("layer: unknown biome kept for saving", layer.get_property_list().any(func(p): return p.name == "biomes/Gone"))
+	layer.set_biome("Gone", 0.0)
+	# In a plain folder node, and removed with it.
+	var folder := Node.new()
+	layer.reparent(folder)
+	population.add_child(folder)
+	_check("layer: found in a folder", population.get_layers() == [layer])
+	_check("layer: grows from a folder", await count.call() == half, "%d" % half)
+	folder.free()
+	_check("layer: gone", await count.call() == 0)
 	volume.queue_free()
 	world.viewer.queue_free()
 	await get_tree().process_frame
@@ -533,10 +524,8 @@ func _test_biomes() -> void:
 	map.biomes = [cold, warm]
 	var world := TestWorld.flat(self, Vector3(3, 30, 5), func(v: JarVoxelVolume):
 		v.population_biome_map = map
-		var table := JarPopulationTable.new()
-		table.add(cold_feature, {"Cold": 1.0})
-		table.add(warm_feature, {"Warm": 1.0})
-		TestWorld.population(v).table = table)
+		TestWorld.population(v).add_layer(cold_feature, {"Cold": 1.0})
+		TestWorld.population(v).add_layer(warm_feature, {"Warm": 1.0}))
 	var volume: JarVoxelVolume = world.volume
 	await _settle(volume)
 	var center := Vector3(3, 0, 5)

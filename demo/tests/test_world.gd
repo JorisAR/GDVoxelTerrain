@@ -24,17 +24,15 @@ static func population(volume: JarVoxelVolume) -> JarVoxelPopulation:
 	if not found.is_empty():
 		return found[0]
 	var node := JarVoxelPopulation.new()
-	node.table = JarPopulationTable.new()
 	volume.add_child(node)
 	return node
 
 ## Makes `assets` (features or details) grow everywhere, replacing those of that kind.
 static func populate(volume: JarVoxelVolume, assets: Array) -> void:
 	var node := population(volume)
-	var table := JarPopulationTable.new()
-	for row: Dictionary in node.table.rows:
-		if row.asset.get_class() != assets[0].get_class():
-			table.add(row.asset, row.biomes)
+	for layer: JarPopulationLayer in node.get_layers():
+		if layer.get_asset().get_class() == assets[0].get_class():
+			node.remove_child(layer)
+			layer.free()
 	for asset: Resource in assets:
-		table.add(asset)
-	node.table = table
+		node.add_layer(asset)

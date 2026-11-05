@@ -1,15 +1,14 @@
 extends Node
-## Bakes the features of JarVoxelPopulation-style table TABLE (or demo's) and
-## saves each impostor; a real run of what the editor's Bake button does.
-## SAVE=1 keeps the features pointing at their bakes, otherwise only one feature
-## is baked to a copy under user:// to measure time and size.
+## Bakes the features of POPULATION (a scene with a JarVoxelPopulation at its
+## root) and saves each impostor: what the editor's Bake button does.
 
 func _ready() -> void:
-	var table: JarPopulationTable = load(OS.get_environment("TABLE"))
+	var population: JarVoxelPopulation = load(OS.get_environment("POPULATION")).instantiate()
 	var seen := []
-	for row: Dictionary in table.rows:
-		if row.asset is JarTerrainFeature and not row.asset in seen:
-			seen.append(row.asset)
+	for layer: JarPopulationLayer in population.get_layers():
+		if layer is JarFeatureLayer and layer.feature != null and not layer.feature in seen:
+			seen.append(layer.feature)
+	population.free()
 	for feature: JarTerrainFeature in seen:
 		var start := Time.get_ticks_msec()
 		var error := await JarImpostorBaker.new().bake_feature(feature, self)

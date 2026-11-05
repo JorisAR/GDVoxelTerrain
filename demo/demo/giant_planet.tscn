@@ -9,7 +9,7 @@
 [ext_resource type="Material" path="res://demo/planet/moon_material.tres" id="13_moon_material"]
 [ext_resource type="PackedScene" uid="uid://cupyeuv1xe20s" path="res://demo/player/player.tscn" id="14_player"]
 [ext_resource type="Material" uid="uid://55tbedv6qxva" path="res://demo/assets/space/space_sky.tres" id="15_sky"]
-[ext_resource type="JarPopulationTable" uid="uid://cjarplanetpop1" path="res://demo/planet/planet_population.tres" id="18_population"]
+[ext_resource type="PackedScene" path="res://demo/planet/planet_population.tscn" id="18_population"]
 [ext_resource type="JarClimateBiomeMap" uid="uid://dt3ug1atfvmdb" path="res://demo/planet/biomes.tres" id="17_biomes"]
 
 [sub_resource type="JarTerrainMaterial" id="Grass"]
@@ -126,8 +126,7 @@ lod_automatic_update_distance = 16.0
 editor_preview_min_lod = 5
 population_biome_map = ExtResource("17_biomes")
 
-[node name="Population" type="JarVoxelPopulation" parent="Sun/PlanetOrbit/Planet/JarVoxelVolume"]
-table = ExtResource("18_population")
+[node name="Population" parent="Sun/PlanetOrbit/Planet/JarVoxelVolume" instance=ExtResource("18_population")]
 
 [node name="Debris" type="JarVoxelDebris" parent="Sun/PlanetOrbit/Planet/JarVoxelVolume" unique_id=1288236388]
 collision_layer = 3
@@ -193,3 +192,5 @@ light_energy = 0.043707762
 sky_mode = 1
 
 [node name="LensFlare" type="JarLensFlare" parent="." unique_id=1771092205]
+
+[editable path="Sun/PlanetOrbit/Planet/JarVoxelVolume/Population"]

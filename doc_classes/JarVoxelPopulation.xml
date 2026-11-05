@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <class name="JarVoxelPopulation" inherits="Node" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
 	<brief_description>
-		Grows features and details on its parent [JarVoxelVolume], from a [JarPopulationTable].
+		Grows features and details on its parent [JarVoxelVolume], from its [JarFeatureLayer] and [JarDetailLayer] children.
 	</brief_description>
 	<description>
 	</description>

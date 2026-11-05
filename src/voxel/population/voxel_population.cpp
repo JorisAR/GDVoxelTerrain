@@ -84,20 +84,66 @@ void JarVoxelPopulation::regenerate()
     reset_details();
 }
 
-void JarVoxelPopulation::on_table_changed()
+void JarVoxelPopulation::layers_changed()
 {
+    if (_regeneratePending)
+        return;
+    _regeneratePending = true;
+    callable_mp(this, &JarVoxelPopulation::regenerate_pending).call_deferred();
+}
+
+void JarVoxelPopulation::regenerate_pending()
+{
+    _regeneratePending = false;
     regenerate();
 }
 
-void JarVoxelPopulation::set_table(const Ref<JarPopulationTable> &value)
+static void find_layers(const Node *node, TypedArray<JarPopulationLayer> &result)
 {
-    const Callable callback = callable_mp(this, &JarVoxelPopulation::on_table_changed);
-    if (_table.is_valid() && _table->is_connected("changed", callback))
-        _table->disconnect("changed", callback);
-    _table = value;
-    if (_table.is_valid())
-        _table->connect("changed", callback, Object::CONNECT_DEFERRED);
-    regenerate();
+    for (int i = 0; i < node->get_child_count(); ++i)
+    {
+        Node *child = node->get_child(i);
+        if (JarPopulationLayer *layer = Object::cast_to<JarPopulationLayer>(child))
+            result.push_back(layer);
+        else if (Object::cast_to<JarVoxelPopulation>(child) == nullptr)
+            find_layers(child, result);
+    }
+}
+
+TypedArray<JarPopulationLayer> JarVoxelPopulation::get_layers() const
+{
+    TypedArray<JarPopulationLayer> result;
+    find_layers(this, result);
+    return result;
+}
+
+JarPopulationLayer *JarVoxelPopulation::add_layer(const Ref<Resource> &asset, const Dictionary &biomes)
+{
+    JarPopulationLayer *layer = nullptr;
+    const Ref<JarTerrainFeature> feature = asset;
+    const Ref<JarTerrainDetail> detail = asset;
+    if (feature.is_valid())
+    {
+        JarFeatureLayer *made = memnew(JarFeatureLayer);
+        made->set_feature(feature);
+        layer = made;
+    }
+    else if (detail.is_valid())
+    {
+        JarDetailLayer *made = memnew(JarDetailLayer);
+        made->set_detail(detail);
+        layer = made;
+    }
+    ERR_FAIL_NULL_V_MSG(layer, nullptr, "A layer grows a JarTerrainFeature or a JarTerrainDetail.");
+    if (!biomes.is_empty())
+    {
+        layer->set_everywhere(false);
+        const Array names = biomes.keys();
+        for (int64_t i = 0; i < names.size(); ++i)
+            layer->set_biome(names[i], biomes[names[i]]);
+    }
+    add_child(layer);
+    return layer;
 }
 
 void JarVoxelPopulation::set_features_enabled(bool value)
@@ -145,43 +191,29 @@ void JarVoxelPopulation::set_feature_cell_size(float value)
 template <typename T> std::vector<JarVoxelPopulation::Entry<T>> JarVoxelPopulation::entries(bool enabled) const
 {
     std::vector<Entry<T>> result;
-    if (!enabled || _table.is_null() || _volume == nullptr)
+    if (!enabled || _volume == nullptr)
         return result;
     const Ref<JarBiomeMap> map = _volume->get_biome_map();
     const TypedArray<JarBiome> biomes = map.is_valid() ? map->get_biomes() : TypedArray<JarBiome>();
-    const TypedArray<Dictionary> rows = _table->get_rows();
-    const String all = "*";
-    for (int64_t r = 0; r < rows.size(); ++r)
+    const TypedArray<JarPopulationLayer> layers = get_layers();
+    for (int64_t l = 0; l < layers.size(); ++l)
     {
-        const Dictionary row = rows[r];
-        const Ref<T> item = row.get("asset", Variant());
-        if (item.is_null())
+        const JarPopulationLayer *layer = Object::cast_to<JarPopulationLayer>(layers[l]);
+        const Ref<T> item = layer != nullptr ? layer->get_asset() : Ref<Resource>();
+        if (item.is_null() || !layer->get_enabled())
             continue;
-        const Dictionary grows = row.get("biomes", Dictionary());
-        const Array names = grows.keys();
-        // Everywhere: one layer, whatever the biomes are.
-        if (names.size() == 1 && String(names[0]) == all)
+        if (layer->get_everywhere())
         {
-            const float density = grows[names[0]];
-            if (density > 0.0f)
-                result.push_back({item, {-1, density}});
+            result.push_back({item, {-1, 1.0f}});
             continue;
         }
-        const float others = grows.get(all, 0.0f);
-        int found = 0;
         for (int64_t b = 0; b < biomes.size(); ++b)
         {
             const Ref<JarBiome> biome = biomes[b];
-            if (biome.is_null())
-                continue;
-            const String name = biome->get_name();
-            found += grows.has(name) ? 1 : 0;
-            const float density = grows.get(name, others);
+            const float density = biome.is_valid() ? layer->get_biome(biome->get_name()) : 0.0f;
             if (density > 0.0f)
                 result.push_back({item, {int(b), density}});
         }
-        if (found != int(names.size()) - (grows.has(all) ? 1 : 0))
-            UtilityFunctions::push_warning("Population table row ", r, " names a biome that does not exist: ", names);
     }
     return result;
 }
@@ -275,7 +307,6 @@ void JarVoxelPopulation::_bind_methods()
     ClassDB::bind_method(D_METHOD("get_" #m_name), &JarVoxelPopulation::get_##m_name);                                 \
     ClassDB::bind_method(D_METHOD("set_" #m_name, "value"), &JarVoxelPopulation::set_##m_name);                        \
     ADD_PROPERTY(PropertyInfo(m_type, #m_name, m_hint, m_hint_text), "set_" #m_name, "get_" #m_name)
-    BIND_POPULATION(table, Variant::OBJECT, PROPERTY_HINT_RESOURCE_TYPE, "JarPopulationTable");
     BIND_POPULATION(features_enabled, Variant::BOOL, PROPERTY_HINT_NONE, "");
     BIND_POPULATION(details_enabled, Variant::BOOL, PROPERTY_HINT_NONE, "");
     BIND_POPULATION(feature_cell_size, Variant::FLOAT, PROPERTY_HINT_RANGE, "8,512,1,or_greater,suffix:m");
@@ -284,6 +315,8 @@ void JarVoxelPopulation::_bind_methods()
     BIND_POPULATION(preview_details, Variant::BOOL, PROPERTY_HINT_NONE, "");
 #undef BIND_POPULATION
     ClassDB::bind_method(D_METHOD("regenerate"), &JarVoxelPopulation::regenerate);
+    ClassDB::bind_method(D_METHOD("get_layers"), &JarVoxelPopulation::get_layers);
+    ClassDB::bind_method(D_METHOD("add_layer", "asset", "biomes"), &JarVoxelPopulation::add_layer, DEFVAL(Dictionary()));
     ClassDB::bind_method(D_METHOD("remove_features", "global_position", "radius"), &JarVoxelPopulation::remove_features);
     ClassDB::bind_method(D_METHOD("get_features_near", "global_position", "radius"),
                          &JarVoxelPopulation::get_features_near);

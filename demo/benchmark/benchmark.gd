@@ -35,9 +35,8 @@ func _ready() -> void:
 	if OS.get_environment("FEATURES") == "1":
 		var population := JarVoxelPopulation.new()
 		population.name = "Population"
-		population.table = JarPopulationTable.new()
-		population.table.add(load("res://demo/planet/pine.tres"))
-		population.table.add(load("res://demo/planet/rock.tres"))
+		population.add_layer(load("res://demo/planet/pine.tres"))
+		population.add_layer(load("res://demo/planet/rock.tres"))
 		terrain.add_child(population)
 	planet.add_child(terrain)
 	camera = JarVoxelViewer.new()

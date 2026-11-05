@@ -8,7 +8,7 @@
 [ext_resource type="JarTerrainFeature" path="res://demo/planet/broadleaf.tres" id="5_broadleaf"]
 [ext_resource type="JarTerrainFeature" path="res://demo/planet/rock.tres" id="8_rock"]
 [ext_resource type="JarTerrainFeature" path="res://demo/planet/bush.tres" id="6_bush"]
-[ext_resource type="JarPopulationTable" uid="uid://cjarflatpop1" path="res://demo/planet/flat_population.tres" id="9_population"]
+[ext_resource type="PackedScene" path="res://demo/planet/flat_population.tscn" id="9_population"]
 
 [sub_resource type="ProceduralSkyMaterial" id="SkyMaterial"]
 
@@ -31,8 +31,7 @@ sdf = ExtResource("2_sdf")
 meshing_algorithm = 1
 lod_automatic_update_distance = 16.0
 
-[node name="Population" type="JarVoxelPopulation" parent="Ground/JarVoxelVolume"]
-table = ExtResource("9_population")
+[node name="Population" parent="Ground/JarVoxelVolume" instance=ExtResource("9_population")]
 
 [node name="Water" type="JarBodyWater" parent="Ground"]
 

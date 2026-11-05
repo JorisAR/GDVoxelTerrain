@@ -1,0 +1,91 @@
+[gd_scene format=3]
+
+[ext_resource type="JarTerrainFeature" path="res://demo/planet/rock.tres" id="1"]
+[ext_resource type="JarTerrainFeature" path="res://demo/planet/pine.tres" id="2"]
+[ext_resource type="JarTerrainFeature" path="res://demo/planet/broadleaf_large.tres" id="3"]
+[ext_resource type="JarTerrainFeature" path="res://demo/planet/broadleaf.tres" id="4"]
+[ext_resource type="JarTerrainFeature" path="res://demo/planet/birch.tres" id="5"]
+[ext_resource type="JarTerrainFeature" path="res://demo/planet/bush.tres" id="6"]
+[ext_resource type="JarTerrainFeature" path="res://demo/planet/pine_sparse.tres" id="7"]
+[ext_resource type="JarTerrainFeature" path="res://demo/planet/rock_field.tres" id="8"]
+[ext_resource type="JarTerrainFeature" path="res://demo/planet/broadleaf_savanna.tres" id="9"]
+[ext_resource type="JarTerrainDetail" path="res://demo/planet/grass.tres" id="10"]
+[ext_resource type="JarTerrainDetail" path="res://demo/planet/grass_tall.tres" id="11"]
+[ext_resource type="JarTerrainDetail" path="res://demo/planet/poppies.tres" id="12"]
+[ext_resource type="JarTerrainDetail" path="res://demo/planet/poppies_orange.tres" id="13"]
+[ext_resource type="JarTerrainDetail" path="res://demo/planet/ground_elder.tres" id="14"]
+[ext_resource type="JarTerrainDetail" path="res://demo/planet/lupine.tres" id="15"]
+
+[node name="Population" type="JarVoxelPopulation"]
+
+[node name="Rock" type="JarFeatureLayer" parent="."]
+feature = ExtResource("1")
+
+[node name="Pine" type="JarFeatureLayer" parent="."]
+feature = ExtResource("2")
+everywhere = false
+"biomes/Temperate forest" = 1.0
+
+[node name="BroadleafLarge" type="JarFeatureLayer" parent="."]
+feature = ExtResource("3")
+everywhere = false
+"biomes/Temperate forest" = 1.0
+
+[node name="Broadleaf" type="JarFeatureLayer" parent="."]
+feature = ExtResource("4")
+everywhere = false
+"biomes/Temperate forest" = 1.0
+
+[node name="Birch" type="JarFeatureLayer" parent="."]
+feature = ExtResource("5")
+everywhere = false
+"biomes/Temperate forest" = 1.0
+
+[node name="Bush" type="JarFeatureLayer" parent="."]
+feature = ExtResource("6")
+everywhere = false
+"biomes/Dry steppe" = 1.0
+"biomes/Temperate forest" = 1.0
+
+[node name="PineSparse" type="JarFeatureLayer" parent="."]
+feature = ExtResource("7")
+everywhere = false
+"biomes/Alpine tundra" = 1.0
+
+[node name="RockField" type="JarFeatureLayer" parent="."]
+feature = ExtResource("8")
+everywhere = false
+"biomes/Alpine tundra" = 1.0
+
+[node name="BroadleafSavanna" type="JarFeatureLayer" parent="."]
+feature = ExtResource("9")
+everywhere = false
+"biomes/Dry steppe" = 1.0
+
+[node name="Grass" type="JarDetailLayer" parent="."]
+detail = ExtResource("10")
+
+[node name="GrassTall" type="JarDetailLayer" parent="."]
+detail = ExtResource("11")
+everywhere = false
+"biomes/Temperate forest" = 1.0
+
+[node name="Poppies" type="JarDetailLayer" parent="."]
+detail = ExtResource("12")
+everywhere = false
+"biomes/Temperate forest" = 1.0
+
+[node name="PoppiesOrange" type="JarDetailLayer" parent="."]
+detail = ExtResource("13")
+everywhere = false
+"biomes/Temperate forest" = 1.0
+
+[node name="GroundElder" type="JarDetailLayer" parent="."]
+detail = ExtResource("14")
+everywhere = false
+"biomes/Temperate forest" = 1.0
+
+[node name="Lupine" type="JarDetailLayer" parent="."]
+detail = ExtResource("15")
+everywhere = false
+"biomes/Temperate forest" = 1.0

@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="JarPopulationLayer" inherits="Node" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
+	<brief_description>
+		One thing that grows, below a [JarVoxelPopulation]: everywhere, or with a density multiplier per biome. Tree order is layer order.
+	</brief_description>
+	<description>
+	</description>
+	<tutorials>
+	</tutorials>
+</class>

@@ -16,7 +16,7 @@
 #include "terrain_detail.h"
 #include "terrain_material.h"
 #include "biome_map.h"
-#include "population_table.h"
+#include "population_layer.h"
 #include "voxel_population.h"
 #include "terrain_feature.h"
 #include "terrain_populator.h"
@@ -69,7 +69,6 @@ void initialize_jar_voxel_terrain_module(ModuleInitializationLevel p_level)
         GDREGISTER_CLASS(JarBiome);
         GDREGISTER_CLASS(JarBiomeMap);
         GDREGISTER_CLASS(JarClimateBiomeMap);
-        GDREGISTER_CLASS(JarPopulationTable);
         GDREGISTER_CLASS(JarTerrainFeature);
 
         // TERRAIN
@@ -79,6 +78,9 @@ void initialize_jar_voxel_terrain_module(ModuleInitializationLevel p_level)
         GDREGISTER_CLASS(JarVoxelDebrisBody);
         GDREGISTER_CLASS(JarVoxelDebris);
         GDREGISTER_CLASS(JarVoxelPopulation);
+        GDREGISTER_ABSTRACT_CLASS(JarPopulationLayer);
+        GDREGISTER_CLASS(JarFeatureLayer);
+        GDREGISTER_CLASS(JarDetailLayer);
         GDREGISTER_ABSTRACT_CLASS(JarVoxelStats);
 
         // UNIVERSE

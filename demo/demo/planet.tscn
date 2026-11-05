@@ -3,14 +3,12 @@
 [ext_resource type="PackedScene" uid="uid://c7kqgl1k10x14" path="res://addons/jar_voxel_terrain/src/chunk.tscn" id="1_chunk"]
 [ext_resource type="JarTerrainSdf" uid="uid://dqn1tb1t75fft" path="res://demo/planet/planet_terrain.tres" id="2_terrain"]
 [ext_resource type="Material" path="res://demo/planet/planet_material.tres" id="3_material"]
-[ext_resource type="JarTerrainDetail" uid="uid://b07o6puiiv3ht" path="res://demo/planet/grass.tres" id="6_grass"]
-[ext_resource type="JarTerrainFeature" uid="uid://2dvalovk54ou" path="res://demo/planet/rock.tres" id="6_rock"]
 [ext_resource type="JarCraterSdf" uid="uid://p0ja4axgdl71" path="res://demo/planet/moon_craters.tres" id="12_moon"]
 [ext_resource type="Material" path="res://demo/planet/moon_material.tres" id="13_moon_material"]
 [ext_resource type="PackedScene" uid="uid://cupyeuv1xe20s" path="res://demo/player/player.tscn" id="14_player"]
 [ext_resource type="Material" uid="uid://55tbedv6qxva" path="res://demo/assets/space/space_sky.tres" id="15_sky"]
-[ext_resource type="JarPopulationTable" uid="uid://cjarplanetpop1" path="res://demo/planet/planet_population.tres" id="18_population"]
 [ext_resource type="JarClimateBiomeMap" uid="uid://dt3ug1atfvmdb" path="res://demo/planet/biomes.tres" id="17_biomes"]
+[ext_resource type="PackedScene" path="res://demo/planet/planet_population.tscn" id="18_population"]
 
 [sub_resource type="JarTerrainMaterial" id="Grass"]
 albedo = Color(0.25, 0.35, 0.15, 1)
@@ -126,8 +124,7 @@ lod_automatic_update_distance = 16.0
 editor_preview_min_lod = 5
 population_biome_map = ExtResource("17_biomes")
 
-[node name="Population" type="JarVoxelPopulation" parent="Sun/PlanetOrbit/Planet/JarVoxelVolume"]
-table = ExtResource("18_population")
+[node name="Population" parent="Sun/PlanetOrbit/Planet/JarVoxelVolume" instance=ExtResource("18_population")]
 
 [node name="Debris" type="JarVoxelDebris" parent="Sun/PlanetOrbit/Planet/JarVoxelVolume" unique_id=1288236388]
 collision_layer = 3
@@ -194,3 +191,5 @@ light_energy = 0.043707762
 sky_mode = 1
 
 [node name="LensFlare" type="JarLensFlare" parent="." unique_id=1771092205]
+
+[editable path="Sun/PlanetOrbit/Planet/JarVoxelVolume/Population"]

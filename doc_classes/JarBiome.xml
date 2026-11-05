@@ -4,7 +4,7 @@
 		A biome of a [JarBiomeMap]: its name, where it occurs in climate space, and its ground materials.
 	</brief_description>
 	<description>
-		A biome sits at a point in climate space ([member temperature], [member moisture]); a [JarClimateBiomeMap] gives every position on a volume a climate and blends the biomes nearest to it. What grows in it is set in a [JarPopulationTable], by [member Resource.resource_name] (weighted by how strongly the biome is present). The terrain shader's ground rules use its ground materials. In the default terrain shaders the first 4 biomes of a map can have their own ground materials.
+		A biome sits at a point in climate space ([member temperature], [member moisture]); a [JarClimateBiomeMap] gives every position on a volume a climate and blends the biomes nearest to it. What grows in it is set on [JarPopulationLayer] nodes, by [member Resource.resource_name] (weighted by how strongly the biome is present). The terrain shader's ground rules use its ground materials. In the default terrain shaders the first 4 biomes of a map can have their own ground materials.
 	</description>
 	<tutorials>
 	</tutorials>

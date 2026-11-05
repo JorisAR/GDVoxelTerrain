@@ -2,7 +2,7 @@
 #define JAR_VOXEL_POPULATION_H
 
 #include "biome_map.h"
-#include "population_table.h"
+#include "population_layer.h"
 #include "terrain_detail.h"
 #include "terrain_feature.h"
 #include "volume_extension.h"
@@ -16,8 +16,9 @@ class DetailScheduler;
 class FeatureManager;
 class JarVoxelVolume;
 
-// Grows features and details on a JarVoxelVolume: add it as a child of one and
-// give it a JarPopulationTable. Which biome is where stays the volume's
+// Grows features and details on a JarVoxelVolume: add it as a child of one, and
+// give it JarFeatureLayer and JarDetailLayer children, one per thing that grows,
+// in the order they claim ground. Which biome is where stays the volume's
 // (population_biome_map): the mesher and materials use it too. A volume
 // extension: without this node nothing of it runs.
 class JarVoxelPopulation : public Node, public VolumeExtension
@@ -33,12 +34,12 @@ class JarVoxelPopulation : public Node, public VolumeExtension
     };
 
   private:
-    Ref<JarPopulationTable> _table;
     bool _featuresEnabled = true;
     bool _detailsEnabled = true;
     bool _previewFeatures = false;
     bool _previewDetails = false;
     float _featureCellSize = 64.0f;
+    bool _regeneratePending = false;
     JarVoxelVolume *_volume = nullptr;
     std::unique_ptr<FeatureManager> _features;
     std::unique_ptr<DetailScheduler> _details;
@@ -49,15 +50,13 @@ class JarVoxelPopulation : public Node, public VolumeExtension
     void stop();
     void reset_features();
     void reset_details();
-    void on_table_changed();
+    void regenerate_pending();
     template <typename T> std::vector<Entry<T>> entries(bool enabled) const;
 
   public:
     JarVoxelPopulation();
     ~JarVoxelPopulation();
 
-    Ref<JarPopulationTable> get_table() const { return _table; }
-    void set_table(const Ref<JarPopulationTable> &value);
     bool get_features_enabled() const { return _featuresEnabled; }
     void set_features_enabled(bool value);
     bool get_details_enabled() const { return _detailsEnabled; }
@@ -70,11 +69,18 @@ class JarVoxelPopulation : public Node, public VolumeExtension
     void set_feature_cell_size(float value);
 
     void regenerate();
+    // A layer below changed (or came, went or moved): regenerates once, later.
+    void layers_changed();
+    // All layers below, in order.
+    TypedArray<JarPopulationLayer> get_layers() const;
+    // Script convenience: a new layer for a feature or detail, growing
+    // everywhere, or in `biomes` (name -> density multiplier) if given.
+    JarPopulationLayer *add_layer(const Ref<Resource> &asset, const Dictionary &biomes);
     void remove_features(const Vector3 &global_position, float radius);
     TypedArray<Dictionary> get_features_near(const Vector3 &global_position, float radius) const;
 
-    // In effect now, expanded from the table: indices into these identify
-    // features and details, in table order.
+    // In effect now, expanded from the layers: indices into these identify
+    // features and details, in tree order.
     std::vector<Entry<JarTerrainFeature>> feature_entries() const;
     std::vector<Entry<JarTerrainDetail>> detail_entries() const;
 

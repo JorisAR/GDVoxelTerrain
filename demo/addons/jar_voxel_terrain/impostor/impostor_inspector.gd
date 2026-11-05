@@ -15,10 +15,10 @@ func _features(object: Object) -> Array[JarTerrainFeature]:
 	var result: Array[JarTerrainFeature] = []
 	if object is JarTerrainFeature:
 		result.append(object)
-	elif object.table != null:
-		for row: Dictionary in object.table.rows:
-			if row.get("asset") is JarTerrainFeature and not row.asset in result:
-				result.append(row.asset)
+	else:
+		for layer: JarPopulationLayer in object.get_layers():
+			if layer is JarFeatureLayer and layer.feature != null and not layer.feature in result:
+				result.append(layer.feature)
 	return result
 
 ## Also the 3D editor's toolbar button.

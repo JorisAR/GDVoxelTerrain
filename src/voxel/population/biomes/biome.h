@@ -6,7 +6,7 @@
 
 using namespace godot;
 
-// One biome: its name (resource_name, what a JarPopulationTable grows things
+// One biome: its name (resource_name, what population layers grow
 // in), where it occurs on a climate map (see JarClimateBiomeMap) and the
 // materials its ground rules use (ground, cliff, shore, seabed, peaks; -1 keeps
 // the shader's setting).

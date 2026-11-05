@@ -1,0 +1,24 @@
+[gd_scene format=3]
+
+[ext_resource type="JarTerrainFeature" path="res://demo/planet/pine.tres" id="1"]
+[ext_resource type="JarTerrainFeature" path="res://demo/planet/broadleaf.tres" id="2"]
+[ext_resource type="JarTerrainFeature" path="res://demo/planet/rock.tres" id="3"]
+[ext_resource type="JarTerrainFeature" path="res://demo/planet/bush.tres" id="4"]
+[ext_resource type="JarTerrainDetail" path="res://demo/planet/grass.tres" id="5"]
+
+[node name="Population" type="JarVoxelPopulation"]
+
+[node name="Pine" type="JarFeatureLayer" parent="."]
+feature = ExtResource("1")
+
+[node name="Broadleaf" type="JarFeatureLayer" parent="."]
+feature = ExtResource("2")
+
+[node name="Rock" type="JarFeatureLayer" parent="."]
+feature = ExtResource("3")
+
+[node name="Bush" type="JarFeatureLayer" parent="."]
+feature = ExtResource("4")
+
+[node name="Grass" type="JarDetailLayer" parent="."]
+detail = ExtResource("5")
