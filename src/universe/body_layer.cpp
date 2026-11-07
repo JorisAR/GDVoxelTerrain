@@ -1,4 +1,5 @@
 #include "body_layer.h"
+#include <godot_cpp/classes/array_mesh.hpp>
 #include "voxel_stats.h"
 #include <godot_cpp/classes/camera3d.hpp>
 #include <godot_cpp/classes/engine.hpp>
@@ -61,6 +62,55 @@ Ref<SphereMesh> make_sphere(float radius, int segments, int rings)
     sphere->set_radial_segments(segments);
     sphere->set_rings(rings);
     return sphere;
+}
+
+// A flat disc around the origin: rings growing by a constant ratio, so its cells
+// look about the same size from the center at any distance.
+Ref<ArrayMesh> make_disc(float radius)
+{
+    const int Segments = 192;
+    constexpr float First = 1.5f, Growth = 1.08f;
+    const int rings = std::max(2, int(std::ceil(std::log(radius / First) / std::log(Growth))));
+    PackedVector3Array vertices, normals;
+    PackedInt32Array indices;
+    vertices.push_back(Vector3());
+    normals.push_back(Vector3(0, 1, 0));
+    for (int r = 0; r < rings; ++r)
+    {
+        const float distance = r == rings - 1 ? radius : First * std::pow(Growth, float(r));
+        for (int s = 0; s < Segments; ++s)
+        {
+            const float angle = Math_TAU * float(s) / float(Segments);
+            vertices.push_back(Vector3(std::cos(angle) * distance, 0.0f, std::sin(angle) * distance));
+            normals.push_back(Vector3(0, 1, 0));
+        }
+    }
+    const auto at = [Segments](int ring, int segment) { return 1 + ring * Segments + (segment % Segments); };
+    for (int s = 0; s < Segments; ++s)
+    {
+        indices.push_back(0);
+        indices.push_back(at(0, s));
+        indices.push_back(at(0, s + 1));
+    }
+    for (int r = 0; r + 1 < rings; ++r)
+        for (int s = 0; s < Segments; ++s)
+        {
+            indices.push_back(at(r, s));
+            indices.push_back(at(r + 1, s));
+            indices.push_back(at(r, s + 1));
+            indices.push_back(at(r, s + 1));
+            indices.push_back(at(r + 1, s));
+            indices.push_back(at(r + 1, s + 1));
+        }
+    Array arrays;
+    arrays.resize(Mesh::ARRAY_MAX);
+    arrays[Mesh::ARRAY_VERTEX] = vertices;
+    arrays[Mesh::ARRAY_NORMAL] = normals;
+    arrays[Mesh::ARRAY_INDEX] = indices;
+    Ref<ArrayMesh> mesh;
+    mesh.instantiate();
+    mesh->add_surface_from_arrays(Mesh::PRIMITIVE_TRIANGLES, arrays);
+    return mesh;
 }
 
 Ref<PlaneMesh> make_plane(float size, int subdivisions)
@@ -346,8 +396,6 @@ void JarBodyWater::_bind_methods()
     ADD_PROPERTY(PropertyInfo(m_type, #m_name, m_hint, m_hint_text), "set_" #m_name, "get_" #m_name)
     BIND_WATER(level_offset, Variant::FLOAT, PROPERTY_HINT_NONE, "suffix:m");
     BIND_WATER(material, Variant::OBJECT, PROPERTY_HINT_RESOURCE_TYPE, "ShaderMaterial");
-    BIND_WATER(patch_size, Variant::FLOAT, PROPERTY_HINT_RANGE, "10,10000,1,suffix:m");
-    BIND_WATER(patch_resolution, Variant::INT, PROPERTY_HINT_RANGE, "16,512,1");
     BIND_WATER(underwater_material, Variant::OBJECT, PROPERTY_HINT_RESOURCE_TYPE, "ShaderMaterial");
 #undef BIND_WATER
     ClassDB::bind_method(D_METHOD("get_active_material"), &JarBodyWater::get_active_material);
@@ -384,20 +432,6 @@ void JarBodyWater::set_underwater_material(const Ref<ShaderMaterial> &value)
     apply_materials();
 }
 
-void JarBodyWater::set_patch_size(float value)
-{
-    _patchSize = std::max(10.0f, value);
-    if (_near)
-        _near->set_mesh(make_plane(_patchSize, _patchResolution));
-}
-
-void JarBodyWater::set_patch_resolution(int value)
-{
-    _patchResolution = std::clamp(value, 16, 512);
-    if (_near)
-        _near->set_mesh(make_plane(_patchSize, _patchResolution));
-}
-
 void JarBodyWater::apply_materials()
 {
     if (_far == nullptr)
@@ -415,7 +449,6 @@ void JarBodyWater::build()
     _fog->set_extra_cull_margin(16384.0f);
     _far = add_shell();
     _near = add_shell();
-    _near->set_mesh(make_plane(_patchSize, _patchResolution));
     apply_materials();
 }
 
@@ -450,14 +483,22 @@ void JarBodyWater::update(const JarCelestialBody &body)
             _sphereRadius = level;
         }
         _far->set_global_transform(Transform3D(Basis(), frame.center));
-        // The patch lies on the tangent plane under the camera; the shader
-        // bends it onto the sphere. It sits on top of the coarse sphere, whose
-        // flat facets lie slightly inside the sphere: no z-fighting.
+        // The disc lies on the tangent plane under the camera and the shader
+        // bends it onto the sphere: 4 radii out on the plane is 76 degrees
+        // around it, past the horizon from up to 2 radii high. The coarse
+        // sphere only draws what is left.
+        constexpr float DiscRadii = 4.0f;
+        if (!Math::is_equal_approx(_discRadius, level * DiscRadii))
+        {
+            _discRadius = level * DiscRadii;
+            _near->set_mesh(make_disc(_discRadius));
+        }
         const Vector3 up = (at - frame.center).normalized();
         _near->set_global_transform(Transform3D(basis_with_up(up), frame.center + up * level));
-        const bool close = (at - frame.center).length() - level < _patchSize;
+        const bool close = (at - frame.center).length() - level < 2.0f * level;
         _near->set_visible(close);
-        set_hole(close ? _near->get_global_position() : frame.center, close ? _patchSize * 0.5f : 0.0f);
+        // The chord of those 76 degrees.
+        set_hole(_near->get_global_position(), close ? 2.0f * level * std::sin(0.5f * std::atan(DiscRadii)) * 0.99f : 0.0f);
     }
     else
     {
@@ -469,12 +510,15 @@ void JarBodyWater::update(const JarCelestialBody &body)
         Vector3 onPlane = at - frame.axis * (at - frame.center).dot(frame.axis);
         const Basis basis = basis_with_up(frame.axis);
         _far->set_global_transform(Transform3D(basis, onPlane - frame.axis * 0.05f));
-        // Snapped to the patch grid so the vertices do not swim.
-        const float step = _patchSize / float(_patchResolution);
-        onPlane = onPlane.snapped(Vector3(step, step, step));
+        constexpr float FlatDisc = 200000.0f;
+        if (!Math::is_equal_approx(_discRadius, FlatDisc))
+        {
+            _discRadius = FlatDisc;
+            _near->set_mesh(make_disc(_discRadius));
+        }
         _near->set_global_transform(Transform3D(basis, onPlane));
         _near->set_visible(true);
-        set_hole(onPlane, _patchSize * 0.5f);
+        set_hole(onPlane, FlatDisc * 0.99f);
     }
 }
 

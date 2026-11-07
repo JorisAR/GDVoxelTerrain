@@ -4,7 +4,7 @@
 		Water at the body's sea level.
 	</brief_description>
 	<description>
-		A sphere on round bodies, a plane on flat ones: a coarse mesh for distant water plus a dense patch that follows the camera; the shader projects both onto the exact sea level, so coasts are precise up close. Fogs the view under water.
+		A sphere on round bodies, a plane on flat ones: a coarse mesh for distant water plus a disc that follows the camera; the shader projects both onto the exact sea level, so coasts are precise up close. Fogs the view under water.
 		The default materials ([code]water.gdshader[/code], [code]underwater.gdshader[/code]) are created at runtime; assign your own to change the look.
 	</description>
 	<tutorials>
@@ -29,12 +29,6 @@
 		</member>
 		<member name="material" type="ShaderMaterial" setter="set_material" getter="get_material">
 			The water's look. Empty: the default [code]water.gdshader[/code].
-		</member>
-		<member name="patch_resolution" type="int" setter="set_patch_resolution" getter="get_patch_resolution" default="200">
-			Quads along each side of the dense patch.
-		</member>
-		<member name="patch_size" type="float" setter="set_patch_size" getter="get_patch_size" default="1200.0">
-			Width of the dense patch around the camera, in meters.
 		</member>
 		<member name="underwater_material" type="ShaderMaterial" setter="set_underwater_material" getter="get_underwater_material">
 			The fog under water. Empty: the default [code]underwater.gdshader[/code].

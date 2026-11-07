@@ -53,10 +53,11 @@ class JarBodyLayer : public Node3D
     void set_sun(DirectionalLight3D *value) { _sun = value; }
 };
 
-// Water at the body's sea level: a sphere (or a plane on a flat body), drawn as
-// a coarse mesh for distant water plus a dense patch that follows the camera;
-// the shader projects both onto the exact sea level, so the coast is precise up
-// close. Fog when the camera is under water. The look is set on `material`
+// Water at the body's sea level: a disc under the camera, its rings ever wider
+// towards the horizon, plus a coarse sphere for what the disc does not reach
+// when seen from space (its facets sag below sea level on a large planet, so
+// it must not show near the ground). The shader projects both onto the exact
+// sea level, so the coast is precise up close. Fog when the camera is under water. The look is set on `material`
 // (water.gdshader).
 class JarBodyWater : public JarBodyLayer
 {
@@ -64,8 +65,7 @@ class JarBodyWater : public JarBodyLayer
 
   private:
     float _levelOffset = 0.0f;
-    float _patchSize = 1200.0f;
-    int _patchResolution = 200;
+    float _discRadius = 0.0f;
     Ref<ShaderMaterial> _material;
     Ref<ShaderMaterial> _underwaterMaterial;
     Ref<ShaderMaterial> _defaultMaterial;
@@ -89,10 +89,6 @@ class JarBodyWater : public JarBodyLayer
 
     float get_level_offset() const { return _levelOffset; }
     void set_level_offset(float value) { _levelOffset = value; }
-    float get_patch_size() const { return _patchSize; }
-    void set_patch_size(float value);
-    int get_patch_resolution() const { return _patchResolution; }
-    void set_patch_resolution(int value);
     Ref<ShaderMaterial> get_material() const { return _material; }
     void set_material(const Ref<ShaderMaterial> &value);
     Ref<ShaderMaterial> get_underwater_material() const { return _underwaterMaterial; }
