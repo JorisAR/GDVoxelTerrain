@@ -44,7 +44,7 @@ class JarVoxelPopulation : public Node, public VolumeExtension
     bool _previewDetails = false;
     float _featureCellSize = 64.0f;
     float _disappearPixels = 4.0f;
-    float _impostorPixels = 64.0f;
+    float _impostorPixels = 24.0f;
     float _maxDrawDistance = 5000.0f;
     bool _regeneratePending = false;
     JarVoxelVolume *_volume = nullptr;

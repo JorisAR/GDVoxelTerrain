@@ -6,7 +6,7 @@
 std::vector<PackedFloat32Array> ChunkDetailGenerator::generate_detail_buffers(
     const std::vector<Ref<JarTerrainDetail>> &details, const std::vector<PopulationLayer> &detailLayers,
     const Ref<JarBiomeMap> &biomeMap, const std::shared_ptr<const GroundPalette> &ground,
-    const DetailInputs &inputs) const
+    const DetailInputs &inputs, bool near) const
 {
     if (details.empty() || !inputs.valid())
         return {};
@@ -39,6 +39,7 @@ std::vector<PackedFloat32Array> ChunkDetailGenerator::generate_detail_buffers(
         int index; // into `details`
         int biome;
         float spacing; // lattice cell size (m)
+        float thin;    // keeps instances of a place below this
     };
     std::vector<Active> active;
     for (int d = 0; d < int(details.size()); d++)
@@ -46,11 +47,13 @@ std::vector<PackedFloat32Array> ChunkDetailGenerator::generate_detail_buffers(
         const JarTerrainDetail *detail = details[d].ptr();
         const PopulationLayer layer = d < int(detailLayers.size()) ? detailLayers[d] : PopulationLayer();
         if (detail != nullptr && detail->get_density() * layer.density > 0.0f)
-            active.push_back({detail, d, layer.biome, std::sqrt(MinProjection / (detail->get_density() * layer.density))});
+            active.push_back({detail, d, layer.biome, std::sqrt(MinProjection / (detail->get_density() * layer.density)),
+                              near || !detail->has_far_level() ? 1.0f : detail->get_far_density()});
     }
 
     std::vector<std::vector<Transform3D>> transforms(details.size());
     std::vector<std::vector<glm::vec3>> colors(details.size());
+    std::vector<std::vector<float>> places(details.size());
     for (int64_t i = 0; i + 2 < indexCount; i += 3)
     {
         const int ia = indices[i], ib = indices[i + 1], ic = indices[i + 2];
@@ -114,6 +117,9 @@ std::vector<PackedFloat32Array> ChunkDetailGenerator::generate_detail_buffers(
                     const float rotation = rng.next(), scale = rng.next(), keep = rng.next();
                     if (rng.next() >= keepProjection)
                         continue;
+                    const float place = rng.next();
+                    if (place >= entry.thin)
+                        continue;
                     if (keep >= biomeWeight)
                         continue;
                     if (w0 * painted(ia) + w1 * painted(ib) + w2 * painted(ic) > 0.5f)
@@ -137,6 +143,7 @@ std::vector<PackedFloat32Array> ChunkDetailGenerator::generate_detail_buffers(
                         colorReady = true;
                     }
                     colors[entry.index].push_back(color);
+                    places[entry.index].push_back(place);
                 }
         }
     }
@@ -159,7 +166,7 @@ std::vector<PackedFloat32Array> ChunkDetailGenerator::generate_detail_buffers(
                 *w++ = t.origin[row];
             }
             // Custom data: the ground color; the chunk fills in the LOD range.
-            PopulationRendering::write_custom(w, colors[d][i], 0.0f, 0.0f);
+            PopulationRendering::write_custom(w, colors[d][i], places[d][i], 0.0f);
             w += 4;
         }
     }

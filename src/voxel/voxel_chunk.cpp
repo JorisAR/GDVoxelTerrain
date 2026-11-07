@@ -1,4 +1,6 @@
 #include "voxel_chunk.h"
+#include <cmath>
+#include <cstring>
 #include "chunk_detail_generator.h"
 #include "population_rendering.h"
 #include "voxel_volume.h"
@@ -282,9 +284,12 @@ void JarVoxelChunk::apply_details(const JarVoxelVolume &terrain, const std::vect
         MultiMeshInstance3D *multi_mesh_instance = multi_mesh_instances[i];
         const Ref<JarTerrainDetail> detail = i < 2 * detail_count ? details[i / 2] : Ref<JarTerrainDetail>();
         const bool far = (i & 1) != 0;
-        const bool has_far = detail.is_valid() && detail->get_far_mesh().is_valid() && detail->get_far_distance() > 0.0f;
-        const Ref<Mesh> mesh = detail.is_null() ? Ref<Mesh>() : (far ? detail->get_far_mesh() : detail->get_mesh());
-        if (mesh.is_null() || (far && !has_far) || buffers[i / 2].is_empty())
+        const bool has_far = detail.is_valid() && detail->has_far_level();
+        Ref<Mesh> mesh = detail.is_null() ? Ref<Mesh>() : (far ? detail->get_far_mesh() : detail->get_mesh());
+        if (detail.is_valid() && mesh.is_null())
+            mesh = detail->get_mesh();
+        // A chunk only that far away has no near level.
+        if (mesh.is_null() || (far && !has_far) || (!far && has_far && !detail_near) || buffers[i / 2].is_empty())
         {
             hide_multi_mesh_instance(multi_mesh_instance);
             continue;
@@ -303,12 +308,32 @@ void JarVoxelChunk::apply_details(const JarVoxelVolume &terrain, const std::vect
         const float split = has_far ? detail->get_far_distance() : 0.0f;
         const float begin = far ? split : 0.0f, end = far || !has_far ? draw : split;
         // This level's range in each instance's custom data (y, z).
-        PackedFloat32Array data = buffer;
+        // Far: the part of them drawn there, larger to cover the same ground.
+        const float keep = far ? detail->get_far_density() : 2.0f;
+        const float grow = far ? std::pow(1.0f / detail->get_far_density(), 0.25f) : 1.0f;
+        PackedFloat32Array data;
+        data.resize(buffer.size());
+        const float *r = buffer.ptr();
         float *w = data.ptrw();
-        for (int64_t k = 0; k + ChunkDetailGenerator::Stride <= data.size(); k += ChunkDetailGenerator::Stride)
+        int64_t kept = 0;
+        for (int64_t k = 0; k + ChunkDetailGenerator::Stride <= buffer.size(); k += ChunkDetailGenerator::Stride)
         {
-            w[k + 13] = begin;
-            w[k + 14] = end > 0.0f ? end : 1e20f;
+            if (r[k + 13] >= keep)
+                continue;
+            float *out = w + kept;
+            std::memcpy(out, r + k, sizeof(float) * ChunkDetailGenerator::Stride);
+            for (int row = 0; row < 3; ++row)
+                for (int column = 0; column < 3; ++column)
+                    out[row * 4 + column] *= grow;
+            out[13] = begin;
+            out[14] = end > 0.0f ? end : 1e20f;
+            kept += ChunkDetailGenerator::Stride;
+        }
+        data.resize(kept);
+        if (data.is_empty())
+        {
+            hide_multi_mesh_instance(multi_mesh_instance);
+            continue;
         }
         multi_mesh->set_mesh(mesh);
         multi_mesh->set_instance_count(data.size() / ChunkDetailGenerator::Stride);

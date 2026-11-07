@@ -12,6 +12,7 @@ func _ready() -> void:
 	await _test_layers()
 	await _test_impostor()
 	await _test_distances()
+	await _test_far_details()
 	await _test_toggles()
 	await _test_detail_resolution()
 	await _test_detail_sphere()
@@ -523,6 +524,40 @@ func _test_distances() -> void:
 	world.viewer.queue_free()
 	await get_tree().process_frame
 
+## Beyond far_distance: thinner, and chunks only that far away make just those.
+func _test_far_details() -> void:
+	var detail := JarTerrainDetail.new()
+	detail.mesh = BoxMesh.new()
+	detail.density = 2.0
+	detail.maximum_slope = 90.0
+	detail.draw_distance = 90.0
+	detail.far_distance = 20.0
+	detail.far_density = 0.25
+	var world := TestWorld.flat(self, Vector3(3, 30, 5), func(v: JarVoxelVolume):
+		TestWorld.populate(v, [detail]))
+	var volume: JarVoxelVolume = world.volume
+	await _settle(volume)
+	var near_level := 0
+	var far_level := 0
+	var far_only := 0
+	var both := 0
+	for c in volume.get_children():
+		if not (c is JarVoxelChunk and c.visible):
+			continue
+		var levels: Array = c.get_children().filter(func(n): return n is MultiMeshInstance3D and n.visible and n.multimesh)
+		if levels.size() == 2:
+			both += 1
+			near_level += levels[0].multimesh.instance_count
+			far_level += levels[1].multimesh.instance_count
+		elif levels.size() == 1:
+			far_only += 1
+	_check("far details: near chunks have both levels", both > 0, "%d chunks" % both)
+	_check("far details: others only the far one", far_only > 0, "%d chunks" % far_only)
+	_check("far details: thinned", far_level > 0.15 * near_level and far_level < 0.35 * near_level, "%d of %d" % [far_level, near_level])
+	world.volume.queue_free()
+	world.viewer.queue_free()
+	await get_tree().process_frame
+
 ## A baked impostor takes over from its distance, with or without one set.
 func _test_impostor() -> void:
 	var feature := _box_feature(0.01)
@@ -539,8 +574,8 @@ func _test_impostor() -> void:
 			meshes[n.multimesh.mesh] = n
 	_check("impostor drawn beyond the mesh", meshes.has(quad) and meshes.has(feature.mesh))
 	if meshes.has(quad):
-		_check("impostor starts where the mesh ends", absf(meshes[quad].visibility_range_begin - 43.98) < 0.1
-			and absf(meshes[feature.mesh].visibility_range_end - 43.98) < 0.1,
+		_check("impostor starts where the mesh ends", absf(meshes[quad].visibility_range_begin - 117.29) < 0.1
+			and absf(meshes[feature.mesh].visibility_range_end - 117.29) < 0.1,
 			"%f, %f" % [meshes[quad].visibility_range_begin, meshes[feature.mesh].visibility_range_end])
 	volume.queue_free()
 	world.viewer.queue_free()

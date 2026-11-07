@@ -41,6 +41,7 @@ class DetailScheduler
         JarVoxelChunk *chunk;
         uint64_t token;
         DetailInputs inputs;
+        bool near;
         std::shared_ptr<const std::vector<Ref<JarTerrainDetail>>> details;
         std::shared_ptr<const std::vector<PopulationLayer>> layers;
         Ref<JarBiomeMap> biomeMap;
@@ -51,6 +52,7 @@ class DetailScheduler
     {
         JarVoxelChunk *chunk;
         uint64_t token;
+        bool near;
         std::shared_ptr<const std::vector<Ref<JarTerrainDetail>>> details;
         std::vector<PackedFloat32Array> buffers;
     };
@@ -65,6 +67,7 @@ class DetailScheduler
     std::shared_ptr<const std::vector<Ref<JarTerrainDetail>>> _details;
     std::shared_ptr<const std::vector<PopulationLayer>> _detailLayers;
     float _maxDrawDistance = 0.0f; // 0: no limit
+    float _maxNearDistance = 0.0f; // beyond it chunks only make what is drawn far away
     bool _detailsDirty = true;
     int _inFlight = 0;
     bool _waiting = false; // chunks in range without details at the last process()
