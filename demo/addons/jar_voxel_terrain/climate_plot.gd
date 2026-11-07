@@ -130,11 +130,16 @@ func _draw() -> void:
 		draw_circle(at, DOT, COLORS[i % COLORS.size()].lightened(0.3))
 		var label: String = biomes[i].resource_name if biomes[i].resource_name != "" else "Biome %d" % i
 		var width := font.get_string_size(label, HORIZONTAL_ALIGNMENT_LEFT, -1, text_size).x
-		var place := Vector2(clampf(at.x + DOT + 4.0, 0.0, side - width), at.y + text_size * 0.35)
+		# Beside the dot, on whichever side it fits.
+		var fits := at.x + DOT + 4.0 + width <= side
+		var place := Vector2(at.x + DOT + 4.0 if fits else at.x - DOT - 4.0 - width, at.y + text_size * 0.35)
 		draw_string_outline(font, place, label, HORIZONTAL_ALIGNMENT_LEFT, -1, text_size, 3, Color.BLACK)
 		draw_string(font, place, label, HORIZONTAL_ALIGNMENT_LEFT, -1, text_size, Color.WHITE)
 	var bottom := side + text_size + 4.0
 	draw_string(font, Vector2(0, bottom), "Cold", HORIZONTAL_ALIGNMENT_LEFT, -1, text_size)
 	draw_string(font, Vector2(0, bottom), "Hot", HORIZONTAL_ALIGNMENT_RIGHT, side, text_size)
-	draw_string(font, Vector2(0, bottom), "Dry to wet: bottom to top", HORIZONTAL_ALIGNMENT_CENTER, side, text_size,
-		Color(1, 1, 1, 0.6))
+	draw_string(font, Vector2(0, bottom), "Temperature", HORIZONTAL_ALIGNMENT_CENTER, side, text_size, Color(1, 1, 1, 0.6))
+	draw_string_outline(font, Vector2(4, text_size + 2.0), "Wet", HORIZONTAL_ALIGNMENT_LEFT, -1, text_size, 3, Color.BLACK)
+	draw_string(font, Vector2(4, text_size + 2.0), "Wet", HORIZONTAL_ALIGNMENT_LEFT, -1, text_size)
+	draw_string_outline(font, Vector2(4, side - 6.0), "Dry", HORIZONTAL_ALIGNMENT_LEFT, -1, text_size, 3, Color.BLACK)
+	draw_string(font, Vector2(4, side - 6.0), "Dry", HORIZONTAL_ALIGNMENT_LEFT, -1, text_size)
