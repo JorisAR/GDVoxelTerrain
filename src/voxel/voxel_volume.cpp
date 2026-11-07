@@ -1,4 +1,5 @@
 #include "voxel_volume.h"
+#include "edit_command.h"
 #include "voxel_population.h"
 #include "block_mesher.h"
 #include "terrain_material_palette.h"
@@ -159,6 +160,8 @@ void JarVoxelVolume::_bind_methods()
     ClassDB::bind_method(D_METHOD("get_up_direction_at", "global_position"), &JarVoxelVolume::get_up_direction_at);
     ClassDB::bind_method(D_METHOD("get_height_at", "global_position"), &JarVoxelVolume::get_height_at);
     ClassDB::bind_method(D_METHOD("save_edits"), &JarVoxelVolume::save_edits);
+    ClassDB::bind_method(D_METHOD("apply_edit_command", "command"), &JarVoxelVolume::apply_edit_command);
+    ADD_SIGNAL(MethodInfo("edit_made", PropertyInfo(Variant::DICTIONARY, "command")));
     ClassDB::bind_method(D_METHOD("load_edits", "data"), &JarVoxelVolume::load_edits);
     ClassDB::bind_method(D_METHOD("get_lod_at", "global_position"), &JarVoxelVolume::get_lod_at);
     ClassDB::bind_method(D_METHOD("raycast_sdf", "from", "to"), &JarVoxelVolume::raycast_sdf);
@@ -493,6 +496,60 @@ void JarVoxelVolume::queue_edit(const Ref<JarSignedDistanceField> &sdf, SDF::Ope
                                 const Transform3D &transform, int material, float smoothness, const Bounds &limit,
                                 bool paintOnly, std::shared_ptr<const EditMaterials> materials, bool keepMaterials)
 {
+    const Transform3D local = get_global_transform().affine_inverse() * transform;
+    // What a player did, not what followed from it (debris cutting and merging).
+    if (!materials && !keepMaterials && has_signal_connections())
+    {
+        const Variant brush = EditCommand::encode_sdf(sdf);
+        if (brush.get_type() == Variant::NIL)
+            UtilityFunctions::push_warning("JarVoxelVolume: this edit's SDF cannot be sent as a command.");
+        else
+        {
+            Dictionary command;
+            command["sdf"] = brush;
+            command["operation"] = int(operation);
+            command["transform"] = local;
+            command["material"] = material;
+            command["smoothness"] = smoothness;
+            command["paint"] = paintOnly;
+            if (!limit.is_infinite())
+                command["limit"] = AABB(Vector3(limit.min.x, limit.min.y, limit.min.z),
+                                        Vector3(limit.max.x - limit.min.x, limit.max.y - limit.min.y, limit.max.z - limit.min.z));
+            emit_signal("edit_made", command);
+        }
+    }
+    queue_local_edit(sdf, operation, local, material, smoothness, limit, paintOnly, std::move(materials), keepMaterials);
+}
+
+bool JarVoxelVolume::has_signal_connections() const
+{
+    return !get_signal_connection_list("edit_made").is_empty();
+}
+
+Error JarVoxelVolume::apply_edit_command(const Dictionary &command)
+{
+    const Ref<JarSignedDistanceField> sdf = EditCommand::decode_sdf(command.get("sdf", Variant()));
+    const Variant transform = command.get("transform", Variant());
+    const int operation = command.get("operation", -1);
+    ERR_FAIL_COND_V_MSG(sdf.is_null() || transform.get_type() != Variant::TRANSFORM3D, ERR_INVALID_DATA,
+                        "Not an edit command.");
+    ERR_FAIL_COND_V_MSG(operation < SDF_OPERATION_UNION || operation > SDF_OPERATION_SMOOTH_INTERSECTION, ERR_INVALID_DATA,
+                        "An edit command with an unknown operation.");
+    Bounds limit = Bounds::infinite();
+    const Variant bounds = command.get("limit", Variant());
+    if (bounds.get_type() == Variant::AABB)
+        limit = Bounds(AABB(bounds));
+    queue_local_edit(sdf, static_cast<SDF::Operation>(operation), transform, command.get("material", -1),
+                     command.get("smoothness", 0.0f), limit, command.get("paint", false));
+    return OK;
+}
+
+// Works in the volume's space: a command gives the same edit wherever the
+// volume is in the scene, which differs per player (floating origin).
+void JarVoxelVolume::queue_local_edit(const Ref<JarSignedDistanceField> &sdf, SDF::Operation operation,
+                                      const Transform3D &local, int material, float smoothness, const Bounds &limit,
+                                      bool paintOnly, std::shared_ptr<const EditMaterials> materials, bool keepMaterials)
+{
     if (sdf.is_null())
     {
         UtilityFunctions::push_error("JarVoxelVolume: edit needs an SDF.");
@@ -501,7 +558,6 @@ void JarVoxelVolume::queue_edit(const Ref<JarSignedDistanceField> &sdf, SDF::Ope
     sdf->prepare(); // e.g. bake a mesh SDF, on this (main) thread
 
     // SDF space -> volume space.
-    const Transform3D local = get_global_transform().affine_inverse() * transform;
     const glm::mat4 toVolume = to_glm(local);
     const Vector3 scale = local.basis.get_scale().abs();
 
@@ -1580,6 +1636,7 @@ void JarVoxelVolume::on_biome_map_changed()
 {
     update_materials();
     invalidate_population();
+    remesh_all(); // per-vertex biome weights and details
 }
 
 void JarVoxelVolume::set_biome_map(const Ref<JarBiomeMap> &value)

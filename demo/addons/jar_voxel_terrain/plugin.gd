@@ -5,8 +5,10 @@ extends EditorPlugin
 
 const Inspector := preload("res://addons/jar_voxel_terrain/impostor/impostor_inspector.gd")
 const LayerFiles := preload("res://addons/jar_voxel_terrain/layer_files.gd")
+const ClimateInspector := preload("res://addons/jar_voxel_terrain/climate_inspector.gd")
 
 var _inspector: EditorInspectorPlugin
+var _climate_inspector: EditorInspectorPlugin
 var _add_button: Button
 var _bake_button: Button
 var _file_dialog: EditorFileDialog
@@ -15,6 +17,9 @@ var _population: JarVoxelPopulation
 func _enter_tree() -> void:
 	_inspector = Inspector.new()
 	add_inspector_plugin(_inspector)
+	_climate_inspector = ClimateInspector.new()
+	_climate_inspector.undo = get_undo_redo()
+	add_inspector_plugin(_climate_inspector)
 	_add_button = _menu_button("Add Layers", _pick_files)
 	_bake_button = _menu_button("Bake Impostors", func():
 		if _population != null:
@@ -30,6 +35,7 @@ func _enter_tree() -> void:
 
 func _exit_tree() -> void:
 	remove_inspector_plugin(_inspector)
+	remove_inspector_plugin(_climate_inspector)
 	for button: Button in [_add_button, _bake_button]:
 		remove_control_from_container(CONTAINER_SPATIAL_EDITOR_MENU, button)
 		button.queue_free()

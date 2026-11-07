@@ -11,6 +11,13 @@
 	<tutorials>
 	</tutorials>
 	<methods>
+		<method name="apply_edit_command">
+			<return type="int" enum="Error" />
+			<param index="0" name="command" type="Dictionary" />
+			<description>
+				Plays a command from [signal edit_made] on this volume, without sending it on. Played in the same order, commands leave every volume with the same voxels. Anything that is not a valid command is refused.
+			</description>
+		</method>
 		<method name="edit">
 			<return type="void" />
 			<param index="0" name="sdf" type="JarSignedDistanceField" />
@@ -258,6 +265,14 @@
 			Edge length of a voxel at full detail (LOD 0), in meters: the smallest feature and edit the volume can represent. Halving it doubles the detail near viewers and costs roughly 8 times more work there. Applied when the volume enters the tree.
 		</member>
 	</members>
+	<signals>
+		<signal name="edit_made">
+			<param index="0" name="command" type="Dictionary" />
+			<description>
+				An edit was made on this volume, as plain data to send to other volumes (see [method apply_edit_command]) or keep for a replay. Not for edits debris makes, or commands being played.
+			</description>
+		</signal>
+	</signals>
 	<constants>
 		<constant name="MATERIAL_MODE_WEIGHTS" value="0" enum="MaterialMode">
 			Materials 0-7 as 8 smooth blend weights per vertex (vertex [code]COLOR[/code] = materials 0-3, [code]CUSTOM0[/code] = 4-7).

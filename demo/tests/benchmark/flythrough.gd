@@ -7,7 +7,8 @@ extends Node
 ## Options (environment): SCENE, SPEEDS (m/s, comma separated), SECONDS (per
 ## speed), ALTITUDE (m), CLIMB (m/s: rises while flying, e.g. out to space),
 ## FAST_NORMALS (1: the terrain's fast_normals, in memory only), SIMD (0: plain
-## noise kernel), OUT,
+## noise kernel), PREDICT (0 or 1: the viewer's motion prediction), ARRIVAL (1:
+## measures what is ready when the flight ends), OUT,
 ## EDITS (seconds between digs on the ground ahead: prints how long each took
 ## to show, split by whether a build was running when it was made).
 
@@ -47,6 +48,9 @@ func _ready() -> void:
 		await get_tree().process_frame
 	print("spawned, terrain settled after %.1f s" % ((Time.get_ticks_msec() - start) / 1000.0))
 	player.set_physics_process(false) # the benchmark moves it
+	if _env("PREDICT", "") != "":
+		for viewer: JarVoxelViewer in player.find_children("*", "JarVoxelViewer", true, false):
+			viewer.predict_motion = _env("PREDICT", "") == "1"
 
 	# A great circle through the player's direction, in volume space.
 	var dir := (volume.global_transform.affine_inverse() * player.global_position).normalized()
@@ -85,6 +89,8 @@ func _ready() -> void:
 				_edit_step(volume, to_global * (near * (sdf.radius + sdf.sample_height(near * sdf.radius))), label, elapsed)
 			stats["phase"] = label if CLIMB == 0.0 else "%s, %d km up" % [label, int(altitude / 10000.0) * 10]
 			_frames.append(stats)
+	if _env("ARRIVAL", "") == "1":
+		await _arrival(volume, player)
 	_report()
 	get_tree().quit()
 
@@ -116,6 +122,21 @@ func _edit_step(volume: JarVoxelVolume, spot: Vector3, phase: String, elapsed: f
 	sphere.radius = 2.5
 	_dig = {start = Time.get_ticks_usec(), building = volume.is_building(), chunks = chunks}
 	volume.edit(sphere, JarVoxelVolume.SDF_OPERATION_SUBTRACTION, Transform3D(Basis(), spot))
+
+## The viewer stopped: how much is ready where it is, and how long the rest takes.
+func _arrival(volume: JarVoxelVolume, player: Node3D) -> void:
+	var start := Time.get_ticks_msec()
+	var local := volume.to_local(player.global_position)
+	var near := func() -> int:
+		var count := 0
+		for chunk in volume.get_children():
+			if chunk is JarVoxelChunk and chunk.visible and chunk.get_lod() == 0 and chunk.get_center().distance_to(local) < 300.0:
+				count += 1
+		return count
+	var at_once: int = near.call()
+	while (volume.is_building() or volume.is_meshing()) and Time.get_ticks_msec() - start < 20000:
+		await get_tree().process_frame
+	print("arrival: %d full-detail chunks at once, %d after %.2f s" % [at_once, near.call(), (Time.get_ticks_msec() - start) / 1000.0])
 
 func _report() -> void:
 	for phase in _phases():

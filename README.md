@@ -122,6 +122,10 @@ To customize, set the volume's `material` to your own `ShaderMaterial` (a copy o
 
 `volume.save_edits()` returns what edits changed as bytes for your save file, and `volume.load_edits(bytes)` starts the volume over from them, before or after it enters the tree. Only edited voxels are stored (the rest comes from the SDF again), so a save's size depends on how much was edited, not on the planet. Features stay removed. The volume loading a save needs the same SDF, `voxel_size` and `extent`; debris still falling is not saved.
 
+### Edit commands
+
+For multiplayer and replays, every edit made on a volume is also an `edit_made(command)` signal: a plain dictionary with the brush, the transform in the volume's space, operation, material. `volume.apply_edit_command(command)` plays it on another volume, wherever that is in its scene. Send them your own way (`rpc` takes dictionaries as they are), and play them in the same order everywhere: every volume ends with the same voxels. Commands decode to SDFs and noises only, and load `res://` files only, so they are safe to receive. A brush saved as a file travels as its path, so both sides need that file. A new player can start from `save_edits()` plus the commands since. Debris is not sent: it follows from physics, so in multiplayer keep it to one side or leave it out.
+
 ### Moving fast
 
 Give a `JarVoxelViewer` `predict_motion` to also refine around where it will be `predict_seconds` from now, at its smoothed velocity, on top of where it is: terrain and colliders are ready on arrival, at the cost of extra building while moving. `predict_max_distance` limits how far ahead that goes.
@@ -155,7 +159,7 @@ The demos use a generated low-poly pine and rock (`demo/demo/assets/population/f
 
 ### Biomes
 
-A volume's `population_biome_map` decides which `JarBiome` is where. `JarBiomeMap` itself is uniform (its first biome everywhere). `JarClimateBiomeMap` uses a simple climate model: temperature from a noise, colder with height above sea level and towards a planet's poles, and moisture from a second noise. Each biome sits at a point in (temperature, moisture) space and positions belong to the biomes nearest their climate, blended smoothly, so borders follow the climate rather than a grid.
+A volume's `population_biome_map` decides which `JarBiome` is where. `JarBiomeMap` itself is uniform (its first biome everywhere). `JarClimateBiomeMap` uses a simple climate model (with the plugin enabled, its inspector shows the biomes on a plot: drag them): temperature from a noise, colder with height above sea level and towards a planet's poles, and moisture from a second noise. Each biome sits at a point in (temperature, moisture) space and positions belong to the biomes nearest their climate, blended smoothly, so borders follow the climate rather than a grid.
 
 A biome brings its own **ground materials** for the shader's ground rules (ground, cliff, shore, seabed, peaks; `-1` keeps the shader's). The mesher passes per-vertex weights of the first 4 biomes in `CUSTOM1`.
 

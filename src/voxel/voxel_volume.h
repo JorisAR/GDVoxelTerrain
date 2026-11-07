@@ -68,6 +68,11 @@ class JarVoxelVolume : public Node3D
     void apply_rendering_to_chunks();
     void on_terrain_material_changed();
     void on_biome_map_changed();
+    bool has_signal_connections() const;
+    void queue_local_edit(const Ref<JarSignedDistanceField> &sdf, SDF::Operation operation, const Transform3D &local,
+                          int material, float smoothness, const Bounds &limit = Bounds::infinite(),
+                          bool paintOnly = false, std::shared_ptr<const EditMaterials> materials = nullptr,
+                          bool keepMaterials = false);
     PackedByteArray _pendingRestore; // unpacked: applied before the first build
     bool _restoredEdits = false;     // this volume's edits came from a save
     std::vector<uint8_t> _pendingState; // for the extensions
@@ -428,6 +433,9 @@ class JarVoxelVolume : public Node3D
     // edited voxels; the rest comes from the SDF). Applies queued edits first,
     // which can take a frame or two.
     PackedByteArray save_edits();
+    // Applies an `edit_made` command, as is, on this volume, without sending it
+    // on: play them in the same order everywhere and every volume ends the same.
+    Error apply_edit_command(const Dictionary &command);
     // Starts the volume over from saved edits, of a volume with the same SDF,
     // voxel_size and extent; everything edited since is gone. Any time, also
     // before it enters the tree.

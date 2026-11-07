@@ -107,6 +107,8 @@ func _run(camera: Node3D) -> void:
 	await _cleanup()
 	await _skip_outside()
 	await _large_edits()
+	await _climate_plot()
+	await _commands()
 	await _save_and_load()
 	await _digs_while_moving()
 	_finish()
@@ -274,6 +276,88 @@ func _large_edits() -> void:
 
 ## What edits changed survives a save: a new volume loading it has the same
 ## ground, and features stay gone; damaged bytes change nothing.
+## Commands from one volume played on another, elsewhere in the scene, give the
+## same voxels; bad commands are refused.
+func _commands() -> void:
+	# Detail follows every viewer: others would stand elsewhere for the second volume.
+	var others := get_tree().root.find_children("*", "JarVoxelViewer", true, false)
+	for viewer: JarVoxelViewer in others:
+		viewer.enabled = false
+	var holder := Node3D.new()
+	add_child(holder)
+	var first := TestWorld.flat(holder, Vector3(0, 30, 0))
+	var a: JarVoxelVolume = first.volume
+	await _settle_on(a)
+	var commands: Array[Dictionary] = []
+	a.edit_made.connect(func(command: Dictionary): commands.append(command))
+	var ground: float = a.raycast(Vector3(0, 300, 0), Vector3(0, -300, 0)).position.y
+	var pit := Vector3(0, ground, 0)
+	a.sphere_edit(pit, 7.0, false, 2)
+	var box := JarBoxSdf.new()
+	var shaped := JarTransformSdf.new()
+	shaped.sdf = box
+	a.edit(shaped, JarVoxelVolume.SDF_OPERATION_SMOOTH_UNION, Transform3D(Basis(Vector3.UP, 0.6), pit + Vector3(16, 0, 3)), 3, 1.5)
+	var brush := JarSphereSdf.new()
+	brush.radius = 5.0
+	a.paint(brush, Transform3D(Basis(), pit + Vector3(-14, 0, 0)), 4)
+	await _settle_on(a)
+	_check("commands: made", commands.size() == 3, str(commands.size()))
+	# Over a network: plain data, and no objects in it.
+	var sent: Array = bytes_to_var(var_to_bytes(commands))
+	var saved := a.save_edits()
+	# Alone: a volume's detail follows every viewer, and this is to be the same.
+	a.queue_free()
+	first.viewer.queue_free()
+	await get_tree().process_frame
+	var far := Node3D.new()
+	far.position = Vector3(300, 40, -200)
+	holder.add_child(far)
+	var second := TestWorld.flat(far, Vector3(0, 30, 0))
+	var b: JarVoxelVolume = second.volume
+	await _settle_on(b)
+	var echoed := []
+	b.edit_made.connect(func(command: Dictionary): echoed.append(command))
+	for command: Dictionary in sent:
+		_check("commands: applied", b.apply_edit_command(command) == OK)
+	await _settle_on(b)
+	_check("commands: not sent on", echoed.is_empty())
+	var played := b.save_edits()
+	_check("commands: same voxels", saved == played, "%d, %d bytes" % [saved.size(), played.size()])
+	var hit: Dictionary = b.raycast(far.to_global(pit + Vector3.UP * 40.0), far.to_global(pit + Vector3.DOWN * 40.0))
+	_check("commands: same ground", not hit.is_empty() and absf(far.to_local(hit.position).y - (ground - 7.0)) < 0.3, "%s" % hit.get("position"))
+	var bad: Array[Dictionary] = [{}, {"sdf": {"class": "OS"}, "transform": Transform3D(), "operation": 0},
+		{"sdf": {"class": "JarSphereSdf"}, "transform": 5, "operation": 0},
+		{"sdf": {"path": "user://x.tres"}, "transform": Transform3D(), "operation": 0},
+		{"sdf": {"class": "JarSphereSdf"}, "transform": Transform3D(), "operation": 99}]
+	for command in bad:
+		_check("commands: refused", b.apply_edit_command(command) != OK, str(command))
+	holder.queue_free()
+	for viewer: JarVoxelViewer in others:
+		viewer.enabled = true
+	await get_tree().process_frame
+
+## The climate plot moves biomes, and its picture agrees with the map.
+func _climate_plot() -> void:
+	var cold := JarBiome.new()
+	cold.temperature = -0.5
+	var warm := JarBiome.new()
+	warm.temperature = 0.5
+	warm.moisture = 0.5
+	var map := JarClimateBiomeMap.new()
+	map.biomes = [cold, warm]
+	var plot: Control = load("res://addons/jar_voxel_terrain/climate_plot.gd").new()
+	add_child(plot)
+	plot.size = Vector2(260, 284)
+	plot.set_map(map)
+	_check("plot: finds a dot", plot.biome_at(plot.to_point(Vector2(0.5, 0.5))) == 1)
+	_check("plot: nothing elsewhere", plot.biome_at(plot.to_point(Vector2(-0.9, 0.9))) == -1)
+	plot.move_biome(0, plot.to_point(Vector2(0.2, -0.4)))
+	_check("plot: moves", is_equal_approx(cold.temperature, 0.2) and is_equal_approx(cold.moisture, -0.4), "%f, %f" % [cold.temperature, cold.moisture])
+	plot.move_biome(1, Vector2(9000, -9000))
+	_check("plot: stays in range", is_equal_approx(warm.temperature, 1.0) and is_equal_approx(warm.moisture, 1.0))
+	plot.queue_free()
+	await get_tree().process_frame
+
 func _save_and_load() -> void:
 	var holder := Node.new()
 	add_child(holder)
