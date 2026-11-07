@@ -10,6 +10,10 @@ func _parse_begin(object: Object) -> void:
 	button.text = "Bake impostor" if object is JarTerrainFeature else "Bake all impostors"
 	button.pressed.connect(bake.bind(object, button))
 	add_custom_control(button)
+	if object is JarVoxelPopulation:
+		var distances := preload("res://addons/jar_voxel_terrain/impostor/feature_distances.gd").new()
+		distances.population = object
+		add_custom_control(distances)
 
 func _features(object: Object) -> Array[JarTerrainFeature]:
 	var result: Array[JarTerrainFeature] = []

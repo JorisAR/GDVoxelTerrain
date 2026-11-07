@@ -36,8 +36,9 @@ void tangent_basis(const glm::vec3 &up, glm::vec3 &t1, glm::vec3 &t2)
 }
 } // namespace
 
-FeatureManager::FeatureManager(JarVoxelVolume &volume, const JarVoxelPopulation &population)
-    : _volume(volume), _population(population), _shared(std::make_shared<Shared>())
+FeatureManager::FeatureManager(JarVoxelVolume &volume, const JarVoxelPopulation &population, bool far)
+    : _volume(volume), _population(population), _far(far), _begin(far ? NearRange : 0.0f),
+      _shared(std::make_shared<Shared>())
 {
     refresh_features();
 }
@@ -55,17 +56,30 @@ void FeatureManager::refresh_features()
     _features.clear();
     _layers.clear();
     _templates.clear();
+    _draws.clear();
     _range = 0.0f;
     for (const auto &entry : _population.feature_entries())
     {
-        _features.push_back(entry.item);
         _layers.push_back(entry.layer);
-        _templates.push_back(make_template(entry.item));
+        Template t = make_template(entry.item);
+        const Distances distances = entry.item.is_valid() ? distances_of(t, entry.item, _population) : Distances();
         if (entry.item.is_valid())
-            _range = std::max(_range, entry.item->get_draw_distance());
+            add_impostor(t, **entry.item, distances.impostor);
+        float draw = _far ? distances.draw : std::min(distances.draw, NearRange);
+        // Far: only what reaches past the near cells; a scene per feature stays near.
+        if (_far)
+        {
+            if (distances.draw <= NearRange || t.nodes)
+                draw = 0.0f;
+            t.colliders.clear();
+        }
+        _features.push_back(draw > 0.0f ? entry.item : Ref<JarTerrainFeature>());
+        _draws.push_back(draw);
+        _range = std::max(_range, draw);
+        _templates.push_back(std::move(t));
     }
     _biomeMap = _volume.get_biome_map();
-    _cellSize = _population.get_feature_cell_size();
+    _cellSize = _population.get_feature_cell_size() * (_far ? float(FarSplit) : 1.0f);
 }
 
 void FeatureManager::reset()
@@ -195,6 +209,7 @@ std::vector<FeatureManager::Instance> FeatureManager::instances_near(const glm::
 
 void FeatureManager::process()
 {
+
     if (_features.empty() || _range <= 0.0f)
         return;
     const std::vector<glm::vec3> viewers = JarVoxelLoD::gather_viewers(_volume);
@@ -249,13 +264,13 @@ void FeatureManager::start_scan(const std::vector<glm::vec3> &viewers)
     _scanRunning = true;
     std::shared_ptr<Shared> shared = _shared;
     shared->activeJobs++;
-    const float range = _range, cellSize = _cellSize;
+    const float range = _range, cellSize = _cellSize, closest = _begin;
     std::shared_ptr<ScanCache> cache = _scanCache;
-    JobSystem::get_pool().enqueue_background([shared, viewers, range, cellSize, sdf, cache]() {
+    JobSystem::get_pool().enqueue_background([shared, viewers, range, closest, cellSize, sdf, cache]() {
         std::vector<glm::ivec3> keys;
         {
             const VoxelStats::Scope stage(VoxelStats::WorkerFeatures);
-            keys = scan_cells(viewers, range, cellSize, sdf, *cache);
+            keys = scan_cells(viewers, range, cellSize, closest, sdf, *cache);
             // Nearest first, so features appear around the player before the
             // horizon. Sorted here: thousands of cells took 15-20 ms on the
             // main thread.
@@ -290,11 +305,23 @@ void FeatureManager::start_generation(const glm::ivec3 &key)
     const Ref<JarBiomeMap> biomes = _biomeMap;
     const UpField up = _volume.get_up_field();
     const std::shared_ptr<const GroundPalette> ground = _volume.get_ground_palette();
-    JobSystem::get_pool().enqueue_background([shared, key, cellSize, features, layers, biomes, sdf, up, ground]() {
+    const int split = _far ? FarSplit : 1;
+    JobSystem::get_pool().enqueue_background([shared, key, cellSize, split, features, layers, biomes, sdf, up, ground]() {
         std::vector<Instance> instances;
         {
             const VoxelStats::Scope stage(VoxelStats::WorkerFeatures);
-            instances = generate_cell(key, cellSize, features, layers, biomes, sdf, up, ground);
+            // The near cells inside, so features stand where they do up close.
+            const float inner = cellSize / float(split);
+            for (int z = 0; z < split; ++z)
+                for (int y = 0; y < split; ++y)
+                    for (int x = 0; x < split; ++x)
+                    {
+                        const glm::ivec3 cell = key * split + glm::ivec3(x, y, z);
+                        if (split > 1 && std::abs(sdf->distance((glm::vec3(cell) + 0.5f) * inner)) > inner * 2.0f * 0.8660254f)
+                            continue;
+                        std::vector<Instance> found = generate_cell(cell, inner, features, layers, biomes, sdf, up, ground);
+                        instances.insert(instances.end(), found.begin(), found.end());
+                    }
         }
         {
             std::lock_guard<std::mutex> lock(shared->mutex);
@@ -395,10 +422,12 @@ void FeatureManager::update_visibility(const std::vector<glm::vec3> &viewers)
         {
             if (_features[f].is_null() || cell.perFeature[f].empty())
                 continue;
-            const float range = _features[f]->get_draw_distance();
-            if (cell.groups[f] == nullptr && d < range + _cellSize)
+            const float range = _draws[f];
+            const float reach2 = 0.87f * _cellSize;
+            const bool inside = d + reach2 < _begin; // all of it nearer than this manager draws
+            if (cell.groups[f] == nullptr && d < range + _cellSize && !inside)
                 needsBuild = true;
-            else if (cell.groups[f] != nullptr && d > range + 2.0f * _cellSize)
+            else if (cell.groups[f] != nullptr && (d > range + 2.0f * _cellSize || d + 2.0f * reach2 < _begin))
             {
                 cell.groups[f]->queue_free();
                 cell.groups[f] = nullptr;
@@ -434,7 +463,6 @@ FeatureManager::Template FeatureManager::make_template(const Ref<JarTerrainFeatu
             t.parts.push_back({feature->get_mesh(), feature->get_material(), Transform3D(), 0.0f, 0.0f,
                                feature->get_cast_shadows() ? GeometryInstance3D::SHADOW_CASTING_SETTING_ON
                                                            : GeometryInstance3D::SHADOW_CASTING_SETTING_OFF});
-        add_impostor(t, **feature);
         return t;
     }
     if (feature->get_scene_mode() == JarTerrainFeature::SCENE_MODE_NODES)
@@ -484,16 +512,55 @@ FeatureManager::Template FeatureManager::make_template(const Ref<JarTerrainFeatu
     };
     visit(root, Transform3D()); // the root's own transform does not count
     memdelete(root);
-    add_impostor(t, **feature);
     return t;
 }
 
-void FeatureManager::add_impostor(Template &t, const JarTerrainFeature &feature)
+float FeatureManager::size_of(const Template &t, const JarTerrainFeature &feature)
+{
+    float size = 0.0f;
+    for (const Template::Part &part : t.parts)
+        if (part.mesh.is_valid())
+        {
+            const AABB box = part.local.xform(part.mesh->get_aabb());
+            size = std::max(size, float(box.get_longest_axis_size()));
+        }
+    if (size <= 0.0f && feature.get_impostor().is_valid())
+        size = float(feature.get_impostor()->get_aabb().get_longest_axis_size());
+    return size * 0.5f * (feature.get_minimum_scale() + feature.get_maximum_scale());
+}
+
+FeatureManager::Distances FeatureManager::distances_of(const Template &t, const Ref<JarTerrainFeature> &feature,
+                                                       const JarVoxelPopulation &population)
+{
+    const float size = size_of(t, **feature);
+    const float limit = population.get_max_draw_distance();
+    Distances result;
+    result.draw = feature->get_draw_distance() > 0.0f
+                      ? feature->get_draw_distance()
+                      : size / (std::max(population.get_disappear_pixels(), 0.1f) * PixelAngle);
+    if (limit > 0.0f)
+        result.draw = std::min(result.draw, limit);
+    if (feature->get_impostor().is_valid())
+    {
+        result.impostor = feature->get_impostor_distance() > 0.0f
+                              ? feature->get_impostor_distance()
+                              : size / (std::max(population.get_impostor_pixels(), 1.0f) * PixelAngle);
+        result.impostor = std::min(result.impostor, result.draw);
+    }
+    return result;
+}
+
+FeatureManager::Distances FeatureManager::distances_of(const Ref<JarTerrainFeature> &feature,
+                                                       const JarVoxelPopulation &population)
+{
+    return distances_of(make_template(feature), feature, population);
+}
+
+void FeatureManager::add_impostor(Template &t, const JarTerrainFeature &feature, float distance)
 {
     const Ref<Mesh> impostor = feature.get_impostor();
     if (impostor.is_null())
         return;
-    const float distance = feature.effective_impostor_distance();
     // The scene's LODs up to there: what is shown last reaches the impostor,
     // wherever the scene ended it.
     std::vector<Template::Part> parts;
@@ -546,8 +613,8 @@ void FeatureManager::build_groups(const glm::ivec3 &key, Cell &cell, const std::
             cell.colliders[f] = build_colliders(tpl, placed);
             _volume.add_child(cell.colliders[f]);
         }
-        const float draw = feature->get_draw_distance();
-        if (cell.groups[f] != nullptr || d >= draw + _cellSize)
+        const float draw = _draws[f];
+        if (cell.groups[f] != nullptr || d >= draw + _cellSize || d + margin < _begin)
             continue;
         Node3D *group = memnew(Node3D);
         if (tpl.nodes)
@@ -562,8 +629,9 @@ void FeatureManager::build_groups(const glm::ivec3 &key, Cell &cell, const std::
         }
         for (const Template::Part &part : tpl.parts)
         {
+            const float begin = std::max(part.begin, _begin);
             const float end = part.end > 0.0f ? std::min(part.end, draw) : draw;
-            if (part.begin >= end)
+            if (begin >= end)
                 continue;
             // Transform, then custom data: the ground color (see jar_population.gdshaderinc).
             PackedFloat32Array buffer;
@@ -579,7 +647,7 @@ void FeatureManager::build_groups(const glm::ivec3 &key, Cell &cell, const std::
                     *w++ = t.basis.rows[row].z;
                     *w++ = t.origin[row];
                 }
-                PopulationRendering::write_custom(w, p.ground, part.begin, end);
+                PopulationRendering::write_custom(w, p.ground, begin, end);
                 w += 4;
             }
             Ref<MultiMesh> multimesh;
@@ -595,7 +663,7 @@ void FeatureManager::build_groups(const glm::ivec3 &key, Cell &cell, const std::
                 mmi->set_material_override(part.material);
             mmi->set_cast_shadows_setting(part.shadows);
             PopulationRendering::set_lod_range(mmi, PopulationRendering::effective_material(part.mesh, part.material),
-                                               part.begin, end, margin);
+                                               begin, end, margin);
             group->add_child(mmi);
         }
         _volume.add_child(group);
@@ -620,7 +688,7 @@ void FeatureManager::free_groups(Cell &cell)
 }
 
 std::vector<glm::ivec3> FeatureManager::scan_cells(const std::vector<glm::vec3> &viewers, float range, float cellSize,
-                                                   const Ref<JarSignedDistanceField> &sdf, ScanCache &cache)
+                                                   float closest, const Ref<JarSignedDistanceField> &sdf, ScanCache &cache)
 {
     // Coarse blocks of 4^3 cells first: whole blocks far from the surface are
     // skipped with one sample. SDFs from noise are not exact distances, hence
@@ -659,7 +727,8 @@ std::vector<glm::ivec3> FeatureManager::scan_cells(const std::vector<glm::vec3> 
                                 const glm::ivec3 key = glm::ivec3(bx, by, bz) * Block + glm::ivec3(x, y, z);
                                 const glm::vec3 center = (glm::vec3(key) + 0.5f) * cellSize;
                                 const float cellRadius = cellSize * 0.8660254f;
-                                if (glm::distance(center, v) > range + cellRadius)
+                                const float away = glm::distance(center, v);
+                                if (away > range + cellRadius || away + cellRadius < closest)
                                     continue;
                                 if (!near_surface(cache.cells, key, center, cellRadius * Margin))
                                     continue;

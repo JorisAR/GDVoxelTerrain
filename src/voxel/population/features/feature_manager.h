@@ -39,6 +39,12 @@ class JarVoxelVolume;
 // every time; edits and remove_features() record their bounds and features
 // inside them never come back.
 //
+// Two managers work together (see JarVoxelPopulation). Cells up to NearRange
+// are a few dozen meters wide. Beyond it, big features are drawn from cells
+// FarSplit times wider, or the cells would number in the tens of thousands; a
+// far cell generates the near cells inside it, so a feature crossing from one
+// to the other stays exactly where it stands.
+//
 // Scans and generation run on the shared worker pool (low priority); nodes are
 // created on the main thread within a time budget. A feature's scene is read
 // once into a template (see JarTerrainFeature): its meshes become one
@@ -54,7 +60,18 @@ class FeatureManager
         glm::vec3 ground;      // linear color of the ground there
     };
 
-    FeatureManager(JarVoxelVolume &volume, const JarVoxelPopulation &population);
+    static constexpr float NearRange = 1024.0f; // meters
+    static constexpr int FarSplit = 8;          // near cells across a far cell
+    // Radians one pixel covers: 1080 pixels over a 75 degree field of view.
+    static constexpr float PixelAngle = 0.001421f;
+
+    FeatureManager(JarVoxelVolume &volume, const JarVoxelPopulation &population, bool far);
+    // Where a feature gets its impostor (0: never) and how far it is drawn.
+    struct Distances
+    {
+        float impostor = 0.0f, draw = 0.0f;
+    };
+    static Distances distances_of(const Ref<JarTerrainFeature> &feature, const JarVoxelPopulation &population);
     ~FeatureManager(); // waits for running jobs
 
     void process(); // main thread, every frame
@@ -143,10 +160,13 @@ class FeatureManager
     void apply_removal(const Removal &removal);
     std::vector<Ref<JarTerrainFeature>> _features;
     std::vector<PopulationLayer> _layers; // per feature
+    std::vector<float> _draws;            // per feature: how far this manager draws it, 0: not at all
+    bool _far = false;
+    float _begin = 0.0f; // where this manager takes over
     std::vector<Template> _templates; // per feature
     Ref<JarBiomeMap> _biomeMap;
     float _cellSize = 64.0f;
-    float _range = 0.0f; // largest draw distance
+    float _range = 0.0f; // how far anything is drawn
     std::vector<glm::vec3> _scanViewers;
     bool _scanRunning = false;
     bool _dirtyVisibility = false;
@@ -161,7 +181,10 @@ class FeatureManager
     void build_groups(const glm::ivec3 &key, Cell &cell, const std::vector<glm::vec3> &viewers);
     Node3D *build_colliders(const Template &t, const std::vector<Placed> &placed) const;
     static Template make_template(const Ref<JarTerrainFeature> &feature);
-    static void add_impostor(Template &t, const JarTerrainFeature &feature);
+    static void add_impostor(Template &t, const JarTerrainFeature &feature, float distance);
+    static float size_of(const Template &t, const JarTerrainFeature &feature);
+    static Distances distances_of(const Template &t, const Ref<JarTerrainFeature> &feature,
+                                  const JarVoxelPopulation &population);
     void free_groups(Cell &cell);
     bool is_removed(const glm::vec3 &position) const;
     Bounds cell_bounds(const glm::ivec3 &key) const;
@@ -172,7 +195,7 @@ class FeatureManager
                                                const Ref<JarSignedDistanceField> &sdf, const UpField &up,
                                                const std::shared_ptr<const GroundPalette> &ground);
     static std::vector<glm::ivec3> scan_cells(const std::vector<glm::vec3> &viewers, float range, float cellSize,
-                                              const Ref<JarSignedDistanceField> &sdf, ScanCache &cache);
+                                              float closest, const Ref<JarSignedDistanceField> &sdf, ScanCache &cache);
 };
 
 #endif // JAR_FEATURE_MANAGER_H

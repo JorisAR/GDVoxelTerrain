@@ -6,7 +6,6 @@
 [resource]
 scene = ExtResource("1_scene")
 footprint = 4.0
-draw_distance = 900.0
 impostor = ExtResource("1_fg74v")
 minimum_scale = 0.5
 maximum_scale = 0.75

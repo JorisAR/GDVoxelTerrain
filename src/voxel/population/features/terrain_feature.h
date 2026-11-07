@@ -21,9 +21,10 @@ using namespace godot;
 // SCENE_MODE_NODES the scene is instantiated per feature instead (scripts,
 // lights, anything else), which costs far more.
 //
-// A baked `impostor` (see JarImpostorBaker; the Bake button of the inspector)
-// replaces everything from `impostor_distance` on, and anything a scene shows
-// beyond that distance.
+// How far it is drawn and where a baked `impostor` (see JarImpostorBaker; the
+// Bake button of the inspector) takes over follow from its size and the
+// population's pixel settings; `draw_distance` and `impostor_distance`
+// override them. An impostor replaces anything a scene shows beyond it.
 //
 // Materials that include addons/jar_voxel_terrain/shaders/jar_population.gdshaderinc
 // switch LODs per instance and can blend with the ground's color.
@@ -46,10 +47,10 @@ class JarTerrainFeature : public JarTerrainPopulator
     float collision_distance = 64.0f; // meters; batched scenes' collision shapes
     float density = 0.01f;         // instances per square meter where the rules allow
     float footprint = 2.0f;        // meters kept free of other features
-    float draw_distance = 500.0f;  // meters
+    float draw_distance = 0.0f;    // meters, 0: from its size (see JarVoxelPopulation)
     bool cast_shadows = true;
     Ref<Mesh> impostor;
-    float impostor_distance = 0.0f; // meters; 0: from its size
+    float impostor_distance = 0.0f; // meters, 0: from its size (see JarVoxelPopulation)
 
   public:
     Ref<Mesh> get_mesh() const { return mesh; }
@@ -75,20 +76,13 @@ class JarTerrainFeature : public JarTerrainPopulator
     void set_footprint(float value) { footprint = std::max(0.0f, value); }
     void set_density(float value) { density = std::max(0.0f, value); }
     float get_draw_distance() const { return draw_distance; }
-    void set_draw_distance(float value) { draw_distance = std::max(1.0f, value); }
+    void set_draw_distance(float value) { draw_distance = std::max(0.0f, value); }
     bool get_cast_shadows() const { return cast_shadows; }
     void set_cast_shadows(bool value) { cast_shadows = value; }
     Ref<Mesh> get_impostor() const { return impostor; }
     void set_impostor(const Ref<Mesh> &value) { impostor = value; }
     float get_impostor_distance() const { return impostor_distance; }
     void set_impostor_distance(float value) { impostor_distance = std::max(0.0f, value); }
-    // Where the impostor starts: 10 times its size unless set.
-    float effective_impostor_distance() const
-    {
-        if (impostor_distance > 0.0f || impostor.is_null())
-            return impostor_distance;
-        return 10.0f * float(impostor->get_aabb().get_longest_axis_size());
-    }
 
   protected:
     // A scene replaces the mesh settings.
@@ -117,7 +111,7 @@ class JarTerrainFeature : public JarTerrainPopulator
         BIND_FEATURE(collision_distance, Variant::FLOAT, PROPERTY_HINT_RANGE, "0,500,1,or_greater,suffix:m");
         BIND_FEATURE(density, Variant::FLOAT, PROPERTY_HINT_RANGE, "0,1,0.0001,or_greater,suffix:/m2");
         BIND_FEATURE(footprint, Variant::FLOAT, PROPERTY_HINT_RANGE, "0,50,0.1,or_greater,suffix:m");
-        BIND_FEATURE(draw_distance, Variant::FLOAT, PROPERTY_HINT_RANGE, "1,5000,1,or_greater,suffix:m");
+        BIND_FEATURE(draw_distance, Variant::FLOAT, PROPERTY_HINT_RANGE, "0,10000,1,or_greater,suffix:m");
         BIND_FEATURE(cast_shadows, Variant::BOOL, PROPERTY_HINT_NONE, "");
         BIND_FEATURE(impostor, Variant::OBJECT, PROPERTY_HINT_RESOURCE_TYPE, "Mesh");
         BIND_FEATURE(impostor_distance, Variant::FLOAT, PROPERTY_HINT_RANGE, "0,2000,1,or_greater,suffix:m");

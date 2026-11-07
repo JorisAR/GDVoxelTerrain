@@ -11,6 +11,7 @@ func _ready() -> void:
 	await _test_biomes()
 	await _test_layers()
 	await _test_impostor()
+	await _test_distances()
 	await _test_toggles()
 	await _test_detail_resolution()
 	await _test_detail_sphere()
@@ -482,13 +483,52 @@ func _test_layers() -> void:
 	world.viewer.queue_free()
 	await get_tree().process_frame
 
+## Distances follow from size in pixels, a cap and overrides; beyond the near
+## cells big features come from far cells and stand exactly where they do up close.
+func _test_distances() -> void:
+	var tall := _box_feature(0.002)
+	(tall.mesh as BoxMesh).size = Vector3(4, 30, 4)
+	tall.draw_distance = 0.0
+	tall.maximum_slope = 90.0
+	var small := _box_feature(0.002)
+	small.draw_distance = 0.0
+	var world := TestWorld.flat(self, Vector3(3, 40, 5), func(v: JarVoxelVolume):
+		TestWorld.populate(v, [tall, small]))
+	var volume: JarVoxelVolume = world.volume
+	var population := _pop(volume)
+	var distances: Array[Dictionary] = population.get_feature_distances()
+	_check("distance from size", absf(distances[0].draw - 5000.0) < 1.0 and absf(distances[1].draw - 703.7) < 1.0,
+		"%.0f, %.1f" % [distances[0].draw, distances[1].draw])
+	population.max_draw_distance = 2500.0
+	_check("distance capped", is_equal_approx(population.get_feature_distances()[0].draw, 2500.0))
+	small.draw_distance = 300.0
+	_check("distance overridden", is_equal_approx(population.get_feature_distances()[1].draw, 300.0))
+	small.draw_distance = 0.0
+	population.regenerate()
+	var start := Time.get_ticks_msec()
+	var far_at := Vector3.ZERO
+	while far_at == Vector3.ZERO and Time.get_ticks_msec() - start < 30000:
+		await get_tree().process_frame
+		for f in population.get_far_features_near(world.viewer.position + Vector3(1500, 0, 0), 300.0):
+			far_at = f.transform.origin
+	_check("far cells drawn", far_at != Vector3.ZERO, str(far_at))
+	if far_at != Vector3.ZERO:
+		world.viewer.position = far_at + Vector3(0, 40, 0)
+		await _settle(volume)
+		var found := false
+		for f in population.get_features_near(far_at, 1.0):
+			found = found or f.transform.origin.distance_to(far_at) < 0.01
+		_check("far feature stands where it does up close", found)
+	volume.queue_free()
+	world.viewer.queue_free()
+	await get_tree().process_frame
+
 ## A baked impostor takes over from its distance, with or without one set.
 func _test_impostor() -> void:
 	var feature := _box_feature(0.01)
 	var quad := QuadMesh.new()
 	quad.size = Vector2(10, 10)
 	feature.impostor = quad
-	_check("impostor distance from its size", is_equal_approx(feature.impostor_distance, 0.0))
 	var world := TestWorld.flat(self, Vector3(3, 30, 5), func(v: JarVoxelVolume):
 		TestWorld.populate(v, [feature]))
 	var volume: JarVoxelVolume = world.volume
@@ -499,8 +539,8 @@ func _test_impostor() -> void:
 			meshes[n.multimesh.mesh] = n
 	_check("impostor drawn beyond the mesh", meshes.has(quad) and meshes.has(feature.mesh))
 	if meshes.has(quad):
-		_check("impostor starts where the mesh ends", is_equal_approx(meshes[quad].visibility_range_begin, 100.0)
-			and is_equal_approx(meshes[feature.mesh].visibility_range_end, 100.0),
+		_check("impostor starts where the mesh ends", absf(meshes[quad].visibility_range_begin - 43.98) < 0.1
+			and absf(meshes[feature.mesh].visibility_range_end - 43.98) < 0.1,
 			"%f, %f" % [meshes[quad].visibility_range_begin, meshes[feature.mesh].visibility_range_end])
 	volume.queue_free()
 	world.viewer.queue_free()

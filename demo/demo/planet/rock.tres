@@ -6,7 +6,6 @@
 [resource]
 scene = ExtResource("1_scene")
 density = 0.006
-draw_distance = 600.0
 impostor = ExtResource("1_bj8jy")
 minimum_scale = 0.2
 maximum_scale = 0.7

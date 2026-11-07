@@ -25,6 +25,7 @@ void JarVoxelPopulation::attach()
     {
         _details.reset();
         _features.reset();
+        _farFeatures.reset();
     }
     _volume = volume;
     if (_volume == nullptr)
@@ -54,9 +55,13 @@ bool JarVoxelPopulation::ensure_running()
         return true;
     if (_volume == nullptr || _volume->get_sdf().is_null())
         return false;
-    _features = std::make_unique<FeatureManager>(*_volume, *this);
+    _features = std::make_unique<FeatureManager>(*_volume, *this, false);
+    _farFeatures = std::make_unique<FeatureManager>(*_volume, *this, true);
     for (const Bounds &bounds : _loadedRemovals)
+    {
         _features->remove_in(bounds);
+        _farFeatures->remove_in(bounds);
+    }
     _loadedRemovals.clear();
     _details = std::make_unique<DetailScheduler>(*_volume, *this);
     return true;
@@ -66,7 +71,10 @@ void JarVoxelPopulation::stop()
 {
     if (_features)
         _features->reset(); // frees its nodes
+    if (_farFeatures)
+        _farFeatures->reset();
     _features.reset();      // waits for its jobs
+    _farFeatures.reset();
     _details.reset();       // waits for its thread
 }
 
@@ -74,6 +82,8 @@ void JarVoxelPopulation::reset_features()
 {
     if (_features)
         _features->reset();
+    if (_farFeatures)
+        _farFeatures->reset();
 }
 
 void JarVoxelPopulation::reset_details()
@@ -186,6 +196,43 @@ void JarVoxelPopulation::set_preview_details(bool value)
         reset_details();
 }
 
+void JarVoxelPopulation::set_disappear_pixels(float value)
+{
+    _disappearPixels = std::max(0.1f, value);
+    reset_features();
+}
+
+void JarVoxelPopulation::set_impostor_pixels(float value)
+{
+    _impostorPixels = std::max(1.0f, value);
+    reset_features();
+}
+
+void JarVoxelPopulation::set_max_draw_distance(float value)
+{
+    _maxDrawDistance = std::max(0.0f, value);
+    reset_features();
+}
+
+TypedArray<Dictionary> JarVoxelPopulation::get_feature_distances() const
+{
+    TypedArray<Dictionary> result;
+    const TypedArray<JarPopulationLayer> layers = get_layers();
+    for (int64_t i = 0; i < layers.size(); ++i)
+    {
+        const JarFeatureLayer *layer = Object::cast_to<JarFeatureLayer>(layers[i]);
+        if (layer == nullptr || layer->get_feature().is_null())
+            continue;
+        const FeatureManager::Distances distances = FeatureManager::distances_of(layer->get_feature(), *this);
+        Dictionary row;
+        row["name"] = layer->get_name();
+        row["impostor"] = distances.impostor;
+        row["draw"] = distances.draw;
+        result.push_back(row);
+    }
+    return result;
+}
+
 void JarVoxelPopulation::set_feature_cell_size(float value)
 {
     _featureCellSize = std::max(1.0f, value);
@@ -240,20 +287,33 @@ void JarVoxelPopulation::remove_features(const Vector3 &global_position, float r
         return;
     const Vector3 local = _volume->to_local(global_position);
     const glm::vec3 c(local.x, local.y, local.z);
-    _features->remove_in(Bounds(c - glm::vec3(radius), c + glm::vec3(radius)));
+    const Bounds bounds(c - glm::vec3(radius), c + glm::vec3(radius));
+    _features->remove_in(bounds);
+    _farFeatures->remove_in(bounds);
 }
 
 TypedArray<Dictionary> JarVoxelPopulation::get_features_near(const Vector3 &global_position, float radius) const
 {
+    return features_near(_features.get(), global_position, radius);
+}
+
+TypedArray<Dictionary> JarVoxelPopulation::get_far_features_near(const Vector3 &global_position, float radius) const
+{
+    return features_near(_farFeatures.get(), global_position, radius);
+}
+
+TypedArray<Dictionary> JarVoxelPopulation::features_near(const FeatureManager *manager, const Vector3 &global_position,
+                                                         float radius) const
+{
     TypedArray<Dictionary> result;
-    if (!_features || _volume == nullptr)
+    if (manager == nullptr || _volume == nullptr)
         return result;
     const Vector3 local = _volume->to_local(global_position);
     for (const FeatureManager::Instance &instance :
-         _features->instances_near(glm::vec3(local.x, local.y, local.z), radius))
+         manager->instances_near(glm::vec3(local.x, local.y, local.z), radius))
     {
         Dictionary d;
-        d["feature"] = _features->feature_at(instance.feature);
+        d["feature"] = manager->feature_at(instance.feature);
         d["transform"] = _volume->get_global_transform() * instance.transform;
         result.push_back(d);
     }
@@ -267,6 +327,7 @@ void JarVoxelPopulation::process(JarVoxelVolume &volume, double delta)
     {
         const VoxelStats::Scope features(VoxelStats::MainFeatures);
         _features->process(); // independent of the octree: runs during builds too
+        _farFeatures->process();
     }
     const VoxelStats::Scope details(VoxelStats::MainDetails);
     _details->process(); // likewise (only touches chunks)
@@ -276,6 +337,8 @@ void JarVoxelPopulation::edit_queued(JarVoxelVolume &volume, const ModifySetting
 {
     if (_features)
         _features->remove_edited(edit, reach);
+    if (_farFeatures)
+        _farFeatures->remove_edited(edit, reach);
 }
 
 void JarVoxelPopulation::chunk_meshed(JarVoxelVolume &volume, JarVoxelChunk *chunk)
@@ -328,7 +391,10 @@ void JarVoxelPopulation::load_state(const uint8_t *data, size_t size)
     if (_features)
     {
         for (const Bounds &bounds : _loadedRemovals)
+        {
             _features->remove_in(bounds);
+            _farFeatures->remove_in(bounds);
+        }
         _loadedRemovals.clear();
     }
 }
@@ -352,6 +418,11 @@ void JarVoxelPopulation::_bind_methods()
     BIND_POPULATION(features_enabled, Variant::BOOL, PROPERTY_HINT_NONE, "");
     BIND_POPULATION(details_enabled, Variant::BOOL, PROPERTY_HINT_NONE, "");
     BIND_POPULATION(feature_cell_size, Variant::FLOAT, PROPERTY_HINT_RANGE, "8,512,1,or_greater,suffix:m");
+    ADD_GROUP("Distances", "");
+    BIND_POPULATION(disappear_pixels, Variant::FLOAT, PROPERTY_HINT_RANGE, "0.5,32,0.1,or_greater,suffix:px");
+    BIND_POPULATION(impostor_pixels, Variant::FLOAT, PROPERTY_HINT_RANGE, "4,512,1,or_greater,suffix:px");
+    BIND_POPULATION(max_draw_distance, Variant::FLOAT, PROPERTY_HINT_RANGE, "0,20000,10,or_greater,suffix:m");
+    ClassDB::bind_method(D_METHOD("get_feature_distances"), &JarVoxelPopulation::get_feature_distances);
     ADD_GROUP("Editor Preview", "");
     BIND_POPULATION(preview_features, Variant::BOOL, PROPERTY_HINT_NONE, "");
     BIND_POPULATION(preview_details, Variant::BOOL, PROPERTY_HINT_NONE, "");
@@ -362,4 +433,6 @@ void JarVoxelPopulation::_bind_methods()
     ClassDB::bind_method(D_METHOD("remove_features", "global_position", "radius"), &JarVoxelPopulation::remove_features);
     ClassDB::bind_method(D_METHOD("get_features_near", "global_position", "radius"),
                          &JarVoxelPopulation::get_features_near);
+    ClassDB::bind_method(D_METHOD("get_far_features_near", "global_position", "radius"),
+                         &JarVoxelPopulation::get_far_features_near);
 }

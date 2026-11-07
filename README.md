@@ -145,6 +145,8 @@ Both share placement rules, all of them probabilities so populations thin out na
 - **Distribution:** a noise mask with a soft threshold (forests, meadows; `mask_invert` puts grass between the trees of a forest using the same noise) and clusters (groves of `cluster_radius` about `cluster_spacing` apart).
 - **Placement:** scale range, random rotation, alignment to the normal, sink.
 
+How far features are drawn follows from their size: on `JarVoxelPopulation`, `disappear_pixels` is how small one gets before it goes, `impostor_pixels` where its impostor takes over, both in pixels of a 1080p screen at a 75 degree field of view (they are angles, so window size and zoom change nothing), and `max_draw_distance` an upper limit. The inspector lists what they give each feature. A feature's own `draw_distance` and `impostor_distance` override them. Past about a kilometer big features come from cells eight times as wide.
+
 Features are placed in tree order, and each keeps the ones after it out of its `footprint`: list trees first, then rocks, then bushes, and they fill the gaps without overlapping. Edits remove the features standing where the shape changes, permanently; for gameplay there are `remove_features(position, radius)` and `get_features_near(position, radius)`:
 
 ```gdscript
@@ -153,7 +155,7 @@ for f in population.get_features_near(hit_position, 2.0):
 	volume.remove_features(f.transform.origin, 0.5)
 ```
 
-Features can bake their own impostor: enable the *JAR Voxel Terrain* plugin (Project Settings, Plugins), then press *Bake impostor* on a `JarTerrainFeature`, or *Bake all impostors* on a `JarVoxelPopulation`. Baking needs the Forward+ renderer and takes about 5 seconds per feature. The bake is saved next to the feature and takes over from `impostor_distance` (0: 10 times its size); give a scene as many LODs as you like, its last one reaches the impostor.
+Features can bake their own impostor: enable the *JAR Voxel Terrain* plugin (Project Settings, Plugins), then press *Bake impostor* on a `JarTerrainFeature`, or *Bake all impostors* on a `JarVoxelPopulation`. Baking needs the Forward+ renderer and takes about 5 seconds per feature. The bake is saved next to the feature; give a scene as many LODs as you like, its last one reaches the impostor.
 
 The demos use a generated low-poly pine and rock (`demo/demo/assets/population/features/`).
 
