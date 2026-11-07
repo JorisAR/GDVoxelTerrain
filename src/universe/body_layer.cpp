@@ -24,6 +24,8 @@ const char *ExtinctionShader = "res://addons/jar_voxel_terrain/nodes/atmosphere/
 const char *BaseColorMeta = "jar_base_color";
 // The Environment's own ambient light (starlight), under the sky's.
 const char *AmbientFloorMeta = "jar_ambient_floor";
+// On a star's light: the JarBodyLight driving it.
+const char *StarLayerMeta = "jar_star_layer";
 // The light's own shadow opacity, before fading towards the horizon.
 const char *BaseShadowMeta = "jar_base_shadow_opacity";
 // Lights are re-aimed once their star moved this far (radians, 0.05 degrees).
@@ -246,6 +248,41 @@ void JarBodyLayer::apply_sun(const Ref<ShaderMaterial> &material)
     material->set_shader_parameter("moon_color", Vector3(moon.r, moon.g, moon.b));
 }
 
+Vector3 JarBodyLayer::star_direction_at(const Vector3 &global_position)
+{
+    if (SceneTree *tree = get_tree())
+    {
+        const TypedArray<Node> stars = tree->get_nodes_in_group(JarBodyLight::StarGroup);
+        if (!stars.is_empty())
+            if (const auto *light = Object::cast_to<Node>(stars[0]); light && light->has_meta(StarLayerMeta))
+                if (const auto *layer = Object::cast_to<JarBodyLight>(ObjectDB::get_instance(uint64_t(light->get_meta(StarLayerMeta)))))
+                    return layer->get_direction_at(global_position);
+    }
+    if (DirectionalLight3D *light = find_sun())
+        return light->get_global_basis().get_column(2).normalized();
+    return Vector3(0, 1, 0);
+}
+
+JarBodyLayer::FarView JarBodyLayer::far_view(const Vector3 &center) const
+{
+    FarView view{center, 1.0f};
+    Viewport *viewport = is_inside_tree() ? get_viewport() : nullptr;
+    const Camera3D *camera = viewport ? viewport->get_camera_3d() : nullptr;
+    if (camera == nullptr)
+        return view;
+    const Vector3 eye = camera->get_global_position();
+    const float far = camera->get_far();
+    const float distance = eye.distance_to(center);
+    constexpr float Start = 0.6f, Room = 0.25f;
+    if (distance <= Start * far)
+        return view;
+    // Continuous at the start, approaching Start + Room far away.
+    const float drawn = far * (Start + Room * (1.0f - Start * far / distance));
+    view.scale = drawn / distance;
+    view.center = eye + (center - eye) * view.scale;
+    return view;
+}
+
 // ---------------------------------------------------------------- JarBodyLight
 
 void JarBodyLight::_bind_methods()
@@ -312,6 +349,8 @@ void JarBodyLight::update(const JarCelestialBody &body)
     {
         light->add_to_group(LightGroup);
         light->add_to_group(_reflects ? MoonGroup : StarGroup);
+        if (!_reflects)
+            light->set_meta(StarLayerMeta, get_instance_id());
         if (_reflects)
             light->set_sky_mode(DirectionalLight3D::SKY_MODE_LIGHT_ONLY); // the moon is drawn itself
     }

@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="JarBodyGasGiant" inherits="JarBodyLayer" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
+	<brief_description>
+		The visible cloud deck of a gas giant.
+	</brief_description>
+	<description>
+		A sphere at the body's sea level (its radius, for a body without terrain) with latitude bands, turbulence moving with the zonal winds, streaks, oval storms, bluish poles, limb darkening and the shadow of a [JarBodyRings] on the same body. All noise in the shader: nothing is baked. Colors, band count, turbulence and storms are set on [member material].
+		Beyond the camera's far plane it is drawn in scaled space (see [JarBodyLayer]).
+	</description>
+	<tutorials>
+	</tutorials>
+	<methods>
+		<method name="get_active_material">
+			<return type="ShaderMaterial" />
+			<description>
+				The material in use: [member material] or the default.
+			</description>
+		</method>
+	</methods>
+	<members>
+		<member name="material" type="ShaderMaterial" setter="set_material" getter="get_material">
+			The planet's look. Empty: the default [code]gas_giant.gdshader[/code].
+		</member>
+	</members>
+</class>

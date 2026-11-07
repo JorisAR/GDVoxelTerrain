@@ -1,0 +1,126 @@
+shader_type spatial;
+// A gas giant for JarBodyGasGiant: cloud bands along latitude in three
+// colors, broken up by turbulence that moves with the zonal winds, with
+// streaks, a few oval storms, darker poles and limb darkening; lit by the
+// star, with the shadow of its rings (JarBodyRings on the same body).
+// Everything is noise in this shader, nothing is baked.
+render_mode unshaded, shadows_disabled, fog_disabled;
+
+#include "res://addons/jar_voxel_terrain/nodes/rings/rings_common.gdshaderinc"
+
+uniform mat3 world_to_body = mat3(1.0);
+uniform vec3 spin_axis = vec3(0.0, 1.0, 0.0); // in body space
+uniform bool has_rings = false;
+
+group_uniforms bands;
+uniform vec3 color_light : source_color = vec3(0.90, 0.84, 0.68);
+uniform vec3 color_dark : source_color = vec3(0.70, 0.55, 0.38);
+uniform vec3 color_accent : source_color = vec3(0.80, 0.62, 0.42);
+uniform vec3 color_polar : source_color = vec3(0.55, 0.60, 0.62);
+// Number of bands from pole to pole.
+uniform float band_count = 14.0;
+uniform float band_contrast : hint_range(0.0, 1.0) = 0.55;
+// How much the bands are torn up.
+uniform float turbulence : hint_range(0.0, 2.0) = 0.6;
+// Where the polar color takes over (sine of the latitude).
+uniform float polar_latitude : hint_range(0.0, 1.0) = 0.82;
+uniform float storms : hint_range(0.0, 1.0) = 0.4;
+uniform int seed = 3;
+// Turns per hour of the fastest wind relative to the body (bands drift).
+uniform float wind_speed = 0.02;
+group_uniforms light;
+uniform float brightness = 1.4;
+// Minnaert exponent: 0.5 flat disk, 1 Lambert. Gas giants are dark at the limb.
+uniform float limb_darkening : hint_range(0.5, 1.5) = 0.85;
+uniform vec3 ambient_light = vec3(0.004, 0.004, 0.005);
+group_uniforms;
+
+varying vec3 world_position;
+
+void vertex() {
+	world_position = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
+}
+
+float hash(vec3 p) {
+	p = fract(p * 0.3183099 + 0.1 + float(seed) * 0.0137);
+	p *= 17.0;
+	return fract(p.x * p.y * p.z * (p.x + p.y + p.z));
+}
+
+float noise(vec3 x) {
+	vec3 i = floor(x);
+	vec3 f = fract(x);
+	f = f * f * (3.0 - 2.0 * f);
+	return mix(mix(mix(hash(i), hash(i + vec3(1, 0, 0)), f.x), mix(hash(i + vec3(0, 1, 0)), hash(i + vec3(1, 1, 0)), f.x), f.y),
+			   mix(mix(hash(i + vec3(0, 0, 1)), hash(i + vec3(1, 0, 1)), f.x), mix(hash(i + vec3(0, 1, 1)), hash(i + vec3(1, 1, 1)), f.x), f.y), f.z);
+}
+
+// Octaves finer than a pixel (`pixel`, in units of p) fade to their mean.
+float fbm(vec3 p, float pixel) {
+	float v = 0.0;
+	float a = 0.5;
+	for (int i = 0; i < 6; i++) {
+		v += a * mix(noise(p), 0.5, smoothstep(0.25, 0.6, pixel));
+		p = p * 2.07 + 7.3;
+		a *= 0.5;
+		pixel *= 2.07;
+	}
+	return v;
+}
+
+void fragment() {
+	vec3 normal = normalize(world_position - planet_center);
+	vec3 local = normalize(world_to_body * normal); // on the unit sphere, turning with the body
+	vec3 axis = normalize(spin_axis);
+	float lat = dot(local, axis); // sine of the latitude
+	float pixel = max(length(dFdx(local)), length(dFdy(local)));
+
+	// Zonal winds: alternating jets turn the cloud deck at different speeds.
+	vec3 east = normalize(cross(axis, abs(axis.y) < 0.9 ? vec3(0.0, 1.0, 0.0) : vec3(1.0, 0.0, 0.0)));
+	vec3 north = cross(east, axis);
+	float lon = atan(dot(local, north), dot(local, east));
+	float jet = sin(lat * band_count * 1.5708);
+	float drift = TIME / 3600.0 * wind_speed * 6.2832 * jet;
+	float r = sqrt(max(1.0 - lat * lat, 0.0));
+	vec3 flow = axis * lat + (east * cos(lon + drift) + north * sin(lon + drift)) * r;
+
+	// Bands: latitude, displaced by turbulence stretched along the winds.
+	vec3 stretched = flow * 3.0;
+	float warp = (fbm(stretched + vec3(0.0, lat * 12.0, 0.0), pixel * 3.0) - 0.5) * turbulence * 0.25;
+	float band_lat = lat + warp / band_count * 4.0;
+	float bands = sin(band_lat * band_count * 1.5708 * 2.0 + (fbm(vec3(band_lat * 6.0, 0.0, 1.7), 0.0) - 0.5) * 4.0);
+	float accent = smoothstep(0.55, 1.0, fbm(vec3(band_lat * 20.0, 3.1, 0.0), 0.0));
+	vec3 color = mix(color_light, color_dark, (bands * 0.5 + 0.5) * band_contrast);
+	color = mix(color, color_accent, accent * 0.5);
+	// Streaks: fine detail along the winds.
+	float streak = fbm(vec3(flow.x * 4.0, lat * 160.0, flow.z * 4.0), pixel * 80.0);
+	color *= 0.9 + 0.2 * streak;
+	// Oval storms, light or dark, in a few bands.
+	vec3 storm_cell = floor(flow * 5.0);
+	float storm_pick = hash(storm_cell + 0.5);
+	if (storm_pick < storms * 0.25) {
+		vec3 center = (storm_cell + 0.5 + (vec3(hash(storm_cell + 1.3), hash(storm_cell + 2.7), hash(storm_cell + 4.1)) - 0.5) * 0.5) / 5.0;
+		vec3 offset = flow - center;
+		// Ovals: twice as long east-west as north-south.
+		float north_south = dot(offset, axis);
+		float east_west = length(offset - axis * north_south);
+		float d = length(vec2(east_west, north_south * 2.2)) * 5.0;
+		float storm = 1.0 - smoothstep(0.15, 0.35, d);
+		color = mix(color, storm_pick < storms * 0.12 ? color_light * 1.05 : color_accent * 0.8, storm * 0.8);
+	}
+	// Poles: bluer, smoother.
+	color = mix(color, color_polar, smoothstep(polar_latitude, polar_latitude + 0.12, abs(lat)));
+
+	// Light: Minnaert limb darkening, the rings' shadow, a soft terminator.
+	vec3 to_eye = normalize(CAMERA_POSITION_WORLD - world_position);
+	vec3 sun = normalize(sun_direction);
+	float mu0 = dot(normal, sun);
+	float mu = max(dot(normal, to_eye), 0.0);
+	float direct = pow(max(mu0, 0.0), limb_darkening) * pow(max(mu, 1e-3), limb_darkening - 1.0);
+	direct *= smoothstep(-0.02, 0.08, mu0);
+	if (has_rings)
+		direct *= jar_ring_transmittance(world_position);
+	// The terminator reddens a little (light through the upper haze).
+	vec3 tint = mix(vec3(1.0, 0.75, 0.55), vec3(1.0), smoothstep(0.0, 0.25, mu0));
+	ALBEDO = color * (sun_color * tint * direct * brightness + ambient_light);
+}

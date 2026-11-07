@@ -16,6 +16,7 @@ func _ready() -> void:
 	await _test_frame_switching_off()
 	await _test_rotating_frame()
 	await _test_star_light()
+	await _test_rings()
 	await _test_atmosphere()
 	await _test_rigid_body_falls()
 	await _test_flat_body()
@@ -384,6 +385,60 @@ func _test_rotating_frame() -> void:
 	await _frames(2)
 	_check("sky restored without bodies", environment.sky_rotation.is_equal_approx(Vector3(0.1, 0.2, 0.0)), str(environment.sky_rotation))
 	_check("sun restored without bodies", sun.global_basis.is_equal_approx(sun_basis))
+	root.queue_free()
+	await _frames(2)
+
+## Rings and a gas giant far beyond the camera's far plane: drawn in scaled
+## space (inside the far plane, the same size on screen), Saturn's profile.
+func _test_rings() -> void:
+	for path in ["res://addons/jar_voxel_terrain/nodes/rings/rings.gdshader", "res://addons/jar_voxel_terrain/nodes/rings/gas_giant.gdshader"]:
+		var shader: Shader = load(path)
+		_check("ring shader compiles " + path.get_file(), shader != null and shader.get_shader_uniform_list().size() > 5)
+	var root := Node3D.new()
+	add_child(root)
+	var camera := Camera3D.new()
+	root.add_child(camera)
+	camera.make_current()
+	_body(root, Vector3(0, -1000, 0), 900.0, 10.0) # under the camera: sets its clip planes
+	var giant := _body(root, Vector3(3.0e7, 0, 1.0e8), 6.0e5, 10.0)
+	giant.spin_axis = Vector3(0.4, 1, 0)
+	var star := _body(root, Vector3(0, 0, -1.0e9), 1.0e6, 1.0)
+	var light := DirectionalLight3D.new()
+	root.add_child(light)
+	var shine := JarBodyLight.new()
+	shine.sun = light
+	star.add_child(shine)
+	var surface := JarBodyGasGiant.new()
+	var rings := JarBodyRings.new()
+	giant.add_child(rings)
+	giant.add_child(surface)
+	await _frames(3)
+	await get_tree().process_frame
+	var far := camera.far
+	for layer: Node in [surface, rings]:
+		var shell: MeshInstance3D = layer.get_child(0, true)
+		var d := shell.global_position.distance_to(camera.global_position)
+		var real := giant.get_center().distance_to(camera.global_position)
+		var scale := shell.global_basis.get_scale().x
+		_check("far %s inside the far plane" % layer.get_class(), d > 0.59 * far and d < 0.86 * far, "%.0f of %.0f" % [d, far])
+		_check("far %s same size on screen" % layer.get_class(), absf(scale / d - 6.0e5 / real) < 1e-3 * 6.0e5 / real, "%f vs %f" % [scale / d * 1e6, 6.0e5 / real * 1e6])
+		_check("far %s same direction" % layer.get_class(), (shell.global_position - camera.global_position).normalized().angle_to(giant.get_center() - camera.global_position) < 1e-5)
+	var normal: Vector3 = (rings.get_child(0, true) as Node3D).global_basis.y.normalized()
+	_check("rings across the spin axis", normal.angle_to(Vector3(0.4, 1, 0).normalized()) < 1e-3, str(normal))
+	var material: ShaderMaterial = surface.get_active_material()
+	_check("gas giant sees its rings", material.get_shader_parameter("has_rings") == true)
+	var to_star: Vector3 = material.get_shader_parameter("sun_direction")
+	_check("far body lit from its own star direction", to_star.angle_to(star.get_center() - giant.get_center()) < 1e-3, str(to_star))
+	_check("rings: B ring dense", rings.get_opacity_at(1.75) > 0.5, str(rings.get_opacity_at(1.75)))
+	_check("rings: Cassini division clear", rings.get_opacity_at(1.99) < 0.15, str(rings.get_opacity_at(1.99)))
+	_check("rings: C ring faint", rings.get_opacity_at(1.3) < 0.3, str(rings.get_opacity_at(1.3)))
+	_check("rings: nothing outside", rings.get_opacity_at(1.1) == 0.0 and rings.get_opacity_at(2.5) == 0.0)
+	# Close by, no scaling.
+	camera.global_position = giant.get_center() + Vector3(0, 0, -3.0e6)
+	await _frames(2)
+	await get_tree().process_frame
+	var near_scale: float = (rings.get_child(0, true) as Node3D).global_basis.get_scale().x
+	_check("near rings at full size", is_equal_approx(near_scale, 6.0e5), str(near_scale))
 	root.queue_free()
 	await _frames(2)
 

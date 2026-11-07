@@ -43,6 +43,22 @@ class JarBodyLayer : public Node3D
     Vector3 eye(const JarCelestialBody::Frame &frame) const;
     // Sun direction and color to `material` (sun_direction, sun_color).
     void apply_sun(const Ref<ShaderMaterial> &material);
+    // Direction from a global position towards the star (a JarBodyLight's
+    // body), else towards the sun light. Far bodies need their own: the light
+    // is aimed at the camera.
+    Vector3 star_direction_at(const Vector3 &global_position);
+
+    // Where to draw something around a body center: beyond the camera's far
+    // plane it is drawn in scaled space, smaller and nearer by `scale` about
+    // the camera, which looks exactly the same (directions from the camera do
+    // not change) and keeps it inside the far plane. Centers go to between
+    // 0.6 and 0.85 of the far distance, in the order of their real distance.
+    struct FarView
+    {
+        Vector3 center;
+        float scale = 1.0f;
+    };
+    FarView far_view(const Vector3 &center) const;
 
   public:
     // The body this layer belongs to: the nearest JarCelestialBody above it.
