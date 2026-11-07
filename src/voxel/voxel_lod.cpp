@@ -105,8 +105,23 @@ std::vector<glm::vec3> JarVoxelLoD::lod_points(const JarVoxelVolume &volume, siz
         if (limit > 0.0f && length > limit)
             ahead *= limit / length;
         // Less than a chunk ahead is inside the viewer's own detail already.
-        if (glm::length(ahead) >= _chunkMeters)
-            points.push_back(t.last + ahead);
+        if (glm::length(ahead) < _chunkMeters)
+            continue;
+        // Not through the ground: heading down, the detail is wanted where it
+        // lands, not far inside the planet.
+        constexpr int Steps = 8;
+        glm::vec3 point = t.last + ahead;
+        const JarSignedDistanceField *sdf = volume.get_sdf_ptr();
+        for (int step = 1; sdf != nullptr && step <= Steps; ++step)
+        {
+            const glm::vec3 at = t.last + ahead * (float(step) / float(Steps));
+            if (sdf->distance(at) < 0.0f)
+            {
+                point = at;
+                break;
+            }
+        }
+        points.push_back(point);
     }
     return points;
 }

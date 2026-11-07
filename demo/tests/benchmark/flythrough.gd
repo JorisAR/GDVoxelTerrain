@@ -123,20 +123,26 @@ func _edit_step(volume: JarVoxelVolume, spot: Vector3, phase: String, elapsed: f
 	_dig = {start = Time.get_ticks_usec(), building = volume.is_building(), chunks = chunks}
 	volume.edit(sphere, JarVoxelVolume.SDF_OPERATION_SUBTRACTION, Transform3D(Basis(), spot))
 
-## The viewer stopped: how much is ready where it is, and how long the rest takes.
+## The viewer stopped: how fine the terrain under it is right away, and how
+## long the rest takes.
 func _arrival(volume: JarVoxelVolume, player: Node3D) -> void:
 	var start := Time.get_ticks_msec()
-	var local := volume.to_local(player.global_position)
-	var near := func() -> int:
-		var count := 0
+	var finest := func() -> int:
+		var at: Vector3 = volume.to_local(player.global_position)
+		var best := 99
 		for chunk in volume.get_children():
-			if chunk is JarVoxelChunk and chunk.visible and chunk.get_lod() == 0 and chunk.get_center().distance_to(local) < 300.0:
-				count += 1
-		return count
-	var at_once: int = near.call()
-	while (volume.is_building() or volume.is_meshing()) and Time.get_ticks_msec() - start < 20000:
+			if chunk is JarVoxelChunk and chunk.visible and chunk.position.distance_to(at) < 256.0 + 64.0 * (1 << chunk.get_lod()):
+				best = mini(best, chunk.get_lod())
+		return best
+	var at_once: int = finest.call()
+	var fine_at := -1
+	while Time.get_ticks_msec() - start < 15000:
 		await get_tree().process_frame
-	print("arrival: %d full-detail chunks at once, %d after %.2f s" % [at_once, near.call(), (Time.get_ticks_msec() - start) / 1000.0])
+		if fine_at < 0 and finest.call() == 0:
+			fine_at = Time.get_ticks_msec() - start
+		if fine_at >= 0 and not volume.is_building() and not volume.is_meshing():
+			break
+	print("arrival: finest lod %d at once, lod 0 after %.2f s, settled after %.2f s" % [at_once, fine_at / 1000.0, (Time.get_ticks_msec() - start) / 1000.0])
 
 func _report() -> void:
 	for phase in _phases():
