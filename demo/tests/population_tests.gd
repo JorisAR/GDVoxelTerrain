@@ -538,23 +538,26 @@ func _test_far_details() -> void:
 		TestWorld.populate(v, [detail]))
 	var volume: JarVoxelVolume = world.volume
 	await _settle(volume)
-	var near_level := 0
-	var far_level := 0
 	var far_only := 0
 	var both := 0
+	var close_chunk := 0 # instances in the fullest chunk near the viewer
+	var edge_chunk := 0  # and the fullest far along
 	for c in volume.get_children():
 		if not (c is JarVoxelChunk and c.visible):
 			continue
 		var levels: Array = c.get_children().filter(func(n): return n is MultiMeshInstance3D and n.visible and n.multimesh)
 		if levels.size() == 2:
 			both += 1
-			near_level += levels[0].multimesh.instance_count
-			far_level += levels[1].multimesh.instance_count
 		elif levels.size() == 1:
 			far_only += 1
+		for level in levels:
+			if c.get_center().distance_to(world.viewer.position) < 40.0:
+				close_chunk = maxi(close_chunk, level.multimesh.instance_count)
+			elif c.get_center().distance_to(world.viewer.position) > 75.0:
+				edge_chunk = maxi(edge_chunk, level.multimesh.instance_count)
 	_check("far details: near chunks have both levels", both > 0, "%d chunks" % both)
 	_check("far details: others only the far one", far_only > 0, "%d chunks" % far_only)
-	_check("far details: thinned", far_level > 0.15 * near_level and far_level < 0.35 * near_level, "%d of %d" % [far_level, near_level])
+	_check("far details: thinned", edge_chunk > 0 and edge_chunk < 0.6 * close_chunk, "%d, near it %d" % [edge_chunk, close_chunk])
 	world.volume.queue_free()
 	world.viewer.queue_free()
 	await get_tree().process_frame

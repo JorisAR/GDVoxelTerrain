@@ -68,7 +68,7 @@ class JarVoxelChunk : public Node3D
     DetailInputs detail_inputs;
     uint64_t detail_token = 0;
     DetailState detail_state = DETAILS_NONE;
-    bool detail_near = false; // its details include those only drawn near
+    float detail_closest = 0.0f; // its details are what lasts this close to a viewer
     bool has_details() const { return _has_details; }
     void apply_details(const JarVoxelVolume &terrain, const std::vector<Ref<JarTerrainDetail>> &details,
                        const std::vector<DetailLevels> &levels,

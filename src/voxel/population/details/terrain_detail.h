@@ -5,14 +5,35 @@
 #include <godot_cpp/classes/material.hpp>
 #include <godot_cpp/classes/mesh.hpp>
 
+#include <algorithm>
+#include <cmath>
+
 using namespace godot;
 
-// How far a detail goes, in meters, and how much of it is left past `far`.
+// How far a detail goes, in meters. Past `far` it thins out, gradually, down to
+// `density` of it at `draw`: each instance has a place in [0, 1) that says how
+// far it lasts, so they go one by one, not in one ring.
 struct DetailLevels
 {
     float draw = 0.0f;
     float far = 0.0f; // 0: the same all the way
     float density = 1.0f;
+
+    // The part of them still there at `distance`.
+    float alive_at(float distance) const
+    {
+        if (far <= 0.0f || distance <= far)
+            return 1.0f;
+        const float t = 1.0f - std::min((distance - far) / std::max(draw - far, 1e-3f), 1.0f);
+        return density + (1.0f - density) * t * t;
+    }
+    // How far the instance at `place` lasts.
+    float last_distance(float place) const
+    {
+        if (far <= 0.0f || place < density)
+            return draw;
+        return far + (1.0f - std::sqrt((place - density) / std::max(1.0f - density, 1e-3f))) * (draw - far);
+    }
 };
 
 // Small, dense objects (grass, pebbles) scattered over full-detail chunks. They
@@ -20,10 +41,10 @@ struct DetailLevels
 // are not persistent: their exact positions may change when regenerated.
 // How far they go follows from their size (see JarVoxelPopulation), and
 // `draw_distance`, `far_distance` and `far_density` override it, 0 meaning
-// automatic. Beyond the far distance only part of them are drawn, a little larger
-// to keep the ground covered, as `far_mesh` (fewer triangles) if it has one:
-// the same instances, so nothing moves, and chunks only that far away only make
-// those. Materials that include
+// automatic. Beyond the far distance they are drawn as `far_mesh` (fewer
+// triangles) if it has one, a little larger, and thin out gradually down to the
+// far density at the draw distance: the same instances, so nothing moves, and
+// chunks only make what is left at their distance. Materials that include
 // addons/jar_voxel_terrain/shaders/jar_population.gdshaderinc switch per
 // instance and can take the ground's color; others switch per chunk.
 class JarTerrainDetail : public JarTerrainPopulator

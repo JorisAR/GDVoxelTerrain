@@ -291,7 +291,7 @@ void JarVoxelChunk::apply_details(const JarVoxelVolume &terrain, const std::vect
         if (detail.is_valid() && mesh.is_null())
             mesh = detail->get_mesh();
         // A chunk only that far away has no near level.
-        if (mesh.is_null() || (far && !has_far) || (!far && has_far && !detail_near) || buffers[i / 2].is_empty())
+        if (mesh.is_null() || (far && !has_far) || (!far && has_far && detail_closest > level.far) || buffers[i / 2].is_empty())
         {
             hide_multi_mesh_instance(multi_mesh_instance);
             continue;
@@ -310,9 +310,8 @@ void JarVoxelChunk::apply_details(const JarVoxelVolume &terrain, const std::vect
         const float split = has_far ? level.far : 0.0f;
         const float begin = far ? split : 0.0f, end = far || !has_far ? draw : split;
         // This level's range in each instance's custom data (y, z).
-        // Far: the part of them drawn there, larger to cover the same ground.
-        const float keep = far ? level.density : 2.0f;
-        const float grow = far ? std::pow(1.0f / std::max(level.density, 0.01f), 0.25f) : 1.0f;
+        // Far: a little larger, as they thin out, to cover the ground.
+        const float grow = far ? std::pow(1.0f / std::max(level.density, 0.01f), 0.1f) : 1.0f;
         PackedFloat32Array data;
         data.resize(buffer.size());
         const float *r = buffer.ptr();
@@ -320,15 +319,16 @@ void JarVoxelChunk::apply_details(const JarVoxelVolume &terrain, const std::vect
         int64_t kept = 0;
         for (int64_t k = 0; k + ChunkDetailGenerator::Stride <= buffer.size(); k += ChunkDetailGenerator::Stride)
         {
-            if (r[k + 13] >= keep)
-                continue;
+            const float last = far ? level.last_distance(r[k + 13]) : end;
+            if (far && last <= begin)
+                continue; // gone before this level starts
             float *out = w + kept;
             std::memcpy(out, r + k, sizeof(float) * ChunkDetailGenerator::Stride);
             for (int row = 0; row < 3; ++row)
                 for (int column = 0; column < 3; ++column)
                     out[row * 4 + column] *= grow;
             out[13] = begin;
-            out[14] = end > 0.0f ? end : 1e20f;
+            out[14] = last > 0.0f ? last : 1e20f;
             kept += ChunkDetailGenerator::Stride;
         }
         data.resize(kept);

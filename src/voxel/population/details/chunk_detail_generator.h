@@ -39,19 +39,19 @@ class ChunkDetailGenerator
     // Floats per instance in the buffers: a TRANSFORM_3D transform, then the
     // custom data (PopulationRendering::write_custom; the LOD range is the
     // chunk's to set). Until then custom y holds the instance's place in
-    // [0, 1): those below a detail's far_density are drawn far away too.
+    // [0, 1), which says how far it lasts (see DetailLevels).
     static constexpr int Stride = 16;
 
     // Thread-safe given read-only details: one MultiMesh buffer per detail,
     // with chunk-relative transforms. details[i] grows everywhere for
-    // layers[i].biome == -1, else weighted by that biome. Without `near`, only
-    // what is drawn beyond far_distance.
+    // layers[i].biome == -1, else weighted by that biome. Only what is still
+    // there at `closest` meters, the nearest any viewer is to the chunk.
     std::vector<PackedFloat32Array> generate_detail_buffers(const std::vector<Ref<JarTerrainDetail>> &details,
                                                             const std::vector<DetailLevels> &levels,
                                                             const std::vector<PopulationLayer> &detailLayers,
                                                             const Ref<JarBiomeMap> &biomeMap,
                                                             const std::shared_ptr<const GroundPalette> &ground,
-                                                            const DetailInputs &inputs, bool near) const;
+                                                            const DetailInputs &inputs, float closest) const;
 };
 
 #endif // JAR_CHUNK_DETAIL_GENERATOR_H

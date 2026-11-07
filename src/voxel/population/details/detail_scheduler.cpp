@@ -52,10 +52,10 @@ void DetailScheduler::worker()
             const VoxelStats::Scope stage(VoxelStats::WorkerDetails);
             ChunkDetailGenerator generator(job.up);
             buffers =
-                generator.generate_detail_buffers(*job.details, *job.levels, *job.layers, job.biomeMap, job.ground, job.inputs, job.near);
+                generator.generate_detail_buffers(*job.details, *job.levels, *job.layers, job.biomeMap, job.ground, job.inputs, job.closest);
         }
         std::lock_guard<std::mutex> lock(_mutex);
-        _results.push_back({job.chunk, job.token, job.near, job.details, job.levels, std::move(buffers)});
+        _results.push_back({job.chunk, job.token, job.closest, job.details, job.levels, std::move(buffers)});
     }
 }
 
@@ -83,7 +83,7 @@ void DetailScheduler::refresh_details()
     auto layers = std::make_shared<std::vector<PopulationLayer>>();
     auto levels = std::make_shared<std::vector<DetailLevels>>();
     _maxDrawDistance = 0.0f;
-    _maxNearDistance = 0.0f;
+    _thinning = false;
     bool unlimited = false;
     for (const auto &entry : _population.detail_entries())
     {
@@ -95,8 +95,7 @@ void DetailScheduler::refresh_details()
         const DetailLevels level = _population.levels_of(**entry.item);
         levels->back() = level;
         const float draw = level.draw;
-        // Without a far level, the whole range is near.
-        _maxNearDistance = std::max(_maxNearDistance, level.far > 0.0f ? level.far : 1e20f);
+        _thinning = _thinning || level.far > 0.0f;
         unlimited = unlimited || draw <= 0.0f;
         _maxDrawDistance = std::max(_maxDrawDistance, draw);
     }
@@ -129,7 +128,7 @@ void DetailScheduler::process()
         JarVoxelChunk *chunk = result.chunk;
         if (_chunks.count(chunk) == 0 || chunk->detail_token != result.token)
             continue;
-        chunk->detail_near = result.near;
+        chunk->detail_closest = result.closest;
         chunk->apply_details(_volume, *result.details, *result.levels, result.buffers);
     }
 
@@ -143,7 +142,7 @@ void DetailScheduler::process()
     // at its edge do not flip on and off.
     const float near = range();
     const float far = near + chunk_reach(_volume);
-    const float nearDetail = _maxNearDistance + chunk_reach(_volume);
+    const float reach = chunk_reach(_volume);
     std::vector<std::pair<float, JarVoxelChunk *>> wanted;
     for (JarVoxelChunk *chunk : _chunks)
     {
@@ -156,8 +155,9 @@ void DetailScheduler::process()
         }
         else if (distance <= near && chunk->detail_state == JarVoxelChunk::DETAILS_NONE)
             wanted.emplace_back(distance, chunk);
-        // Come close: the instances only drawn near are still to be made.
-        else if (distance <= nearDetail && chunk->detail_state == JarVoxelChunk::DETAILS_SHOWN && !chunk->detail_near)
+        // Come closer: more of them last this far than it made.
+        else if (_thinning && chunk->detail_state == JarVoxelChunk::DETAILS_SHOWN &&
+                 distance - reach < chunk->detail_closest - reach)
             wanted.emplace_back(distance, chunk);
     }
     _waiting = !wanted.empty();
@@ -174,8 +174,9 @@ void DetailScheduler::process()
             break;
         chunk->detail_state = JarVoxelChunk::DETAILS_QUEUED;
         const Vector3 p = chunk->get_center();
-        const bool nearChunk = _volume.distance_to_nearest_viewer(glm::vec3(p.x, p.y, p.z)) <= nearDetail;
-        _jobs.push_back({chunk, chunk->detail_token, chunk->detail_inputs, nearChunk, _details, _detailLevels, _detailLayers, biomeMap, ground, up});
+        // Its nearest ground, a little closer still, to not remake it every step.
+        const float closest = std::max(0.0f, _volume.distance_to_nearest_viewer(glm::vec3(p.x, p.y, p.z)) - 2.0f * reach);
+        _jobs.push_back({chunk, chunk->detail_token, chunk->detail_inputs, closest, _details, _detailLevels, _detailLayers, biomeMap, ground, up});
         _inFlight++;
     }
     _wake.notify_one();
