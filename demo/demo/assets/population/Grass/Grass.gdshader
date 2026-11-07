@@ -30,6 +30,7 @@ void vertex() {
 }
 
 void fragment() {
+	JAR_POPULATION_FRAGMENT
 	//if(dither(SCREEN_UV * VIEWPORT_SIZE,
 		//smoothstep(64, 80, distance(global_position, CAMERA_POSITION_WORLD))
 		//))

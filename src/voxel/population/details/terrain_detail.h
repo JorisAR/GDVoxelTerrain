@@ -7,10 +7,20 @@
 
 using namespace godot;
 
+// How far a detail goes, in meters, and how much of it is left past `far`.
+struct DetailLevels
+{
+    float draw = 0.0f;
+    float far = 0.0f; // 0: the same all the way
+    float density = 1.0f;
+};
+
 // Small, dense objects (grass, pebbles) scattered over full-detail chunks. They
 // are generated from the chunk mesh, so they follow edits automatically, and
 // are not persistent: their exact positions may change when regenerated.
-// Beyond `far_distance` only `far_density` of them are drawn, a little larger
+// How far they go follows from their size (see JarVoxelPopulation), and
+// `draw_distance`, `far_distance` and `far_density` override it, 0 meaning
+// automatic. Beyond the far distance only part of them are drawn, a little larger
 // to keep the ground covered, as `far_mesh` (fewer triangles) if it has one:
 // the same instances, so nothing moves, and chunks only that far away only make
 // those. Materials that include
@@ -24,10 +34,10 @@ class JarTerrainDetail : public JarTerrainPopulator
     Ref<Mesh> mesh;
     Ref<Material> material;
     Ref<Mesh> far_mesh;
-    float far_distance = 0.0f;     // meters; 0 = the same all the way
-    float far_density = 1.0f;      // part of them drawn beyond far_distance
+    float far_distance = 0.0f;     // meters; 0: from its size
+    float far_density = 0.0f;      // part of them drawn beyond it; 0: the population's
     float density = 1.0f;          // instances per square meter
-    float draw_distance = 0.0f;    // meters; 0 shows them on every full-detail chunk
+    float draw_distance = 0.0f;    // meters; 0: from its size
     bool shadows_enabled = false;
 
   public:
@@ -40,9 +50,7 @@ class JarTerrainDetail : public JarTerrainPopulator
     float get_far_distance() const { return far_distance; }
     void set_far_distance(float value) { far_distance = std::max(0.0f, value); }
     float get_far_density() const { return far_density; }
-    void set_far_density(float value) { far_density = std::clamp(value, 0.01f, 1.0f); }
-    // Drawn beyond far_distance: a second, thinned level.
-    bool has_far_level() const { return far_distance > 0.0f; }
+    void set_far_density(float value) { far_density = std::clamp(value, 0.0f, 1.0f); }
     float get_density() const { return density; }
     void set_density(float value) { density = std::max(0.0f, value); }
     float get_draw_distance() const { return draw_distance; }
@@ -66,7 +74,7 @@ class JarTerrainDetail : public JarTerrainPopulator
         BIND_DETAIL(material, Variant::OBJECT, PROPERTY_HINT_RESOURCE_TYPE, "Material");
         BIND_DETAIL(far_mesh, Variant::OBJECT, PROPERTY_HINT_RESOURCE_TYPE, "Mesh");
         BIND_DETAIL(far_distance, Variant::FLOAT, PROPERTY_HINT_RANGE, "0,500,0.1,or_greater,suffix:m");
-        BIND_DETAIL(far_density, Variant::FLOAT, PROPERTY_HINT_RANGE, "0.01,1,0.01");
+        BIND_DETAIL(far_density, Variant::FLOAT, PROPERTY_HINT_RANGE, "0,1,0.01");
         BIND_DETAIL(density, Variant::FLOAT, PROPERTY_HINT_RANGE, "0,20,0.01,or_greater,suffix:/m2");
         BIND_DETAIL(draw_distance, Variant::FLOAT, PROPERTY_HINT_RANGE, "0,500,0.1,or_greater,suffix:m");
         BIND_DETAIL(shadows_enabled, Variant::BOOL, PROPERTY_HINT_NONE, "");

@@ -57,6 +57,7 @@ void vertex() {
 }
 
 void fragment() {
+	JAR_POPULATION_FRAGMENT
 	NORMAL = FRONT_FACING || !flip_normal ? NORMAL : -NORMAL;
 	vec3 mask_color = vec3(1.0,1.0,1.0);
 	vec3 noise_sample = vec3(1.0,1.0,1.0);

@@ -274,6 +274,7 @@ void JarVoxelChunk::update_chunk(JarVoxelVolume &terrain, VoxelOctreeNode *node,
 // Shows details generated for this chunk. Two multimeshes per detail share
 // its instances: the mesh near, the far mesh beyond far_distance.
 void JarVoxelChunk::apply_details(const JarVoxelVolume &terrain, const std::vector<Ref<JarTerrainDetail>> &details,
+                                  const std::vector<DetailLevels> &levels,
                                   const std::vector<PackedFloat32Array> &buffers)
 {
     const int detail_count = std::min<int>(buffers.size(), details.size());
@@ -284,7 +285,8 @@ void JarVoxelChunk::apply_details(const JarVoxelVolume &terrain, const std::vect
         MultiMeshInstance3D *multi_mesh_instance = multi_mesh_instances[i];
         const Ref<JarTerrainDetail> detail = i < 2 * detail_count ? details[i / 2] : Ref<JarTerrainDetail>();
         const bool far = (i & 1) != 0;
-        const bool has_far = detail.is_valid() && detail->has_far_level();
+        const DetailLevels level = detail.is_valid() ? levels[i / 2] : DetailLevels();
+        const bool has_far = level.far > 0.0f;
         Ref<Mesh> mesh = detail.is_null() ? Ref<Mesh>() : (far ? detail->get_far_mesh() : detail->get_mesh());
         if (detail.is_valid() && mesh.is_null())
             mesh = detail->get_mesh();
@@ -304,13 +306,13 @@ void JarVoxelChunk::apply_details(const JarVoxelVolume &terrain, const std::vect
             multi_mesh->set_use_custom_data(true);
             multi_mesh_instance->set_multimesh(multi_mesh);
         }
-        const float draw = detail->get_draw_distance();
-        const float split = has_far ? detail->get_far_distance() : 0.0f;
+        const float draw = level.draw;
+        const float split = has_far ? level.far : 0.0f;
         const float begin = far ? split : 0.0f, end = far || !has_far ? draw : split;
         // This level's range in each instance's custom data (y, z).
         // Far: the part of them drawn there, larger to cover the same ground.
-        const float keep = far ? detail->get_far_density() : 2.0f;
-        const float grow = far ? std::pow(1.0f / detail->get_far_density(), 0.25f) : 1.0f;
+        const float keep = far ? level.density : 2.0f;
+        const float grow = far ? std::pow(1.0f / std::max(level.density, 0.01f), 0.25f) : 1.0f;
         PackedFloat32Array data;
         data.resize(buffer.size());
         const float *r = buffer.ptr();

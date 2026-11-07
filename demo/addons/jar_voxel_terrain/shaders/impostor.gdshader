@@ -151,6 +151,7 @@ vec3 baked_normal(vec2 frame, vec2 uv, vec3 z) {
 }
 
 void fragment() {
+	JAR_POPULATION_FRAGMENT
 	vec4 a0 = sample_frame(imposterTextureAlbedo, frame0, uv0);
 	vec4 a1 = sample_frame(imposterTextureAlbedo, frame1, uv1);
 	vec4 a2 = sample_frame(imposterTextureAlbedo, frame2, uv2);

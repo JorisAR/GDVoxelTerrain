@@ -43,6 +43,7 @@ class DetailScheduler
         DetailInputs inputs;
         bool near;
         std::shared_ptr<const std::vector<Ref<JarTerrainDetail>>> details;
+        std::shared_ptr<const std::vector<DetailLevels>> levels;
         std::shared_ptr<const std::vector<PopulationLayer>> layers;
         Ref<JarBiomeMap> biomeMap;
         std::shared_ptr<const GroundPalette> ground;
@@ -54,6 +55,7 @@ class DetailScheduler
         uint64_t token;
         bool near;
         std::shared_ptr<const std::vector<Ref<JarTerrainDetail>>> details;
+        std::shared_ptr<const std::vector<DetailLevels>> levels;
         std::vector<PackedFloat32Array> buffers;
     };
 
@@ -66,6 +68,7 @@ class DetailScheduler
     std::unordered_set<JarVoxelChunk *> _chunks; // full-detail chunks with mesh data
     std::shared_ptr<const std::vector<Ref<JarTerrainDetail>>> _details;
     std::shared_ptr<const std::vector<PopulationLayer>> _detailLayers;
+    std::shared_ptr<const std::vector<DetailLevels>> _detailLevels;
     float _maxDrawDistance = 0.0f; // 0: no limit
     float _maxNearDistance = 0.0f; // beyond it chunks only make what is drawn far away
     bool _detailsDirty = true;

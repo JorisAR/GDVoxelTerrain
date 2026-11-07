@@ -254,6 +254,7 @@ func _test_detail_resolution() -> void:
 	detail.density = 2.0
 	detail.maximum_slope = 90.0
 	detail.draw_distance = 20.0
+	detail.far_density = 1.0
 	var center := Vector3(3, 0, 5)
 	var sets := []
 	for voxel in [1.0, 0.5]:
@@ -556,6 +557,27 @@ func _test_far_details() -> void:
 	_check("far details: thinned", far_level > 0.15 * near_level and far_level < 0.35 * near_level, "%d of %d" % [far_level, near_level])
 	world.volume.queue_free()
 	world.viewer.queue_free()
+	await get_tree().process_frame
+
+	# Automatic: from its size, the population's settings, and overrides.
+	var auto := JarTerrainDetail.new()
+	auto.mesh = BoxMesh.new()
+	auto.minimum_scale = 0.5
+	auto.maximum_scale = 0.5
+	var layered := TestWorld.flat(self, Vector3(3, 30, 5), func(v: JarVoxelVolume):
+		TestWorld.populate(v, [auto]))
+	var pop := _pop(layered.volume)
+	var row: Dictionary = pop.get_detail_distances()[0]
+	_check("detail distances from size", absf(row.draw - 87.97) < 0.5 and absf(row.far - 5.5) < 0.1 and is_equal_approx(row.density, 0.25),
+		"%.1f, %.1f, %.2f" % [row.draw, row.far, row.density])
+	pop.max_detail_distance = 40.0
+	_check("detail distance capped", is_equal_approx(pop.get_detail_distances()[0].draw, 40.0))
+	auto.draw_distance = 60.0
+	auto.far_density = 0.5
+	row = pop.get_detail_distances()[0]
+	_check("detail overrides", is_equal_approx(row.draw, 60.0) and is_equal_approx(row.density, 0.5))
+	layered.volume.queue_free()
+	layered.viewer.queue_free()
 	await get_tree().process_frame
 
 ## A baked impostor takes over from its distance, with or without one set.

@@ -46,6 +46,10 @@ class JarVoxelPopulation : public Node, public VolumeExtension
     float _disappearPixels = 4.0f;
     float _impostorPixels = 24.0f;
     float _maxDrawDistance = 5000.0f;
+    float _detailDisappearPixels = 4.0f;
+    float _detailFarPixels = 64.0f;
+    float _detailFarDensity = 0.25f;
+    float _maxDetailDistance = 110.0f;
     bool _regeneratePending = false;
     JarVoxelVolume *_volume = nullptr;
     std::unique_ptr<FeatureManager> _features;
@@ -83,8 +87,20 @@ class JarVoxelPopulation : public Node, public VolumeExtension
     void set_impostor_pixels(float value);
     float get_max_draw_distance() const { return _maxDrawDistance; }
     void set_max_draw_distance(float value);
+    float get_detail_disappear_pixels() const { return _detailDisappearPixels; }
+    void set_detail_disappear_pixels(float value);
+    float get_detail_far_pixels() const { return _detailFarPixels; }
+    void set_detail_far_pixels(float value);
+    float get_detail_far_density() const { return _detailFarDensity; }
+    void set_detail_far_density(float value);
+    float get_max_detail_distance() const { return _maxDetailDistance; }
+    void set_max_detail_distance(float value);
+    // A detail's distances: its own, else from its size and the settings above.
+    DetailLevels levels_of(const JarTerrainDetail &detail) const;
     // What the settings give each feature: name, impostor and draw distances.
     TypedArray<Dictionary> get_feature_distances() const;
+    // And each detail: name, far distance, far density and draw distance.
+    TypedArray<Dictionary> get_detail_distances() const;
 
     void regenerate();
     // A layer below changed (or came, went or moved): regenerates once, later.

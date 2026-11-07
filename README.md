@@ -147,7 +147,9 @@ Both share placement rules, all of them probabilities so populations thin out na
 
 How far features are drawn follows from their size: on `JarVoxelPopulation`, `disappear_pixels` is how small one gets before it goes, `impostor_pixels` where its impostor takes over, both in pixels of a 1080p screen at a 75 degree field of view (they are angles, so window size and zoom change nothing), and `max_draw_distance` an upper limit. The inspector lists what they give each feature. A feature's own `draw_distance` and `impostor_distance` override them. Past about a kilometer big features come from cells eight times as wide.
 
-Details thin out with distance: beyond `far_distance` only `far_density` of them are drawn, a little larger, as `far_mesh` if they have one. They are the same instances, so nothing jumps, which is what makes a draw distance of 100 m affordable. Details grow on full-detail chunks, so that ring is their limit.
+Details work the same way, with `detail_disappear_pixels`, `detail_far_pixels`, `detail_far_density` and `max_detail_distance` on the population, and their own `draw_distance`, `far_distance` and `far_density` as overrides. Beyond the far distance only part of them are drawn, a little larger, as `far_mesh` if they have one. They are the same instances, so nothing jumps, which is what makes 100 m of grass affordable. Details grow on full-detail chunks, so that ring is their limit.
+
+Materials with `jar_population.gdshaderinc` fade between levels by dithering, never by blending: put `JAR_POPULATION_FRAGMENT` first in `fragment()`.
 
 Features are placed in tree order, and each keeps the ones after it out of its `footprint`: list trees first, then rocks, then bushes, and they fill the gaps without overlapping. Edits remove the features standing where the shape changes, permanently; for gameplay there are `remove_features(position, radius)` and `get_features_near(position, radius)`:
 

@@ -71,6 +71,7 @@ class JarVoxelChunk : public Node3D
     bool detail_near = false; // its details include those only drawn near
     bool has_details() const { return _has_details; }
     void apply_details(const JarVoxelVolume &terrain, const std::vector<Ref<JarTerrainDetail>> &details,
+                       const std::vector<DetailLevels> &levels,
                        const std::vector<PackedFloat32Array> &buffers);
     void clear_details();
 

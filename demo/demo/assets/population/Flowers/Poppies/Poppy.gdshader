@@ -34,6 +34,7 @@ void vertex() {
 }
 
 void fragment() {
+	JAR_POPULATION_FRAGMENT
 	vec3 col = texture(leaves_mask, UV).rgb;
 	if(COLOR.r > 0.5 && col.r < 0.5) discard;
 

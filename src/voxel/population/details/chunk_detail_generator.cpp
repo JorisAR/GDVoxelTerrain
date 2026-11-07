@@ -4,7 +4,8 @@
 #include <cmath>
 
 std::vector<PackedFloat32Array> ChunkDetailGenerator::generate_detail_buffers(
-    const std::vector<Ref<JarTerrainDetail>> &details, const std::vector<PopulationLayer> &detailLayers,
+    const std::vector<Ref<JarTerrainDetail>> &details, const std::vector<DetailLevels> &levels,
+    const std::vector<PopulationLayer> &detailLayers,
     const Ref<JarBiomeMap> &biomeMap, const std::shared_ptr<const GroundPalette> &ground,
     const DetailInputs &inputs, bool near) const
 {
@@ -48,7 +49,7 @@ std::vector<PackedFloat32Array> ChunkDetailGenerator::generate_detail_buffers(
         const PopulationLayer layer = d < int(detailLayers.size()) ? detailLayers[d] : PopulationLayer();
         if (detail != nullptr && detail->get_density() * layer.density > 0.0f)
             active.push_back({detail, d, layer.biome, std::sqrt(MinProjection / (detail->get_density() * layer.density)),
-                              near || !detail->has_far_level() ? 1.0f : detail->get_far_density()});
+                              near || levels[d].far <= 0.0f ? 1.0f : levels[d].density});
     }
 
     std::vector<std::vector<Transform3D>> transforms(details.size());

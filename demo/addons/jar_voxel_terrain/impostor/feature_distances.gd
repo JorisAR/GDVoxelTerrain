@@ -21,4 +21,7 @@ func refresh() -> void:
 		var impostor: float = row.impostor
 		lines.append("%s: %s%s" % [row.name, ("impostor %d m, " % impostor) if impostor > 0.0 else "",
 			("gone %.1f km" % (row.draw / 1000.0)) if row.draw >= 1000.0 else ("gone %d m" % row.draw)])
+	for row: Dictionary in population.get_detail_distances():
+		var far: float = row.far
+		lines.append("%s: %sgone %d m" % [row.name, ("%d%% from %d m, " % [row.density * 100.0, far]) if far > 0.0 else "", row.draw])
 	text = "\n".join(lines)

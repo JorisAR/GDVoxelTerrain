@@ -37,14 +37,16 @@ inline bool has_instance_lod(const Ref<Material> &material)
 // Shows `instance` (a multimesh spread over `margin` meters around its center)
 // from `begin` to `end` meters (end 0 = no limit): per node with Godot's
 // visibility range, widened by the margin when the material switches per
-// instance itself (from the instances' custom data, see write_custom).
+// instance itself (from the instances' custom data, see write_custom), and
+// for the half of a fade band that lies past each end.
 inline void set_lod_range(GeometryInstance3D *instance, const Ref<Material> &material, float begin, float end,
                           float margin)
 {
     if (has_instance_lod(material))
     {
-        instance->set_visibility_range_begin(begin > 0.0f ? std::max(0.0f, begin - margin) : 0.0f);
-        instance->set_visibility_range_end(end > 0.0f ? end + margin : 0.0f);
+        constexpr float HalfBand = 0.05f; // JAR_FADE_BAND / 2 in jar_population.gdshaderinc
+        instance->set_visibility_range_begin(begin > 0.0f ? std::max(0.0f, begin * (1.0f - HalfBand) - margin) : 0.0f);
+        instance->set_visibility_range_end(end > 0.0f ? end * (1.0f + HalfBand) + margin : 0.0f);
     }
     else
     {

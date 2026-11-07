@@ -47,6 +47,7 @@ class ChunkDetailGenerator
     // layers[i].biome == -1, else weighted by that biome. Without `near`, only
     // what is drawn beyond far_distance.
     std::vector<PackedFloat32Array> generate_detail_buffers(const std::vector<Ref<JarTerrainDetail>> &details,
+                                                            const std::vector<DetailLevels> &levels,
                                                             const std::vector<PopulationLayer> &detailLayers,
                                                             const Ref<JarBiomeMap> &biomeMap,
                                                             const std::shared_ptr<const GroundPalette> &ground,

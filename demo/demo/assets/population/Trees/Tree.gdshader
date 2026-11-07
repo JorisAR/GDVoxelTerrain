@@ -47,6 +47,7 @@ void vertex() {
 }
 
 void fragment() {
+	JAR_POPULATION_FRAGMENT
 	if(COLOR.r < 0.5 && (!FRONT_FACING || dissolve > 0.0f)) discard;
 
 	NORMAL = FRONT_FACING ? NORMAL : -NORMAL;

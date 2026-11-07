@@ -214,6 +214,68 @@ void JarVoxelPopulation::set_max_draw_distance(float value)
     reset_features();
 }
 
+void JarVoxelPopulation::set_detail_disappear_pixels(float value)
+{
+    _detailDisappearPixels = std::max(0.1f, value);
+    reset_details();
+}
+
+void JarVoxelPopulation::set_detail_far_pixels(float value)
+{
+    _detailFarPixels = std::max(0.1f, value);
+    reset_details();
+}
+
+void JarVoxelPopulation::set_detail_far_density(float value)
+{
+    _detailFarDensity = std::clamp(value, 0.01f, 1.0f);
+    reset_details();
+}
+
+void JarVoxelPopulation::set_max_detail_distance(float value)
+{
+    _maxDetailDistance = std::max(0.0f, value);
+    reset_details();
+}
+
+DetailLevels JarVoxelPopulation::levels_of(const JarTerrainDetail &detail) const
+{
+    const Ref<Mesh> mesh = detail.get_mesh();
+    const float size = (mesh.is_valid() ? float(mesh->get_aabb().get_longest_axis_size()) : 1.0f) * 0.5f *
+                       (detail.get_minimum_scale() + detail.get_maximum_scale());
+    DetailLevels levels;
+    levels.draw = detail.get_draw_distance() > 0.0f ? detail.get_draw_distance()
+                                                    : size / (_detailDisappearPixels * FeatureManager::PixelAngle);
+    if (_maxDetailDistance > 0.0f && detail.get_draw_distance() <= 0.0f)
+        levels.draw = std::min(levels.draw, _maxDetailDistance);
+    levels.far = detail.get_far_distance() > 0.0f ? detail.get_far_distance()
+                                                  : size / (_detailFarPixels * FeatureManager::PixelAngle);
+    if (levels.far >= levels.draw)
+        levels.far = 0.0f; // never reached
+    levels.density = detail.get_far_density() > 0.0f ? detail.get_far_density() : _detailFarDensity;
+    return levels;
+}
+
+TypedArray<Dictionary> JarVoxelPopulation::get_detail_distances() const
+{
+    TypedArray<Dictionary> result;
+    const TypedArray<JarPopulationLayer> layers = get_layers();
+    for (int64_t i = 0; i < layers.size(); ++i)
+    {
+        const JarDetailLayer *layer = Object::cast_to<JarDetailLayer>(layers[i]);
+        if (layer == nullptr || layer->get_detail().is_null())
+            continue;
+        const DetailLevels levels = levels_of(**layer->get_detail());
+        Dictionary row;
+        row["name"] = layer->get_name();
+        row["far"] = levels.far;
+        row["density"] = levels.density;
+        row["draw"] = levels.draw;
+        result.push_back(row);
+    }
+    return result;
+}
+
 TypedArray<Dictionary> JarVoxelPopulation::get_feature_distances() const
 {
     TypedArray<Dictionary> result;
@@ -423,6 +485,11 @@ void JarVoxelPopulation::_bind_methods()
     BIND_POPULATION(impostor_pixels, Variant::FLOAT, PROPERTY_HINT_RANGE, "4,512,1,or_greater,suffix:px");
     BIND_POPULATION(max_draw_distance, Variant::FLOAT, PROPERTY_HINT_RANGE, "0,20000,10,or_greater,suffix:m");
     ClassDB::bind_method(D_METHOD("get_feature_distances"), &JarVoxelPopulation::get_feature_distances);
+    ClassDB::bind_method(D_METHOD("get_detail_distances"), &JarVoxelPopulation::get_detail_distances);
+    BIND_POPULATION(detail_disappear_pixels, Variant::FLOAT, PROPERTY_HINT_RANGE, "0.5,32,0.1,or_greater,suffix:px");
+    BIND_POPULATION(detail_far_pixels, Variant::FLOAT, PROPERTY_HINT_RANGE, "4,512,1,or_greater,suffix:px");
+    BIND_POPULATION(detail_far_density, Variant::FLOAT, PROPERTY_HINT_RANGE, "0.01,1,0.01");
+    BIND_POPULATION(max_detail_distance, Variant::FLOAT, PROPERTY_HINT_RANGE, "0,500,1,or_greater,suffix:m");
     ADD_GROUP("Editor Preview", "");
     BIND_POPULATION(preview_features, Variant::BOOL, PROPERTY_HINT_NONE, "");
     BIND_POPULATION(preview_details, Variant::BOOL, PROPERTY_HINT_NONE, "");
