@@ -4,6 +4,13 @@ import sys
 # from scons_compiledb import compile_db # Import the compile_db function # Call the compile_db function to enable compile_commands.json generation
 # compile_db()
 
+# Fully optimized by default, debug targets too: the editor and debug runs load
+# the debug library, so that is what people judge the plugin by. For a faster
+# edit-compile cycle: scons lto=none optimize=speed_trace
+ARGUMENTS.setdefault("optimize", "speed")
+if ARGUMENTS.get("platform") not in ("web", "ios"):
+    ARGUMENTS.setdefault("lto", "full")
+
 # Import the SConstruct from godot-cpp
 env = SConscript("godot-cpp/SConstruct")
 
