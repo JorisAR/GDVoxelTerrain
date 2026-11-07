@@ -64,6 +64,9 @@ everywhere = false
 
 [node name="Grass" type="JarDetailLayer" parent="."]
 detail = ExtResource("10")
+everywhere = false
+"biomes/Temperate forest" = 1.0
+"biomes/Dry steppe" = 1.0
 
 [node name="GrassTall" type="JarDetailLayer" parent="."]
 detail = ExtResource("11")

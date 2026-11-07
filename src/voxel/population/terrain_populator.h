@@ -58,6 +58,7 @@ class JarTerrainPopulator : public Resource
     float mask_threshold = 0.0f;
     float mask_falloff = 0.1f; // noise range over which the mask fades in
     bool mask_invert = false;
+    bool grows_on_peaks = false; // also where the terrain shows its peak material (snow)
     float cluster_spacing = 0.0f; // meters between cluster centers; 0 = no clusters
     float cluster_radius = 10.0f;
 
@@ -70,6 +71,8 @@ class JarTerrainPopulator : public Resource
   public:
     float get_minimum_scale() const { return minimum_scale; }
     void set_minimum_scale(float value) { minimum_scale = value; }
+    bool get_grows_on_peaks() const { return grows_on_peaks; }
+    void set_grows_on_peaks(bool value) { grows_on_peaks = value; }
     float get_maximum_scale() const { return maximum_scale; }
     void set_maximum_scale(float value) { maximum_scale = value; }
     float get_minimum_height() const { return minimum_height; }
@@ -234,6 +237,7 @@ class JarTerrainPopulator : public Resource
         BIND_POP(random_rotation, Variant::BOOL, PROPERTY_HINT_NONE, "");
         BIND_POP(sink, Variant::FLOAT, PROPERTY_HINT_RANGE, "-10,10,0.01,or_greater,or_less,suffix:m");
         ADD_GROUP("Rules", "");
+        BIND_POP(grows_on_peaks, Variant::BOOL, PROPERTY_HINT_NONE, "");
         BIND_POP(minimum_height, Variant::FLOAT, PROPERTY_HINT_NONE, "suffix:m");
         BIND_POP(maximum_height, Variant::FLOAT, PROPERTY_HINT_NONE, "suffix:m");
         BIND_POP(height_falloff, Variant::FLOAT, PROPERTY_HINT_RANGE, "0,100,0.1,or_greater,suffix:m");

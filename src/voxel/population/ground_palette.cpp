@@ -1,4 +1,6 @@
 #include "ground_palette.h"
+#include <godot_cpp/classes/rendering_server.hpp>
+#include <godot_cpp/classes/shader.hpp>
 #include <godot_cpp/classes/image.hpp>
 #include <godot_cpp/classes/shader_material.hpp>
 #include <godot_cpp/classes/texture2d.hpp>
@@ -62,6 +64,25 @@ std::shared_ptr<const GroundPalette> GroundPalette::build(const TypedArray<JarTe
             groundRule = int(v);
     }
     palette->_fallback = color_of(groundRule, palette->_fallback);
+
+    // The peak rule, with the shader's defaults for what the material leaves.
+    if (const Ref<ShaderMaterial> shader = terrainMaterial; shader.is_valid() && shader->get_shader().is_valid())
+    {
+        const auto parameter = [&](const char *name) {
+            const Variant v = shader->get_shader_parameter(name);
+            return v.get_type() != Variant::NIL
+                       ? v
+                       : RenderingServer::get_singleton()->shader_get_parameter_default(shader->get_shader()->get_rid(), name);
+        };
+        const Variant peakMaterial = parameter("peak_material");
+        const Variant height = parameter("peak_height");
+        const Variant blend = parameter("peak_blend");
+        if (height.get_type() != Variant::NIL && (peakMaterial.get_type() == Variant::NIL || int(peakMaterial) >= 0))
+        {
+            palette->_peakHeight = height;
+            palette->_peakBlend = blend.get_type() != Variant::NIL ? std::max(float(blend), 0.01f) : 1.0f;
+        }
+    }
 
     palette->_map = biomes;
     if (biomes.is_valid())

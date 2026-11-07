@@ -29,6 +29,9 @@
 		<member name="mask_falloff" type="float" setter="set_mask_falloff" getter="get_mask_falloff" default="0.1">
 			Range of [member mask_noise] values around [member mask_threshold] over which the probability fades in. [code]0[/code] gives hard edges.
 		</member>
+		<member name="grows_on_peaks" type="bool" setter="set_grows_on_peaks" getter="get_grows_on_peaks" default="false">
+			Whether this also grows where the terrain shader shows its peak material (snow, above [code]peak_height[/code]).
+		</member>
 		<member name="mask_invert" type="bool" setter="set_mask_invert" getter="get_mask_invert" default="false">
 			If [code]true[/code], instances are placed where the mask is low instead: e.g. grass in the meadows between forests that use the same noise.
 		</member>

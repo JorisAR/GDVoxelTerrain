@@ -4,6 +4,7 @@
 [ext_resource type="QuadMesh" path="res://demo/planet/rock_field_impostor.res" id="1_vcc57"]
 
 [resource]
+grows_on_peaks = true
 scene = ExtResource("1_scene")
 density = 0.012
 impostor = ExtResource("1_vcc57")

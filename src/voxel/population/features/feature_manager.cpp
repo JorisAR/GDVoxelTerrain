@@ -981,7 +981,8 @@ std::vector<FeatureManager::Instance> FeatureManager::generate_cell(
             // Ground fit, and the mask at the exact position (the projection
             // above was only an estimate): keep with the combined probability.
             const float fit = feature.terrain_fit(upField.height(p), normal, localUp);
-            const float exact = feature.distribution(p, localUp) * biome_weight(p);
+            const float peaks = ground && !feature.get_grows_on_peaks() ? ground->below_peaks(upField.height(p)) : 1.0f;
+            const float exact = feature.distribution(p, localUp) * biome_weight(p) * peaks;
             if (keep >= fit * exact)
                 continue;
             placed.push_back(p);

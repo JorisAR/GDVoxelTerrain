@@ -2,6 +2,7 @@
 #define JAR_GROUND_PALETTE_H
 
 #include "biome_map.h"
+#include <algorithm>
 #include "terrain_material.h"
 #include "up_field.h"
 #include <glm/glm.hpp>
@@ -22,6 +23,10 @@ class GroundPalette
   private:
     glm::vec3 _fallback{0.3f, 0.35f, 0.2f};
     std::vector<glm::vec3> _biomes; // per biome of the map
+    // The terrain shader's peak rule: above this the ground is its peak
+    // material (snow). Infinite without one.
+    float _peakHeight = 1e30f;
+    float _peakBlend = 1.0f;
     Ref<JarBiomeMap> _map;
 
   public:
@@ -30,6 +35,13 @@ class GroundPalette
                                                       const Ref<Material> &terrainMaterial);
     // Linear color of the ground at a volume-space position.
     glm::vec3 color_at(const glm::vec3 &position, const UpField &up) const;
+    // 1 on ordinary ground, 0 where the shader shows peaks, at a height above
+    // sea level: population rules agree with the ground they stand on.
+    float below_peaks(float height) const
+    {
+        const float t = std::clamp((height - _peakHeight + _peakBlend) / (2.0f * _peakBlend), 0.0f, 1.0f);
+        return 1.0f - t * t * (3.0f - 2.0f * t);
+    }
     // The same, from biome weights already evaluated there.
     glm::vec3 color_for(const BiomeWeights &weights) const;
 };

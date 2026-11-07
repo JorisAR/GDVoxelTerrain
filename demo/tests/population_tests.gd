@@ -13,6 +13,7 @@ func _ready() -> void:
 	await _test_impostor()
 	await _test_distances()
 	await _test_far_details()
+	await _test_peaks()
 	await _test_toggles()
 	await _test_detail_resolution()
 	await _test_detail_sphere()
@@ -581,6 +582,37 @@ func _test_far_details() -> void:
 	_check("detail overrides", is_equal_approx(row.draw, 60.0) and is_equal_approx(row.density, 0.5))
 	layered.volume.queue_free()
 	layered.viewer.queue_free()
+	await get_tree().process_frame
+
+## Nothing grows on the terrain's peak material unless it may.
+func _test_peaks() -> void:
+	var detail := JarTerrainDetail.new()
+	detail.mesh = BoxMesh.new()
+	detail.density = 2.0
+	detail.maximum_slope = 90.0
+	var material: ShaderMaterial = load("res://demo/planet/planet_material.tres").duplicate()
+	material.set_shader_parameter("peak_height", -5000.0)
+	var world := TestWorld.flat(self, Vector3(3, 30, 5), func(v: JarVoxelVolume):
+		v.material = material
+		TestWorld.populate(v, [detail]))
+	var volume: JarVoxelVolume = world.volume
+	await _settle(volume)
+	var counts := func() -> int:
+		var total := 0
+		for c in volume.get_children():
+			if c is JarVoxelChunk and c.visible:
+				for n in c.get_children():
+					if n is MultiMeshInstance3D and n.visible and n.multimesh:
+						total += n.multimesh.instance_count
+		return total
+	_check("peaks: nothing on them", counts.call() == 0, str(counts.call()))
+	detail.grows_on_peaks = true
+	_pop(volume).regenerate()
+	await get_tree().process_frame
+	await _settle(volume)
+	_check("peaks: unless it may", counts.call() > 100, str(counts.call()))
+	volume.queue_free()
+	world.viewer.queue_free()
 	await get_tree().process_frame
 
 ## A baked impostor takes over from its distance, with or without one set.

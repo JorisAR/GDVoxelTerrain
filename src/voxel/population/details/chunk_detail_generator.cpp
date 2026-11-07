@@ -131,7 +131,9 @@ std::vector<PackedFloat32Array> ChunkDetailGenerator::generate_detail_buffers(
                     const glm::vec3 normal(n.x, n.y, n.z);
                     const glm::vec3 up = _upField.up(position);
                     // `keep` already passed the biome weight; scale it for the rest.
-                    if (keep >= biomeWeight * entry.detail->probability(position, _upField.height(position), normal, up))
+                    const float height = _upField.height(position);
+                    const float peaks = ground && !entry.detail->get_grows_on_peaks() ? ground->below_peaks(height) : 1.0f;
+                    if (keep >= biomeWeight * peaks * entry.detail->probability(position, height, normal, up))
                         continue;
                     // Chunk-relative: the MultiMesh lives under the chunk node.
                     Transform3D t = entry.detail->build_transform(position, up, normal, rotation, scale);
