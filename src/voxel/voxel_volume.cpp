@@ -158,6 +158,7 @@ void JarVoxelVolume::_bind_methods()
     ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "sea_level"), "set_sea_level", "get_sea_level");
     ClassDB::bind_method(D_METHOD("get_up_direction_at", "global_position"), &JarVoxelVolume::get_up_direction_at);
     ClassDB::bind_method(D_METHOD("get_height_at", "global_position"), &JarVoxelVolume::get_height_at);
+    ClassDB::bind_method(D_METHOD("get_lod_at", "global_position"), &JarVoxelVolume::get_lod_at);
     ClassDB::bind_method(D_METHOD("raycast_sdf", "from", "to"), &JarVoxelVolume::raycast_sdf);
     ClassDB::bind_method(D_METHOD("get_region_mesh", "region"), &JarVoxelVolume::get_region_mesh);
 
@@ -782,7 +783,8 @@ bool JarVoxelVolume::is_in_collider_range(const glm::vec3 &pos) const
         return false;
     if (_colliderDistance <= 0.0f)
         return true; // disabled -> original behaviour (collider on every near-LOD chunk)
-    return _voxelLod.distance_to_nearest_viewer(pos) <= _colliderDistance;
+    // Predicted points count: colliders are ready before the viewer arrives.
+    return _voxelLod.distance_to_nearest_point(pos) <= _colliderDistance;
 }
 
 float JarVoxelVolume::get_lod_detail_distance() const
@@ -1006,6 +1008,7 @@ void JarVoxelVolume::process()
     if (_materialsDirty && _voxelRoot)
         rebuild_materials();
     update_shader_frame();
+    _voxelLod.track_viewers(*this, get_process_delta_time());
     {
         const VoxelStats::Scope extensions(VoxelStats::MainExtensions);
         std::shared_lock<std::shared_mutex> lock(_extensionsMutex);
@@ -1549,6 +1552,12 @@ float JarVoxelVolume::get_height_at(const Vector3 &global_position) const
 int JarVoxelVolume::desired_lod(const VoxelOctreeNode &node)
 {
     return _voxelLod.desired_lod(node);
+}
+
+int JarVoxelVolume::get_lod_at(const Vector3 &global_position) const
+{
+    const Vector3 local = to_local(global_position);
+    return lod_at(glm::vec3(local.x, local.y, local.z));
 }
 
 int JarVoxelVolume::lod_at(const glm::vec3 &position) const

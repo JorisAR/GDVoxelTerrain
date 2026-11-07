@@ -29,7 +29,24 @@ class JarVoxelLoD
     int _maxChunkSize = 10; // nodes above this size always use LOD 0 (they are never chunks)
     int _maxLod = 6;
     int _minLod = 0;
-    std::vector<glm::vec3> _viewerPositions; // local space, as of the last (re)build
+    // Local space, as of the last (re)build: the viewers, then the points
+    // predicted for them.
+    std::vector<glm::vec3> _viewerPositions;
+    size_t _realViewers = 0; // how many of _viewerPositions are viewers
+    // Velocity of each predicting viewer, in the volume's space: floating
+    // origin shifts and universe frame changes move it along, so they are no
+    // motion here.
+    struct Tracked
+    {
+        uint64_t id = 0;
+        glm::vec3 last{0.0f};
+        glm::vec3 velocity{0.0f}; // m/s, smoothed
+        bool jumped = false;      // the last sample looked like a teleport
+    };
+    std::vector<Tracked> _tracked;
+    static constexpr float SmoothingSeconds = 0.25f;
+    static constexpr float TeleportSpeed = 1000.0f; // m/s: below this a sample is always believed
+    std::vector<glm::vec3> lod_points(const JarVoxelVolume &volume, size_t &real) const;
     std::vector<glm::ivec4> _viewerCells;    // shell_cell() of each, as of the last (re)build
 
     bool is_in_lod_shell(int lod, const glm::vec3 &pos, const glm::vec3 &viewer) const;
@@ -52,6 +69,8 @@ class JarVoxelLoD
     JarVoxelLoD(bool automaticUpdate, float automaticUpdateDistance, int shellSize, float chunkMeters,
                 float detailDistance, int maxLod);
 
+    // Main thread, every frame: updates predicting viewers' velocities.
+    void track_viewers(const JarVoxelVolume &volume, double delta);
     // Main thread. Returns true when viewers moved far enough (or were added or
     // removed) that the octree should be rebuilt; positions are then updated.
     bool process(const JarVoxelVolume &volume);
@@ -59,6 +78,8 @@ class JarVoxelLoD
 
     // Distance from a local position to the closest viewer (inf without viewers).
     float distance_to_nearest_viewer(const glm::vec3 &position) const;
+    // The same, with the points predicted for them.
+    float distance_to_nearest_point(const glm::vec3 &position) const;
 
     int desired_lod(const VoxelOctreeNode &node) const;
     int lod_at(const glm::vec3 &position) const;

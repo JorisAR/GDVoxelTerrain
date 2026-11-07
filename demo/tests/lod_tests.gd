@@ -15,6 +15,7 @@ func _ready() -> void:
 	]:
 		await _test(config)
 	await _test_round_trip()
+	await _test_prediction()
 	await _test_fast_flight()
 	print("LOD tests: %s" % ("ALL PASSED" if _failures == 0 else "%d FAILED" % _failures))
 	get_tree().quit(1 if _failures > 0 else 0)
@@ -23,6 +24,44 @@ func _ready() -> void:
 ## builds, and a chunk must stay until the chunks replacing it (any number of
 ## levels finer or coarser) are on screen, or the terrain flashes holes.
 ## Afterwards no replaced chunk may linger on top of its replacement.
+## A predicting viewer gets detail ahead of it, keeps it around itself, and a
+## teleport predicts nothing.
+func _test_prediction() -> void:
+	var holder := Node.new()
+	add_child(holder)
+	var world := TestWorld.flat(holder, Vector3(0, 30, 0))
+	var volume: JarVoxelVolume = world.volume
+	var viewer: JarVoxelViewer = world.viewer
+	viewer.predict_motion = true
+	viewer.predict_seconds = 2.0
+	await _settle(volume)
+	var ahead := Vector3(600, 0, 0)
+	var far := volume.get_lod_at(viewer.position + ahead)
+	viewer.position.x += 5000.0
+	for frame in 3:
+		await get_tree().process_frame
+	await _settle(volume)
+	_check("prediction: teleport ignored", volume.get_lod_at(viewer.position + ahead) >= far,
+		"lod %d, %d before" % [volume.get_lod_at(viewer.position + ahead), far])
+	# 400 m/s in real time: frames run uncapped here.
+	var finest := far
+	var near := true
+	var last := Time.get_ticks_usec()
+	var start := last
+	while Time.get_ticks_usec() - start < 4000000:
+		await get_tree().process_frame
+		var now := Time.get_ticks_usec()
+		viewer.position.x += 400.0 * (now - last) / 1000000.0
+		last = now
+		finest = mini(finest, volume.get_lod_at(viewer.position + ahead))
+	_check("prediction: detail ahead", finest < far, "lod %d, %d without" % [finest, far])
+	viewer.predict_motion = false
+	await _settle(volume)
+	_check("prediction: off again", volume.get_lod_at(viewer.position + ahead) > finest,
+		"lod %d, %d before" % [volume.get_lod_at(viewer.position + ahead), far])
+	holder.queue_free()
+	await get_tree().process_frame
+
 func _test_fast_flight() -> void:
 	var holder := Node.new()
 	add_child(holder)

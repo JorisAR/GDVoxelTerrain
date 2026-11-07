@@ -26,6 +26,8 @@ scons platform=linux  target=template_debug   # or platform=windows / macos
 scons platform=linux  target=template_release
 ```
 
+Both are fully optimized (`optimize=speed`, link-time optimization): the editor loads the debug library. For a faster edit-compile cycle, use `lto=none optimize=speed_trace`.
+
 The compiled library is written straight into `demo/addons/jar_voxel_terrain/bin/`.
 
 ### Installation
@@ -115,6 +117,10 @@ Each voxel keeps its 4 strongest materials. `material_mode` picks how they reach
 The default shaders are procedural (no textures needed): large brightness / hue variation, fine detail and bump, fading with distance. Give materials textures and they are applied with triplanar mapping. Everything is computed in the volume's own space, so textures and rules follow moving volumes and work on planets and flat worlds alike.
 
 To customize, set the volume's `material` to your own `ShaderMaterial` (a copy of a default material to tweak its rule and look settings, or your own shader). The volume copies it per volume and fills in the material palette, texture arrays, its transform and up field (chunks need no instance uniforms). The easiest way to write a new shader is to include `terrain_common.gdshaderinc` like the defaults do; the inputs are documented there and on `JarVoxelVolume.material`.
+
+### Moving fast
+
+Give a `JarVoxelViewer` `predict_motion` to also refine around where it will be `predict_seconds` from now, at its smoothed velocity, on top of where it is: terrain and colliders are ready on arrival, at the cost of extra building while moving. `predict_max_distance` limits how far ahead that goes.
 
 ### Population
 

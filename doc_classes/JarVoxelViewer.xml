@@ -12,5 +12,14 @@
 		<member name="enabled" type="bool" setter="set_enabled" getter="is_enabled" default="true">
 			If [code]false[/code], volumes ignore this viewer.
 		</member>
+		<member name="predict_max_distance" type="float" setter="set_predict_max_distance" getter="get_predict_max_distance" default="0.0">
+			How far ahead prediction reaches, in meters. [code]0[/code]: no limit.
+		</member>
+		<member name="predict_motion" type="bool" setter="set_predict_motion" getter="get_predict_motion" default="false">
+			If [code]true[/code], volumes also refine around where this viewer will be [member predict_seconds] from now, at its smoothed velocity, on top of where it is.
+		</member>
+		<member name="predict_seconds" type="float" setter="set_predict_seconds" getter="get_predict_seconds" default="1.0">
+			How far ahead in time prediction looks.
+		</member>
 	</members>
 </class>

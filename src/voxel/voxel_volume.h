@@ -415,6 +415,7 @@ class JarVoxelVolume : public Node3D
 
     // LOD
     float distance_to_nearest_viewer(const glm::vec3 &position) const;
+    int get_lod_at(const Vector3 &global_position) const; // the level of detail wanted there
     // Full-detail chunks with new mesh data / none any more (main thread).
     void chunk_meshed(JarVoxelChunk *chunk);
     void chunk_gone(JarVoxelChunk *chunk);

@@ -6,6 +6,8 @@
 #include "voxel_volume.h"
 #include <godot_cpp/classes/camera3d.hpp>
 #include <godot_cpp/classes/viewport.hpp>
+#include <algorithm>
+#include <cmath>
 #include <limits>
 
 JarVoxelLoD::JarVoxelLoD(bool automaticUpdate, float automaticUpdateDistance, int shellSize, float chunkMeters,
@@ -53,6 +55,62 @@ std::vector<glm::vec3> JarVoxelLoD::gather_viewers(const JarVoxelVolume &volume)
     return positions;
 }
 
+void JarVoxelLoD::track_viewers(const JarVoxelVolume &volume, double delta)
+{
+    if (delta <= 0.0 || Engine::get_singleton()->is_editor_hint())
+        return;
+    const float dt = float(delta);
+    const float blend = 1.0f - std::exp(-dt / SmoothingSeconds);
+    std::vector<Tracked> tracked;
+    for (const JarVoxelViewer *viewer : JarVoxelViewer::get_viewers())
+    {
+        if (!viewer->is_enabled() || !viewer->is_inside_tree() || !viewer->get_predict_motion())
+            continue;
+        const Vector3 local = volume.to_local(viewer->get_global_position());
+        const glm::vec3 p(local.x, local.y, local.z);
+        const uint64_t id = viewer->get_instance_id();
+        const auto known = std::find_if(_tracked.begin(), _tracked.end(), [id](const Tracked &t) { return t.id == id; });
+        if (known == _tracked.end())
+        {
+            tracked.push_back({id, p, glm::vec3(0.0f), false});
+            continue;
+        }
+        Tracked t = *known;
+        const glm::vec3 sample = (p - t.last) / dt;
+        t.last = p;
+        // A teleport is one huge sample: ignored, while a second in a row is
+        // real motion, however fast.
+        const float speed = glm::length(sample);
+        const bool jump = speed > std::max(TeleportSpeed, 8.0f * glm::length(t.velocity));
+        if (!jump || t.jumped)
+            t.velocity = glm::mix(t.velocity, sample, blend);
+        t.jumped = jump;
+        tracked.push_back(t);
+    }
+    _tracked = std::move(tracked);
+}
+
+std::vector<glm::vec3> JarVoxelLoD::lod_points(const JarVoxelVolume &volume, size_t &real) const
+{
+    std::vector<glm::vec3> points = gather_viewers(volume);
+    real = points.size();
+    for (const Tracked &t : _tracked)
+    {
+        const JarVoxelViewer *viewer = Object::cast_to<JarVoxelViewer>(ObjectDB::get_instance(t.id));
+        if (viewer == nullptr)
+            continue;
+        glm::vec3 ahead = t.velocity * viewer->get_predict_seconds();
+        const float length = glm::length(ahead);
+        const float limit = viewer->get_predict_max_distance();
+        if (limit > 0.0f && length > limit)
+            ahead *= limit / length;
+        // Less than a chunk ahead is inside the viewer's own detail already.
+        if (glm::length(ahead) >= _chunkMeters)
+            points.push_back(t.last + ahead);
+    }
+    return points;
+}
+
 bool JarVoxelLoD::process(const JarVoxelVolume &volume)
 {
     if (!_automaticUpdate)
@@ -65,7 +123,8 @@ bool JarVoxelLoD::update_viewers(const JarVoxelVolume &volume, const bool force)
     if (volume.is_building())
         return false;
 
-    std::vector<glm::vec3> positions = gather_viewers(volume);
+    size_t real = 0;
+    std::vector<glm::vec3> positions = lod_points(volume, real);
     const float half = 0.5f * volume.get_extent();
     std::vector<glm::ivec4> cells;
     cells.reserve(positions.size());
@@ -84,6 +143,7 @@ bool JarVoxelLoD::update_viewers(const JarVoxelVolume &volume, const bool force)
     if (changed)
     {
         _viewerPositions = std::move(positions);
+        _realViewers = real;
         _viewerCells = std::move(cells);
     }
     return changed;
@@ -101,6 +161,14 @@ glm::ivec4 JarVoxelLoD::shell_cell(const glm::vec3 &viewer, float halfExtent) co
 }
 
 float JarVoxelLoD::distance_to_nearest_viewer(const glm::vec3 &position) const
+{
+    float best = std::numeric_limits<float>::infinity();
+    for (size_t i = 0; i < _realViewers && i < _viewerPositions.size(); ++i)
+        best = std::min(best, glm::distance(position, _viewerPositions[i]));
+    return best;
+}
+
+float JarVoxelLoD::distance_to_nearest_point(const glm::vec3 &position) const
 {
     float best = std::numeric_limits<float>::infinity();
     for (const glm::vec3 &viewer : _viewerPositions)

@@ -25,6 +25,7 @@ far = 200000.0
 script = ExtResource("2_brush")
 
 [node name="JarVoxelViewer" type="JarVoxelViewer" parent="." unique_id=1284160407]
+predict_motion = true
 
 [node name="HUD" type="CanvasLayer" parent="." unique_id=922992183]
 
