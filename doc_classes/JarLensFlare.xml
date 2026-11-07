@@ -4,8 +4,8 @@
 		A lens flare for the sun.
 	</brief_description>
 	<description>
-		Draws a glow, a starburst, a faint halo ring, ghosts along the line from the sun through the screen's center and a thin horizontal streak over the whole screen, after everything else. It follows [member light] (else a [JarBodyLight] star's light, else the first [DirectionalLight3D] in the scene) and the current camera, and takes the light's color times its energy: orange at sunset through a [JarBodyAtmosphere], gone below the horizon. How much of the sun is visible is measured from the depth buffer around it, so terrain and moons hide the flare, partly while they cover part of the sun. Put one anywhere in the scene. Not drawn in the editor.
-		The look (strength and size of each part) is on [member material] ([code]lens_flare.gdshader[/code]).
+		Draws a glow, a starburst, a faint halo ring, ghosts along the line from the sun through the screen's center and a thin horizontal streak over the whole screen, after everything else. It follows [member light] (else a [JarBodyLight] star's light, else the first [DirectionalLight3D] in the scene) and the current camera, and takes the light's color times its energy: orange at sunset through a [JarBodyAtmosphere], gone below the horizon. How much of the sun is visible is measured from the depth buffer around it, so terrain and moons hide the flare, partly while they cover part of the sun. Put one anywhere in the scene. It shows in the editor too, while [member editor_preview] is on.
+		The look of each part is in the properties here. Strengths are how much is added to the picture for a sun of normal brightness: a brighter sun adds more, but ever more slowly. Ghosts are reflections inside the lens, along the line from the sun through the screen's center, scattered by [member ghost_seed].
 	</description>
 	<tutorials>
 	</tutorials>

@@ -3,29 +3,44 @@ shader_type spatial;
 // else, added on top. The sun's position on screen and its light (already
 // reddened by an atmosphere) are set every frame; how much of the sun is
 // visible is measured here, from the depth buffer around it, so terrain and
-// moons hide it (partly while they cover part of the sun).
+// moons hide it (partly while they cover part of the sun). The look is set on
+// the node's properties, which fill in the uniforms below.
 render_mode unshaded, blend_add, depth_test_disabled, depth_draw_never, cull_disabled, shadows_disabled, fog_disabled;
 
-// Set by JarLensFlare.
-uniform vec2 sun_uv = vec2(0.5);        // on screen (0..1)
-uniform vec3 sun_light = vec3(0.0);     // color times energy
-uniform float aspect = 1.7778;          // width / height
-uniform float sun_radius = 0.005;       // apparent radius, in screen heights
+const int MAX_GHOSTS = 8;
 
-group_uniforms flare;
-uniform float intensity = 1.0;
-uniform float glow = 0.6;
+// Set by JarLensFlare every frame.
+uniform vec2 sun_uv = vec2(0.5);    // on screen (0..1)
+uniform vec3 sun_light = vec3(0.0); // color times energy times intensity
+uniform float aspect = 1.7778;      // width / height
+uniform float sun_radius = 0.005;   // apparent radius, in screen heights
+
+uniform float glow_strength = 0.35;
 uniform float glow_size = 0.12;
-uniform float starburst = 0.25;
+uniform float starburst_strength = 0.2;
+uniform float starburst_size = 0.2;
+uniform float starburst_sharpness = 24.0;
+uniform float starburst_rotation = 0.0;
 uniform int starburst_rays = 6;
-uniform float halo = 0.025;
+uniform float streak_strength = 0.05;
+uniform float streak_width = 0.0045;
+uniform float streak_length = 0.33;
+uniform vec3 streak_tint = vec3(1.0);
+uniform float halo_strength = 0.02;
 uniform float halo_radius = 0.42;
-uniform float ghosts = 0.12;
-uniform float streak = 0.08;
-group_uniforms occlusion;
+uniform float halo_width = 0.03;
+uniform float halo_chromatic = 0.04;
+uniform float halo_arc = 0.7;
+uniform float ghost_strength = 0.03;
+uniform float ghost_softness = 0.3;
+uniform float ghost_fill = 0.25;
+uniform float ghost_chromatic = 0.03;
+uniform int ghost_count = 0;
+uniform float ghost_positions[MAX_GHOSTS];
+uniform float ghost_sizes[MAX_GHOSTS];
+uniform vec3 ghost_tints[MAX_GHOSTS];
 // Area around the sun sampled for occlusion, in sun radii.
 uniform float occlusion_size = 2.0;
-group_uniforms;
 
 uniform sampler2D depth_texture : hint_depth_texture, filter_nearest;
 
@@ -56,15 +71,23 @@ float visibility(mat4 inv_projection) {
 	return open / 25.0;
 }
 
-// A soft disk of radius r at distance d (screen heights).
-float disk(float d, float r) {
-	return 1.0 - smoothstep(r * 0.6, r, d);
+// A lens ghost at distance d of a radius r: an image of the aperture, faint
+// inside and brightest towards its soft rim.
+float ghost_shape(float d, float r) {
+	float x = d / r;
+	if (x >= 1.0)
+		return 0.0;
+	float edge = 1.0 - smoothstep(1.0 - max(ghost_softness, 0.01), 1.0, x);
+	return edge * mix(x * x * x * x, 1.0, ghost_fill);
 }
 
 void fragment() {
-	vec3 light = sun_light * intensity;
-	if (dot(light, vec3(1.0)) <= 1e-4)
+	// The flare's strengths are of its own: a very bright sun makes a brighter
+	// flare, but ever more slowly, or everything would turn solid.
+	float peak = max(sun_light.r, max(sun_light.g, sun_light.b));
+	if (peak <= 1e-4)
 		discard;
+	vec3 light = sun_light / (1.0 + 0.5 * peak);
 	float visible = visibility(INV_PROJECTION_MATRIX);
 	// Fades out as the sun leaves the screen.
 	vec2 edge = min(sun_uv, 1.0 - sun_uv);
@@ -74,28 +97,39 @@ void fragment() {
 
 	vec2 to_pixel = (SCREEN_UV - sun_uv) * vec2(aspect, 1.0); // screen heights
 	float d = length(to_pixel);
+	vec2 axis = (vec2(0.5) - sun_uv) * vec2(aspect, 1.0); // from the sun through the center
+	float off_center = length(axis);
 	vec3 color = vec3(0.0);
-	// Glow and starburst around the sun.
-	color += light * glow * exp(-d / glow_size * 4.0);
-	float angle = atan(to_pixel.y, to_pixel.x);
-	float rays = pow(abs(cos(angle * float(starburst_rays) * 0.5)), 24.0);
-	color += light * starburst * rays * exp(-d / glow_size * 2.5);
+
+	// Glow: a tight core in a wide, faint veil.
+	color += light * glow_strength * (0.7 * exp(-d / max(glow_size, 1e-4) * 6.0) + 0.3 * exp(-d / max(glow_size, 1e-4) * 1.5));
+
+	// Starburst.
+	float angle = atan(to_pixel.y, to_pixel.x) + starburst_rotation;
+	float rays = pow(abs(cos(angle * float(starburst_rays) * 0.5)), starburst_sharpness);
+	color += light * starburst_strength * rays * exp(-d / max(starburst_size, 1e-4) * 4.0);
+
 	// A thin horizontal streak.
-	color += light * streak * exp(-abs(to_pixel.y) * 220.0) * exp(-abs(to_pixel.x) * 3.0);
-	// A faint halo ring, with a rainbow edge.
-	float ring = exp(-pow((d - halo_radius) * 30.0, 2.0));
-	color += light * halo * ring * vec3(0.8 + 0.4 * smoothstep(halo_radius - 0.02, halo_radius + 0.02, d), 0.9, 1.1 - 0.3 * smoothstep(halo_radius - 0.02, halo_radius + 0.02, d));
-	// Ghosts: reflections inside the lens, along the line from the sun
-	// through the screen's center, each slightly tinted.
-	vec2 axis = (vec2(0.5) - sun_uv) * vec2(aspect, 1.0);
-	const int GHOSTS = 5;
-	float positions[GHOSTS] = float[](0.45, 0.8, 1.25, 1.6, 2.2);
-	float sizes[GHOSTS] = float[](0.03, 0.06, 0.02, 0.09, 0.05);
-	vec3 tints[GHOSTS] = vec3[](vec3(1.0, 0.7, 0.4), vec3(0.5, 0.8, 1.0), vec3(1.0, 1.0, 0.8), vec3(0.6, 1.0, 0.7), vec3(0.8, 0.6, 1.0));
-	for (int i = 0; i < GHOSTS; i++) {
-		vec2 center = axis * positions[i];
-		float g = disk(length(to_pixel - center), sizes[i]);
-		color += light * ghosts * g * tints[i];
+	color += light * streak_tint * streak_strength * exp(-abs(to_pixel.y) / max(streak_width, 1e-4)) *
+			exp(-abs(to_pixel.x) / max(streak_length, 1e-4));
+
+	// Halo: a ring split into colors, strongest on the side facing the center.
+	vec3 ring_radius = halo_radius * vec3(1.0 + halo_chromatic, 1.0, 1.0 - halo_chromatic);
+	vec3 ring = (d - ring_radius) / max(halo_width, 1e-4);
+	float facing = off_center > 1e-4 && d > 1e-4 ? dot(to_pixel / d, axis / off_center) * 0.5 + 0.5 : 1.0;
+	color += light * halo_strength * exp(-ring * ring) * mix(1.0, facing * facing, halo_arc);
+
+	// Ghosts: reflections inside the lens, along the line from the sun through
+	// the center, each color at a slightly different size. They gather on the
+	// center when the sun is there, so they fade in as it moves away.
+	float ghosts = ghost_strength * smoothstep(0.02, 0.3, off_center);
+	if (ghosts > 0.0) {
+		for (int i = 0; i < min(ghost_count, MAX_GHOSTS); i++) {
+			float g = length(to_pixel - axis * ghost_positions[i]);
+			float r = ghost_sizes[i];
+			vec3 shape = vec3(ghost_shape(g, r * (1.0 + ghost_chromatic)), ghost_shape(g, r), ghost_shape(g, r * (1.0 - ghost_chromatic)));
+			color += light * ghost_tints[i] * ghosts * shape;
+		}
 	}
 	ALBEDO = color * visible;
 }
