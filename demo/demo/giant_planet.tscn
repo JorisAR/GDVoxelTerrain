@@ -1,13 +1,14 @@
 [gd_scene format=3 uid="uid://icyqexf1hx6l"]
 
 [ext_resource type="PackedScene" uid="uid://c7kqgl1k10x14" path="res://addons/jar_voxel_terrain/src/chunk.tscn" id="1_chunk"]
+[ext_resource type="Shader" path="res://addons/jar_voxel_terrain/nodes/clouds/clouds.gdshader" id="30_clouds"]
 [ext_resource type="JarTerrainSdf" uid="uid://cks8y51ikg4ew" path="res://demo/giant/giant_terrain.tres" id="2_terrain"]
 [ext_resource type="Material" path="res://demo/planet/planet_material.tres" id="3_material"]
 [ext_resource type="JarCraterSdf" path="res://demo/giant/giant_moon_craters.tres" id="12_moon"]
 [ext_resource type="Material" path="res://demo/planet/moon_material.tres" id="13_moon_material"]
 [ext_resource type="PackedScene" uid="uid://cupyeuv1xe20s" path="res://demo/player/player.tscn" id="14_player"]
 [ext_resource type="Material" uid="uid://55tbedv6qxva" path="res://demo/assets/space/space_sky.tres" id="15_sky"]
-[ext_resource type="JarClimateBiomeMap" uid="uid://dt3ug1atfvmdb" path="res://demo/planet/biomes.tres" id="17_biomes"]
+[ext_resource type="JarClimateBiomeMap" path="res://demo/giant/giant_biomes.tres" id="17_biomes"]
 [ext_resource type="PackedScene" path="res://demo/planet/planet_population.tscn" id="18_population"]
 
 [sub_resource type="JarTerrainMaterial" id="Grass"]
@@ -69,6 +70,14 @@ variation = 0.3
 albedo = Color(0.18, 0.18, 0.19, 1)
 roughness = 0.8
 
+[sub_resource type="ShaderMaterial" id="CloudMaterial"]
+render_priority = 50
+shader = ExtResource("30_clouds")
+shader_parameter/coverage = 0.38
+shader_parameter/weather_size = 18000.0
+shader_parameter/cloud_size = 1100.0
+shader_parameter/softness = 0.3
+
 [sub_resource type="Sky" id="Sky"]
 sky_material = ExtResource("15_sky")
 
@@ -85,7 +94,7 @@ glow_bloom = 0.05
 
 [sub_resource type="CameraAttributesPractical" id="Exposure"]
 auto_exposure_enabled = true
-auto_exposure_scale = 0.15
+auto_exposure_scale = 0.22
 auto_exposure_speed = 2.0
 auto_exposure_min_sensitivity = 50.0
 
@@ -126,11 +135,6 @@ population_biome_map = ExtResource("17_biomes")
 
 [node name="Population" parent="Sun/PlanetOrbit/Planet/JarVoxelVolume" unique_id=1207783817 instance=ExtResource("18_population")]
 
-[node name="Rock" parent="Sun/PlanetOrbit/Planet/JarVoxelVolume/Population" index="0"]
-"biomes/Temperate forest" = 0.0
-"biomes/Alpine tundra" = 0.0
-"biomes/Dry steppe" = 0.0
-
 [node name="Pine" parent="Sun/PlanetOrbit/Planet/JarVoxelVolume/Population" index="1"]
 "biomes/Alpine tundra" = 0.0
 "biomes/Dry steppe" = 0.0
@@ -161,11 +165,6 @@ population_biome_map = ExtResource("17_biomes")
 [node name="BroadleafSavanna" parent="Sun/PlanetOrbit/Planet/JarVoxelVolume/Population" index="8"]
 "biomes/Temperate forest" = 0.0
 "biomes/Alpine tundra" = 0.0
-
-[node name="Grass" parent="Sun/PlanetOrbit/Planet/JarVoxelVolume/Population" index="9"]
-"biomes/Temperate forest" = 0.0
-"biomes/Alpine tundra" = 0.0
-"biomes/Dry steppe" = 0.0
 
 [node name="GrassTall" parent="Sun/PlanetOrbit/Planet/JarVoxelVolume/Population" index="10"]
 "biomes/Alpine tundra" = 0.0
@@ -198,6 +197,7 @@ thickness = 0.03
 
 [node name="Clouds" type="JarBodyClouds" parent="Sun/PlanetOrbit/Planet" unique_id=1226887604]
 altitude = 4000.0
+material = SubResource("CloudMaterial")
 
 [node name="MoonOrbit" type="JarBodyOrbit" parent="Sun/PlanetOrbit/Planet" unique_id=1730493881]
 radius = 1500000.0
@@ -233,7 +233,7 @@ reflects = NodePath("../../../../../Light")
 sun = NodePath("../../../../../../MoonLight")
 
 [node name="Player" parent="." unique_id=184981125 instance=ExtResource("14_player")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 298396.5, 356014.8, 381647)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 271742.4, 319839.1, 428812.9)
 
 [node name="WorldEnvironment" type="WorldEnvironment" parent="." unique_id=1854622839]
 environment = SubResource("Environment")

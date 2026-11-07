@@ -60,6 +60,17 @@ class JarTerrainSdf : public JarSignedDistanceField
     float _height = 60.0f; // amplitude of positive noise
     float _depth = 60.0f;  // amplitude of negative noise
 
+    // Landscape between the mountains (JarNoise only): noise moving the ground
+    // up and down by up to `height`, where a `mask` noise says so (everywhere
+    // without one). Below sea level near a coast it makes bays and lakes.
+    struct LandLayer
+    {
+        Noise noise, mask;
+        float height = 0.0f;
+        float threshold = 0.0f; // mask value where it starts
+        float blend = 0.5f;     // mask range over which it reaches full height
+    };
+    LandLayer _hills, _outcrops;
     Noise _mountainNoise;
     Noise _mountainMask; // optional: where mountains are (else the mountain noise itself)
     float _mountainHeight = 200.0f;
@@ -114,6 +125,7 @@ class JarTerrainSdf : public JarSignedDistanceField
     };
     bool analytic() const { return _noise.analytic() && _mountainNoise.analytic() && _mountainMask.analytic(); }
     Layers analytic_layers(const glm::dvec3 &surface, float broadWavelength) const;
+    void add_land_layer(const LandLayer &layer, const glm::dvec3 &p, float broadWavelength, Layers &layers) const;
     float noise_value(const Noise &noise, const glm::dvec3 &surface) const;
     float max_layered_height() const;
     glm::vec3 height_gradient(const glm::dvec3 &surface, const glm::vec3 &up, float h, float step) const;
@@ -168,6 +180,30 @@ class JarTerrainSdf : public JarSignedDistanceField
     void set_height(float v) { set_and_notify(_height, v); }
     float get_depth() const { return _depth; }
     void set_depth(float v) { set_and_notify(_depth, v); }
+#define JAR_LAND_LAYER(m_name, m_member)                                                                               \
+    Ref<Resource> get_##m_name##_noise() const { return m_member.noise.resource; }                                     \
+    void set_##m_name##_noise(const Ref<Resource> &v)                                                                  \
+    {                                                                                                                  \
+        m_member.noise.set(v);                                                                                         \
+        settings_changed();                                                                                            \
+        emit_changed();                                                                                                \
+    }                                                                                                                  \
+    Ref<Resource> get_##m_name##_mask() const { return m_member.mask.resource; }                                       \
+    void set_##m_name##_mask(const Ref<Resource> &v)                                                                   \
+    {                                                                                                                  \
+        m_member.mask.set(v);                                                                                          \
+        settings_changed();                                                                                            \
+        emit_changed();                                                                                                \
+    }                                                                                                                  \
+    float get_##m_name##_height() const { return m_member.height; }                                                    \
+    void set_##m_name##_height(float v) { set_and_notify(m_member.height, std::max(0.0f, v)); }                        \
+    float get_##m_name##_threshold() const { return m_member.threshold; }                                              \
+    void set_##m_name##_threshold(float v) { set_and_notify(m_member.threshold, v); }                                  \
+    float get_##m_name##_blend() const { return m_member.blend; }                                                      \
+    void set_##m_name##_blend(float v) { set_and_notify(m_member.blend, std::max(0.01f, v)); }
+    JAR_LAND_LAYER(hills, _hills)
+    JAR_LAND_LAYER(outcrops, _outcrops)
+#undef JAR_LAND_LAYER
     Ref<Resource> get_mountain_noise() const { return _mountainNoise.resource; }
     void set_mountain_noise(const Ref<Resource> &v)
     {

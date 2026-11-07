@@ -92,6 +92,18 @@ float JarTerrainSdf::layered_height(const glm::dvec3 &surface) const
         const float shape = _mountainMask.is_valid() ? 0.5f * (noise_value(_mountainNoise, surface) + 1.0f) : 1.0f;
         h += _mountainHeight * t * t * (3.0f - 2.0f * t) * shape;
     }
+    for (const LandLayer *layer : {&_hills, &_outcrops})
+        if (layer->noise.is_valid() && layer->height > 0.0f)
+        {
+            float rise = 1.0f;
+            if (layer->mask.is_valid())
+            {
+                const float t = std::clamp((noise_value(layer->mask, surface) - layer->threshold) / layer->blend, 0.0f, 1.0f);
+                rise = t * t * (3.0f - 2.0f * t);
+            }
+            if (rise > 0.0f)
+                h += layer->height * rise * noise_value(layer->noise, surface);
+        }
     return h;
 }
 
@@ -128,12 +140,40 @@ JarTerrainSdf::Layers JarTerrainSdf::analytic_layers(const glm::dvec3 &surface, 
         layers.gradient += _mountainHeight * (riseSlope * shape * m.gradient + rise * shapeGradient);
         layers.broad += _mountainHeight * (riseSlope * shape * m.broad + rise * shapeBroad);
     }
+    add_land_layer(_hills, p, broadWavelength, layers);
+    add_land_layer(_outcrops, p, broadWavelength, layers);
     return layers;
+}
+
+void JarTerrainSdf::add_land_layer(const LandLayer &layer, const glm::dvec3 &p, float broadWavelength, Layers &layers) const
+{
+    if (layer.noise.jar.is_null() || layer.height <= 0.0f)
+        return;
+    float rise = 1.0f, riseSlope = 0.0f;
+    glm::vec3 maskGradient(0.0f), maskBroad(0.0f);
+    if (layer.mask.jar.is_valid())
+    {
+        const JarNoise::Sample m = layer.mask.jar->sample(p, broadWavelength, t_detailSize);
+        const float raw = (m.value - layer.threshold) / layer.blend;
+        const float t = std::clamp(raw, 0.0f, 1.0f);
+        rise = t * t * (3.0f - 2.0f * t);
+        if (rise <= 0.0f)
+            return; // nothing here: the noise below is the costly part
+        riseSlope = raw < 1.0f ? 6.0f * t * (1.0f - t) / layer.blend : 0.0f;
+        maskGradient = m.gradient;
+        maskBroad = m.broad;
+    }
+    const JarNoise::Sample s = layer.noise.jar->sample(p, broadWavelength, t_detailSize);
+    layers.height += layer.height * rise * s.value;
+    layers.gradient += layer.height * (riseSlope * s.value * maskGradient + rise * s.gradient);
+    layers.broad += layer.height * (riseSlope * s.value * maskBroad + rise * s.broad);
 }
 
 float JarTerrainSdf::max_layered_height() const
 {
-    return std::max(std::abs(_height), std::abs(_depth)) + (_mountainNoise.is_valid() ? _mountainHeight : 0.0f);
+    const auto land = [](const LandLayer &layer) { return layer.noise.jar.is_valid() ? layer.height : 0.0f; };
+    return std::max(std::abs(_height), std::abs(_depth)) + (_mountainNoise.is_valid() ? _mountainHeight : 0.0f) +
+           land(_hills) + land(_outcrops);
 }
 
 glm::vec3 JarTerrainSdf::height_gradient(const glm::dvec3 &surface, const glm::vec3 &up, float h, float step) const
@@ -794,6 +834,19 @@ void JarTerrainSdf::_bind_methods()
     BIND_PROP(noise, Variant::OBJECT, PROPERTY_HINT_RESOURCE_TYPE, "JarNoise,FastNoiseLite");
     BIND_PROP(height, Variant::FLOAT, PROPERTY_HINT_RANGE, "0,2000,0.1,or_greater,suffix:m");
     BIND_PROP(depth, Variant::FLOAT, PROPERTY_HINT_RANGE, "0,2000,0.1,or_greater,suffix:m");
+    ADD_GROUP("Mountains", "");
+    ADD_GROUP("Hills", "hills_");
+    BIND_PROP(hills_noise, Variant::OBJECT, PROPERTY_HINT_RESOURCE_TYPE, "JarNoise");
+    BIND_PROP(hills_mask, Variant::OBJECT, PROPERTY_HINT_RESOURCE_TYPE, "JarNoise");
+    BIND_PROP(hills_height, Variant::FLOAT, PROPERTY_HINT_RANGE, "0,1000,0.1,or_greater,suffix:m");
+    BIND_PROP(hills_threshold, Variant::FLOAT, PROPERTY_HINT_RANGE, "-1,1,0.01");
+    BIND_PROP(hills_blend, Variant::FLOAT, PROPERTY_HINT_RANGE, "0.01,2,0.01");
+    ADD_GROUP("Outcrops", "outcrops_");
+    BIND_PROP(outcrops_noise, Variant::OBJECT, PROPERTY_HINT_RESOURCE_TYPE, "JarNoise");
+    BIND_PROP(outcrops_mask, Variant::OBJECT, PROPERTY_HINT_RESOURCE_TYPE, "JarNoise");
+    BIND_PROP(outcrops_height, Variant::FLOAT, PROPERTY_HINT_RANGE, "0,200,0.1,or_greater,suffix:m");
+    BIND_PROP(outcrops_threshold, Variant::FLOAT, PROPERTY_HINT_RANGE, "-1,1,0.01");
+    BIND_PROP(outcrops_blend, Variant::FLOAT, PROPERTY_HINT_RANGE, "0.01,2,0.01");
     ADD_GROUP("Mountains", "");
     BIND_PROP(mountain_noise, Variant::OBJECT, PROPERTY_HINT_RESOURCE_TYPE, "JarNoise,FastNoiseLite");
     BIND_PROP(mountain_mask, Variant::OBJECT, PROPERTY_HINT_RESOURCE_TYPE, "JarNoise,FastNoiseLite");

@@ -57,6 +57,36 @@
 		<member name="lacunarity" type="float" setter="set_lacunarity" getter="get_lacunarity" default="2.0">
 			Width factor from one gully octave to the next: each octave is this many times narrower.
 		</member>
+		<member name="hills_blend" type="float" setter="set_hills_blend" getter="get_hills_blend" default="0.5">
+			Range of [member hills_mask] values over which the layer fades in. Keep it wide: narrow values make a visible edge.
+		</member>
+		<member name="hills_height" type="float" setter="set_hills_height" getter="get_hills_height" default="0.0">
+			How far the rolling hills move the ground up and down, in meters: [member hills_noise] (-1 to 1) times this.
+		</member>
+		<member name="hills_mask" type="Resource" setter="set_hills_mask" getter="get_hills_mask">
+			Where the rolling hills are: a low-frequency [JarNoise]. Without one they are everywhere.
+		</member>
+		<member name="hills_noise" type="Resource" setter="set_hills_noise" getter="get_hills_noise">
+			The shape of the rolling hills: a [JarNoise]. Added on top of the rest of the terrain, also below sea level, where near a coast it makes bays and lakes.
+		</member>
+		<member name="hills_threshold" type="float" setter="set_hills_threshold" getter="get_hills_threshold" default="0.0">
+			Value of [member hills_mask] where the layer starts.
+		</member>
+		<member name="outcrops_blend" type="float" setter="set_outcrops_blend" getter="get_outcrops_blend" default="0.5">
+			Range of [member outcrops_mask] values over which the layer fades in. Keep it wide: narrow values make a visible edge.
+		</member>
+		<member name="outcrops_height" type="float" setter="set_outcrops_height" getter="get_outcrops_height" default="0.0">
+			How far the rocky outcrops move the ground up and down, in meters: [member outcrops_noise] (-1 to 1) times this.
+		</member>
+		<member name="outcrops_mask" type="Resource" setter="set_outcrops_mask" getter="get_outcrops_mask">
+			Where the rocky outcrops are: a low-frequency [JarNoise]. Without one they are everywhere.
+		</member>
+		<member name="outcrops_noise" type="Resource" setter="set_outcrops_noise" getter="get_outcrops_noise">
+			The shape of the rocky outcrops: a [JarNoise]. Added on top of the rest of the terrain, also below sea level, where near a coast it makes bays and lakes.
+		</member>
+		<member name="outcrops_threshold" type="float" setter="set_outcrops_threshold" getter="get_outcrops_threshold" default="0.0">
+			Value of [member outcrops_mask] where the layer starts.
+		</member>
 		<member name="mountain_blend" type="float" setter="set_mountain_blend" getter="get_mountain_blend" default="0.5">
 			Range of [member mountain_mask] (or [member mountain_noise]) values over which mountains rise from nothing to [member mountain_height]. Small values give steep mountain feet.
 		</member>

@@ -60,33 +60,38 @@ float noise(vec3 x) {
 			   mix(mix(hash(i + vec3(0, 0, 1)), hash(i + vec3(1, 0, 1)), f.x), mix(hash(i + vec3(0, 1, 1)), hash(i + vec3(1, 1, 1)), f.x), f.y), f.z);
 }
 
-float fbm(vec3 p) {
+// `pixel`: how much of p a pixel covers. Octaves finer than that fade to their
+// mean: the sparkle near the horizon is noise no pixel can resolve.
+float fbm(vec3 p, float pixel) {
 	float v = 0.0;
 	float a = 0.5;
 	for (int i = 0; i < 5; i++) {
-		v += a * noise(p);
+		v += a * mix(noise(p), 0.5, smoothstep(0.25, 0.6, pixel));
 		p = p * 2.03 + 11.7;
 		a *= 0.5;
+		pixel *= 2.03;
 	}
 	return v;
 }
 
-float density(vec3 p) {
-	float n = fbm(p / cloud_size);
+float density(vec3 p, float pixel) {
+	float n = fbm(p / cloud_size, pixel);
 	float weather = (noise(p / weather_size + 5.3) - 0.5) * 2.0 * weather_strength;
 	float threshold = 1.0 - clamp(coverage + weather * 0.5, 0.0, 1.0);
-	return smoothstep(threshold - softness * 0.5, threshold + softness * 0.5, n);
+	float edge = softness * 0.5 + pixel * 0.25;
+	return smoothstep(threshold - edge, threshold + edge, n);
 }
 
 void fragment() {
 	vec3 p = world_to_body * (world_position - planet_center) - wind * TIME;
-	float d = density(p);
+	float pixel = max(length(dFdx(p)), length(dFdy(p))) / cloud_size;
+	float d = density(p, pixel);
 	if (d < 0.01)
 		discard;
 	vec3 up = radial ? normalize(world_position - planet_center) : up_axis;
 	vec3 sun = normalize(sun_direction);
 	// Self-shadowing: denser cloud towards the sun = darker here.
-	float towards_sun = density(p + world_to_body * sun * cloud_size * 0.35);
+	float towards_sun = density(p + world_to_body * sun * cloud_size * 0.35, pixel);
 	float lit = exp(-towards_sun * 2.0) * 0.8 + 0.2;
 	// Day and night: sunlight (and moonlight) reach the layer only where the
 	// sun (moon) is up; the sky's and stars' light everywhere.

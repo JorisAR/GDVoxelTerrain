@@ -126,6 +126,10 @@ To customize, set the volume's `material` to your own `ShaderMaterial` (a copy o
 
 For multiplayer and replays, every edit made on a volume is also an `edit_made(command)` signal: a plain dictionary with the brush, the transform in the volume's space, operation, material. `volume.apply_edit_command(command)` plays it on another volume, wherever that is in its scene. Send them your own way (`rpc` takes dictionaries as they are), and play them in the same order everywhere: every volume ends with the same voxels. Commands decode to SDFs and noises only, and load `res://` files only, so they are safe to receive. A brush saved as a file travels as its path, so both sides need that file. A new player can start from `save_edits()` plus the commands since. Debris is not sent: it follows from physics, so in multiplayer keep it to one side or leave it out.
 
+### Spawning
+
+`volume.find_land(position)` gives the nearest dry, gentle ground around a position on a `JarTerrainSdf`, with limits for height and slope. The demo player spawns there (`spawn_on_land`).
+
 ### Moving fast
 
 Give a `JarVoxelViewer` `predict_motion` to also refine around where it will be `predict_seconds` from now, at its smoothed velocity, on top of where it is: terrain and colliders are ready on arrival, at the cost of extra building while moving. `predict_max_distance` limits how far ahead that goes.
@@ -150,6 +154,8 @@ How far features are drawn follows from their size: on `JarVoxelPopulation`, `di
 Details work the same way, with `detail_disappear_pixels`, `detail_far_pixels`, `detail_far_density` and `max_detail_distance` on the population, and their own `draw_distance`, `far_distance` and `far_density` as overrides. Beyond the far distance they are drawn as `far_mesh` if they have one, a little larger, and thin out gradually down to the far density at the draw distance. They are the same instances dropping out one by one, so nothing jumps, which is what makes 100 m of grass affordable. Details grow on full-detail chunks, so that ring is their limit.
 
 Materials with `jar_population.gdshaderinc` fade between levels by dithering, never by blending: put `JAR_POPULATION_FRAGMENT` first in `fragment()`.
+
+Population stays off the terrain shader's peak material (snow), wherever the shader's `peak_height` puts it, unless a feature or detail has `grows_on_peaks`.
 
 Features are placed in tree order, and each keeps the ones after it out of its `footprint`: list trees first, then rocks, then bushes, and they fill the gaps without overlapping. Edits remove the features standing where the shape changes, permanently; for gameplay there are `remove_features(position, radius)` and `get_features_near(position, radius)`:
 
