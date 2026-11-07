@@ -5,7 +5,36 @@ extends Node
 
 var _failures := 0
 
+## The noise's vector build gives the same bits as the plain one, or features
+## would stand elsewhere on another CPU.
+func _test_noise_simd() -> void:
+	print("noise simd active: ", JarNoise.simd_active())
+	var noises: Array[JarNoise] = []
+	for setup in [[JarNoise.FRACTAL_FBM, 0.0, 8], [JarNoise.FRACTAL_RIDGED, 0.0, 11], [JarNoise.FRACTAL_FBM, 40.0, 3]]:
+		var n := JarNoise.new()
+		n.fractal_type = setup[0]
+		n.warp_strength = setup[1]
+		n.octaves = setup[2]
+		noises.append(n)
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 7
+	var points: Array[Vector3] = []
+	for i in 2000:
+		points.append(Vector3(rng.randfn(0, 1), rng.randfn(0, 1), rng.randfn(0, 1)) * pow(10.0, rng.randf_range(-1.0, 5.8)))
+	var differ := 0
+	for n in noises:
+		var with: Array[float] = []
+		for p in points:
+			with.append(n.get_noise_3d(p.x, p.y, p.z))
+		JarNoise.use_simd(false)
+		for i in points.size():
+			var p := points[i]
+			differ += 0 if n.get_noise_3d(p.x, p.y, p.z) == with[i] else 1
+		JarNoise.use_simd(true)
+	_check("noise: simd and plain give the same bits", differ == 0, "%d of %d differ" % [differ, points.size() * noises.size()])
+
 func _ready() -> void:
+	_test_noise_simd()
 	_test_primitives()
 	_test_modifiers()
 	_test_mesh_sdfs()

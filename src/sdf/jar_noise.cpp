@@ -1,4 +1,5 @@
 #include "jar_noise.h"
+#include "simd/simplex.h"
 #include <algorithm>
 #include <cmath>
 
@@ -6,25 +7,6 @@ namespace
 {
 // Gradient directions: the 12 cube edge midpoints, 4 repeated to make 16 (an
 // index from 4 bits, no modulo).
-constexpr float Gradients[16][3] = {{1, 1, 0}, {-1, 1, 0}, {1, -1, 0},  {-1, -1, 0}, {1, 0, 1},  {-1, 0, 1},
-                                    {1, 0, -1}, {-1, 0, -1}, {0, 1, 1},  {0, -1, 1},  {0, 1, -1}, {0, -1, -1},
-                                    {1, 1, 0},  {-1, 1, 0},  {0, -1, 1}, {0, -1, -1}};
-
-inline uint32_t hash3(int32_t x, int32_t y, int32_t z, uint32_t seed)
-{
-    uint32_t h = seed ^ (uint32_t(x) * 0x8da6b343U) ^ (uint32_t(y) * 0xd8163841U) ^ (uint32_t(z) * 0xcb1ab31fU);
-    h ^= h >> 16;
-    h *= 0x7feb352dU;
-    h ^= h >> 15;
-    h *= 0x846ca68bU;
-    h ^= h >> 16;
-    return h;
-}
-
-// Brings the noise to about [-1, 1] (measured: the peak of the sum below is
-// about 0.0130 with this kernel).
-constexpr float SimplexScale = 76.0f;
-
 inline uint32_t octave_seed(uint32_t seed, int octave)
 {
     return seed + uint32_t(octave) * 0x9E3779B9U;
@@ -39,56 +21,6 @@ constexpr float RidgedOctaveMean = 0.523f;
 constexpr float BroadRidgeSoftness = 5.0f;
 } // namespace
 
-float JarNoise::simplex(const glm::dvec3 &p, uint32_t seed, glm::vec3 &gradient)
-{
-    constexpr float G3 = 1.0f / 6.0f;
-    // The cell in doubles, the offset into it (small) in floats.
-    const double s = (p.x + p.y + p.z) * (1.0 / 3.0);
-    const double fi = std::floor(p.x + s), fj = std::floor(p.y + s), fk = std::floor(p.z + s);
-    const int i = int(fi), j = int(fj), k = int(fk);
-    const glm::vec3 d0(p - (glm::dvec3(fi, fj, fk) - (fi + fj + fk) * (1.0 / 6.0)));
-    // Which simplex of the skewed cube: the order of the coordinates.
-    glm::ivec3 o1, o2;
-    if (d0.x >= d0.y)
-    {
-        if (d0.y >= d0.z)
-            o1 = {1, 0, 0}, o2 = {1, 1, 0};
-        else if (d0.x >= d0.z)
-            o1 = {1, 0, 0}, o2 = {1, 0, 1};
-        else
-            o1 = {0, 0, 1}, o2 = {1, 0, 1};
-    }
-    else
-    {
-        if (d0.y < d0.z)
-            o1 = {0, 0, 1}, o2 = {0, 1, 1};
-        else if (d0.x < d0.z)
-            o1 = {0, 1, 0}, o2 = {0, 1, 1};
-        else
-            o1 = {0, 1, 0}, o2 = {1, 1, 0};
-    }
-    const glm::ivec3 corners[4] = {glm::ivec3(0), o1, o2, glm::ivec3(1)};
-    float n = 0.0f;
-    glm::vec3 g(0.0f);
-    for (int c = 0; c < 4; ++c)
-    {
-        const glm::vec3 d = d0 - glm::vec3(corners[c]) + float(c) * G3;
-        // Kernel radius^2 0.5: zero before the next simplex starts (continuous).
-        const float k2 = 0.5f - glm::dot(d, d);
-        if (k2 <= 0.0f)
-            continue;
-        const float *gc = Gradients[hash3(i + corners[c].x, j + corners[c].y, k + corners[c].z, seed) & 15];
-        const glm::vec3 grad(gc[0], gc[1], gc[2]);
-        const float dot = glm::dot(grad, d);
-        const float k4 = k2 * k2 * k2 * k2;
-        n += k4 * dot;
-        // d/dp (k2^4 * dot) = k2^4 * grad - 8 k2^3 * dot * d
-        g += k4 * grad - (8.0f * k2 * k2 * k2 * dot) * d;
-    }
-    gradient = g * SimplexScale;
-    return n * SimplexScale;
-}
-
 JarNoise::Sample JarNoise::sample(const glm::dvec3 &position, float broadWavelength, float minWavelength) const
 {
     glm::dvec3 p = position;
@@ -101,7 +33,14 @@ JarNoise::Sample JarNoise::sample(const glm::dvec3 &position, float broadWavelen
         glm::vec3 gx, gy, gz;
         const glm::dvec3 q = position * double(_warpFrequency);
         const uint32_t s = uint32_t(_seed) ^ 0x5bd1e995U;
-        const glm::vec3 w(simplex(q, s, gx), simplex(q, s + 1, gy), simplex(q, s + 2, gz));
+        const double qx[3] = {q.x, q.x, q.x}, qy[3] = {q.y, q.y, q.y}, qz[3] = {q.z, q.z, q.z};
+        const uint32_t seeds[3] = {s, s + 1, s + 2};
+        float wv[3], wx[3], wy[3], wz[3];
+        jar_simd::simplex()(qx, qy, qz, seeds, 3, wv, wx, wy, wz);
+        const glm::vec3 w(wv[0], wv[1], wv[2]);
+        gx = glm::vec3(wx[0], wy[0], wz[0]);
+        gy = glm::vec3(wx[1], wy[1], wz[1]);
+        gz = glm::vec3(wx[2], wy[2], wz[2]);
         p = position + double(_warpStrength) * glm::dvec3(w);
         const float k = _warpStrength * _warpFrequency;
         // Rows of J_w are the gradients of each component: (I + J)^T has them as columns.
@@ -111,6 +50,11 @@ JarNoise::Sample JarNoise::sample(const glm::dvec3 &position, float broadWavelen
     const int octaves = _fractal == FRACTAL_NONE ? 1 : std::max(1, _octaves);
     float frequency = _frequency, amplitude = 1.0f, norm = 0.0f, sum = 0.0f;
     glm::vec3 gradient(0.0f), broad(0.0f);
+    // Octaves in groups, ahead of the loop below, which then only reads them.
+    constexpr int Group = 8;
+    const jar_simd::SimplexLanes kernel = jar_simd::simplex();
+    float groupValue[Group], groupX[Group], groupY[Group], groupZ[Group];
+    int groupSize = 0, groupNext = 0;
     for (int o = 0; o < octaves; ++o)
     {
         if (minWavelength > 0.0f && frequency * minWavelength > 1.0f)
@@ -122,8 +66,27 @@ JarNoise::Sample JarNoise::sample(const glm::dvec3 &position, float broadWavelen
             amplitude *= _gain;
             continue;
         }
-        glm::vec3 g;
-        float n = simplex(p * double(frequency), octave_seed(uint32_t(_seed), o), g);
+        if (groupNext == groupSize)
+        {
+            double px[Group], py[Group], pz[Group];
+            uint32_t seeds[Group];
+            groupSize = groupNext = 0;
+            float f = frequency;
+            for (int q = o; q < octaves && groupSize < Group; ++q, f *= _lacunarity)
+            {
+                if (minWavelength > 0.0f && f * minWavelength > 1.0f)
+                    continue;
+                px[groupSize] = p.x * double(f);
+                py[groupSize] = p.y * double(f);
+                pz[groupSize] = p.z * double(f);
+                seeds[groupSize] = octave_seed(uint32_t(_seed), q);
+                ++groupSize;
+            }
+            kernel(px, py, pz, seeds, groupSize, groupValue, groupX, groupY, groupZ);
+        }
+        float n = groupValue[groupNext];
+        glm::vec3 g(groupX[groupNext], groupY[groupNext], groupZ[groupNext]);
+        ++groupNext;
         g *= frequency;
         // The low-pass: each octave weighted as central differences over half
         // the wavelength would see it (sin x / x), none past their first zero.
@@ -199,8 +162,20 @@ JAR_NOISE_SETTER(warp_strength, _warpStrength, std::max(0.0f, value))
 JAR_NOISE_SETTER(warp_frequency, _warpFrequency, std::max(1e-7f, value))
 #undef JAR_NOISE_SETTER
 
+bool JarNoise::simd_active()
+{
+    return jar_simd::simd_active();
+}
+
+void JarNoise::use_simd(bool enabled)
+{
+    jar_simd::use_simd(enabled);
+}
+
 void JarNoise::_bind_methods()
 {
+    ClassDB::bind_static_method("JarNoise", D_METHOD("simd_active"), &JarNoise::simd_active);
+    ClassDB::bind_static_method("JarNoise", D_METHOD("use_simd", "enabled"), &JarNoise::use_simd);
     BIND_ENUM_CONSTANT(FRACTAL_NONE);
     BIND_ENUM_CONSTANT(FRACTAL_FBM);
     BIND_ENUM_CONSTANT(FRACTAL_RIDGED);

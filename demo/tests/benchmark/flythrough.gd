@@ -6,7 +6,8 @@ extends Node
 ##   godot --path demo res://tests/benchmark/flythrough.tscn
 ## Options (environment): SCENE, SPEEDS (m/s, comma separated), SECONDS (per
 ## speed), ALTITUDE (m), CLIMB (m/s: rises while flying, e.g. out to space),
-## FAST_NORMALS (1: the terrain's fast_normals, in memory only), OUT,
+## FAST_NORMALS (1: the terrain's fast_normals, in memory only), SIMD (0: plain
+## noise kernel), OUT,
 ## EDITS (seconds between digs on the ground ahead: prints how long each took
 ## to show, split by whether a build was running when it was made).
 
@@ -30,6 +31,8 @@ static func _env(name: String, fallback: String) -> String:
 
 func _ready() -> void:
 	Engine.max_fps = 60
+	if _env("SIMD", "") == "0":
+		JarNoise.use_simd(false)
 	var scene: Node = load(SCENE).instantiate()
 	var player: DemoPlayer = scene.get_node("Player")
 	add_child(scene)
