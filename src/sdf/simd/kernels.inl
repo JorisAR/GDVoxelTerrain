@@ -1,5 +1,5 @@
-// 3D simplex noise with its gradient, for many points at once. Included inside
-// a namespace after batch.h, once per build (see batch.h), so it stays free of
+// The terrain's hot loops, for many items at once. Included inside a namespace
+// after batch.h, once per build (see batch.h), so it stays free of
 // anything else: code built for AVX2 must not leak into the rest of the library.
 
 constexpr float SimplexScale = 76.0f; // brings the noise to about [-1, 1]
@@ -10,14 +10,23 @@ alignas(32) const float GradientsY[16] = {1, 1, -1, -1, 0, 0, 0, 0, 1, -1, 1, -1
 alignas(32) const float GradientsZ[16] = {0, 0, 0, 0, 1, 1, -1, -1, 1, 1, -1, -1, 0, 0, 1, -1};
 // clang-format on
 
+inline Ints hash_u32(Ints x)
+{
+    x = x ^ shift_right<16>(x);
+    x = x * Ints(int32_t(0x7feb352dU));
+    x = x ^ shift_right<15>(x);
+    x = x * Ints(int32_t(0x846ca68bU));
+    return x ^ shift_right<16>(x);
+}
+
+inline Ints hash_cell(Ints x, Ints y, Ints z)
+{
+    return (x * Ints(int32_t(0x8da6b343U))) ^ (y * Ints(int32_t(0xd8163841U))) ^ (z * Ints(int32_t(0xcb1ab31fU)));
+}
+
 inline Ints hash3(Ints x, Ints y, Ints z, Ints seed)
 {
-    Ints h = seed ^ (x * Ints(int32_t(0x8da6b343U))) ^ (y * Ints(int32_t(0xd8163841U))) ^ (z * Ints(int32_t(0xcb1ab31fU)));
-    h = h ^ shift_right<16>(h);
-    h = h * Ints(int32_t(0x7feb352dU));
-    h = h ^ shift_right<15>(h);
-    h = h * Ints(int32_t(0x846ca68bU));
-    return h ^ shift_right<16>(h);
+    return hash_u32(seed ^ hash_cell(x, y, z));
 }
 
 // Fills value[i] and gradient (gx, gy, gz)[i] for the `count` points (px, py,
@@ -94,6 +103,79 @@ void simplex_lanes(const double *px, const double *py, const double *pz, const u
             gx[start + l] = outX[l];
             gy[start + l] = outY[l];
             gz[start + l] = outZ[l];
+        }
+    }
+}
+
+constexpr float Tau = 6.28318530718f;
+
+// sin(x) on [-pi/2, pi/2] (Taylor to x^9: error below 4e-6).
+inline Floats sin_half(Floats x)
+{
+    const Floats x2 = x * x;
+    return x * (Floats(1.0f) + x2 * (Floats(-1.0f / 6.0f) + x2 * (Floats(1.0f / 120.0f) +
+                                                                 x2 * (Floats(-1.0f / 5040.0f) + x2 * Floats(1.0f / 362880.0f)))));
+}
+
+// Into [-pi/2, pi/2], where the series is accurate.
+inline Floats fold(Floats x)
+{
+    constexpr float Pi = 3.14159265359f, HalfPi = 1.57079632679f;
+    return choose(above(x, Floats(HalfPi)), Floats(Pi) - x, choose(above(Floats(-HalfPi), x), Floats(-Pi) - x, x));
+}
+
+// Erosion: for the stripe pivots of neighboring cells (cell[i], `step[i]` cells
+// from the sample at `f` in its own cell), where each pivot is seen from the
+// sample (d), how strongly (falloff), and sin and cos of the stripes through it
+// (running across `across`, in cells). `flat`: pivots follow the sample's height.
+void pivot_lanes(const PivotInput &input, int count, float *falloff, float *sine, float *cosine, float *dx, float *dy,
+                 float *dz)
+{
+    constexpr float HalfPi = 1.57079632679f, Scale = 1.0f / 1024.0f;
+    for (int start = 0; start < count; start += Lanes)
+    {
+        const int lanes = count - start < Lanes ? count - start : Lanes;
+        int32_t cellX[Lanes] = {}, cellY[Lanes] = {}, cellZ[Lanes] = {};
+        float stepX[Lanes] = {}, stepY[Lanes] = {}, stepZ[Lanes] = {};
+        for (int l = 0; l < lanes; ++l)
+        {
+            cellX[l] = input.cellX[start + l];
+            cellY[l] = input.cellY[start + l];
+            cellZ[l] = input.cellZ[start + l];
+            stepX[l] = input.stepX[start + l];
+            stepY[l] = input.stepY[start + l];
+            stepZ[l] = input.stepZ[start + l];
+        }
+        // A random point in each cell, in [0, 1)^3 (10 bits of one hash each).
+        const Ints h = hash_u32(hash_cell(Ints::load(cellX), Ints::load(cellY), Ints::load(cellZ)));
+        const Ints mask(0x3FF);
+        const Floats offsetX = to_floats(h & mask) * Floats(Scale);
+        const Floats offsetY = to_floats(shift_right<10>(h) & mask) * Floats(Scale);
+        const Floats offsetZ = to_floats(shift_right<20>(h) & mask) * Floats(Scale);
+        const Floats x = Floats(input.fx) - (Floats::load(stepX) + offsetX);
+        const Floats y = input.flat ? Floats(0.0f) : Floats(input.fy) - (Floats::load(stepY) + offsetY);
+        const Floats z = Floats(input.fz) - (Floats::load(stepZ) + offsetZ);
+        const Floats strength = maximum(Floats(0.0f), Floats(1.0f) - (x * x + y * y + z * z));
+        const Floats angle = (x * Floats(input.acrossX) + y * Floats(input.acrossY) + z * Floats(input.acrossZ)) * Floats(Tau);
+        // Wrapped to [-pi, pi]; cos(x) = sin(x + pi/2).
+        const Floats wrapped = angle - Floats(Tau) * floor(angle * Floats(1.0f / Tau) + Floats(0.5f));
+        const Floats shifted = wrapped + Floats(HalfPi);
+        const Floats forCos = choose(above(shifted, Floats(3.14159265359f)), shifted - Floats(Tau), shifted);
+        float outF[Lanes], outS[Lanes], outC[Lanes], outX[Lanes], outY[Lanes], outZ[Lanes];
+        strength.store(outF);
+        sin_half(fold(wrapped)).store(outS);
+        sin_half(fold(forCos)).store(outC);
+        x.store(outX);
+        y.store(outY);
+        z.store(outZ);
+        for (int l = 0; l < lanes; ++l)
+        {
+            falloff[start + l] = outF[l];
+            sine[start + l] = outS[l];
+            cosine[start + l] = outC[l];
+            dx[start + l] = outX[l];
+            dy[start + l] = outY[l];
+            dz[start + l] = outZ[l];
         }
     }
 }

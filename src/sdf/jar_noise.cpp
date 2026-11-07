@@ -1,5 +1,5 @@
 #include "jar_noise.h"
-#include "simd/simplex.h"
+#include "simd/kernels.h"
 #include <algorithm>
 #include <cmath>
 
@@ -36,7 +36,7 @@ JarNoise::Sample JarNoise::sample(const glm::dvec3 &position, float broadWavelen
         const double qx[3] = {q.x, q.x, q.x}, qy[3] = {q.y, q.y, q.y}, qz[3] = {q.z, q.z, q.z};
         const uint32_t seeds[3] = {s, s + 1, s + 2};
         float wv[3], wx[3], wy[3], wz[3];
-        jar_simd::simplex()(qx, qy, qz, seeds, 3, wv, wx, wy, wz);
+        jar_simd::kernels().simplex(qx, qy, qz, seeds, 3, wv, wx, wy, wz);
         const glm::vec3 w(wv[0], wv[1], wv[2]);
         gx = glm::vec3(wx[0], wy[0], wz[0]);
         gy = glm::vec3(wx[1], wy[1], wz[1]);
@@ -52,7 +52,7 @@ JarNoise::Sample JarNoise::sample(const glm::dvec3 &position, float broadWavelen
     glm::vec3 gradient(0.0f), broad(0.0f);
     // Octaves in groups, ahead of the loop below, which then only reads them.
     constexpr int Group = 8;
-    const jar_simd::SimplexLanes kernel = jar_simd::simplex();
+    const auto kernel = jar_simd::kernels().simplex;
     float groupValue[Group], groupX[Group], groupY[Group], groupZ[Group];
     int groupSize = 0, groupNext = 0;
     for (int o = 0; o < octaves; ++o)

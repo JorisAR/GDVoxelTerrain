@@ -1,4 +1,4 @@
-#include "simplex.h"
+#include "kernels.h"
 #include <atomic>
 
 #ifdef JAR_HAS_AVX2
@@ -34,36 +34,36 @@ bool cpu_has_avx2()
 }
 #endif
 
-SimplexLanes best()
+const Kernels &best()
 {
 #ifdef JAR_HAS_AVX2
     if (cpu_has_avx2())
-        return simplex_avx2;
+        return kernels_avx2;
 #endif
-    return simplex_generic;
+    return kernels_generic;
 }
 
-std::atomic<SimplexLanes> s_current{nullptr};
+std::atomic<const Kernels *> s_current{nullptr};
 } // namespace
 
-SimplexLanes simplex()
+const Kernels &kernels()
 {
-    SimplexLanes kernel = s_current.load(std::memory_order_relaxed);
-    if (kernel == nullptr)
+    const Kernels *current = s_current.load(std::memory_order_relaxed);
+    if (current == nullptr)
     {
-        kernel = best();
-        s_current.store(kernel, std::memory_order_relaxed);
+        current = &best();
+        s_current.store(current, std::memory_order_relaxed);
     }
-    return kernel;
+    return *current;
 }
 
 void use_simd(bool enabled)
 {
-    s_current.store(enabled ? best() : simplex_generic, std::memory_order_relaxed);
+    s_current.store(enabled ? &best() : &kernels_generic, std::memory_order_relaxed);
 }
 
 bool simd_active()
 {
-    return simplex() != simplex_generic;
+    return &kernels() != &kernels_generic;
 }
 } // namespace jar_simd

@@ -32,6 +32,17 @@ func _test_noise_simd() -> void:
 			differ += 0 if n.get_noise_3d(p.x, p.y, p.z) == with[i] else 1
 		JarNoise.use_simd(true)
 	_check("noise: simd and plain give the same bits", differ == 0, "%d of %d differ" % [differ, points.size() * noises.size()])
+	# And the eroded terrain, the other kernel.
+	var terrain: JarTerrainSdf = load("res://demo/planet/planet_terrain.tres")
+	differ = 0
+	var heights: Array[float] = []
+	for p in points:
+		heights.append(terrain.sample_height(p.normalized() * terrain.radius))
+	JarNoise.use_simd(false)
+	for i in points.size():
+		differ += 0 if terrain.sample_height(points[i].normalized() * terrain.radius) == heights[i] else 1
+	JarNoise.use_simd(true)
+	_check("erosion: simd and plain give the same bits", differ == 0, "%d of %d differ" % [differ, points.size()])
 
 func _ready() -> void:
 	_test_noise_simd()

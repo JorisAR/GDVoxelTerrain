@@ -1,11 +1,11 @@
 #ifndef JAR_BATCH_H
 #define JAR_BATCH_H
 
-// The few vector operations the noise kernel needs, so it is written once and
-// reads like plain math. Include it inside a namespace, per translation unit:
+// The few vector operations the terrain kernels need, so they are written once
+// and read like plain math. Include it inside a namespace, per translation unit:
 // the two builds below are different types.
 //
-//   JAR_SIMD_AVX2 defined: 8 lanes of AVX2 (simplex_avx2.cpp only, built with
+//   JAR_SIMD_AVX2 defined: 8 lanes of AVX2 (kernels_avx2.cpp only, built with
 //                          AVX2 enabled and chosen at runtime).
 //   otherwise:             1 lane, plain C++, for every platform.
 //
@@ -22,8 +22,8 @@ struct Floats
     Floats() = default;
     Floats(__m256 value) : v(value) {}
     Floats(float value) : v(_mm256_set1_ps(value)) {}
-    static Floats load(const float *p) { return _mm256_load_ps(p); }
-    void store(float *p) const { _mm256_store_ps(p, v); }
+    static Floats load(const float *p) { return _mm256_loadu_ps(p); }
+    void store(float *p) const { _mm256_storeu_ps(p, v); }
 };
 
 struct Ints
@@ -32,7 +32,7 @@ struct Ints
     Ints() = default;
     Ints(__m256i value) : v(value) {}
     Ints(int32_t value) : v(_mm256_set1_epi32(value)) {}
-    static Ints load(const int32_t *p) { return _mm256_load_si256(reinterpret_cast<const __m256i *>(p)); }
+    static Ints load(const int32_t *p) { return _mm256_loadu_si256(reinterpret_cast<const __m256i *>(p)); }
 };
 
 inline Floats operator+(Floats a, Floats b) { return _mm256_add_ps(a.v, b.v); }
@@ -52,6 +52,10 @@ inline Ints above(Floats a, Floats b) { return _mm256_castps_si256(_mm256_cmp_ps
 // `a` where `mask` is set, else 0.
 inline Floats only(Ints mask, Floats a) { return _mm256_and_ps(_mm256_castsi256_ps(mask.v), a.v); }
 inline Floats to_floats(Ints a) { return _mm256_cvtepi32_ps(a.v); }
+// `a` where `mask` is set, else `b`.
+inline Floats choose(Ints mask, Floats a, Floats b) { return _mm256_blendv_ps(b.v, a.v, _mm256_castsi256_ps(mask.v)); }
+inline Floats floor(Floats a) { return _mm256_floor_ps(a.v); }
+inline Floats maximum(Floats a, Floats b) { return _mm256_max_ps(a.v, b.v); }
 inline Floats lookup(const float *table, Ints index) { return _mm256_i32gather_ps(table, index.v, 4); }
 
 #else
@@ -90,6 +94,9 @@ inline Ints at_least(Floats a, Floats b) { return a.v >= b.v ? -1 : 0; }
 inline Ints above(Floats a, Floats b) { return a.v > b.v ? -1 : 0; }
 inline Floats only(Ints mask, Floats a) { return mask.v != 0 ? a.v : 0.0f; }
 inline Floats to_floats(Ints a) { return float(a.v); }
+inline Floats choose(Ints mask, Floats a, Floats b) { return mask.v != 0 ? a.v : b.v; }
+inline Floats floor(Floats a) { return std::floor(a.v); }
+inline Floats maximum(Floats a, Floats b) { return a.v > b.v ? a.v : b.v; }
 inline Floats lookup(const float *table, Ints index) { return table[index.v]; }
 
 #endif

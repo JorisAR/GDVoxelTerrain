@@ -1,4 +1,5 @@
 #include "terrain_sdf.h"
+#include "simd/kernels.h"
 #include <cmath>
 #include <cstdint>
 
@@ -40,35 +41,6 @@ uint32_t hash_u32(uint32_t x)
     return x;
 }
 
-// sin(x) on [-pi/2, pi/2] (Taylor to x^9: error below 4e-6).
-inline float sin_half(float x)
-{
-    const float x2 = x * x;
-    return x * (1.0f + x2 * (-1.0f / 6.0f + x2 * (1.0f / 120.0f + x2 * (-1.0f / 5040.0f + x2 * (1.0f / 362880.0f)))));
-}
-
-// sin and cos of any angle, several times faster than std::sin + std::cos
-// (the erosion's stripes take a few dozen per sample).
-inline void fast_sincos(float angle, float &s, float &c)
-{
-    constexpr float Pi = 3.14159265359f, HalfPi = 1.57079632679f;
-    // Wrap to [-pi, pi], then fold into [-pi/2, pi/2] where the series is accurate.
-    float x = angle - Tau * std::floor(angle * (1.0f / Tau) + 0.5f);
-    const float sx = x > HalfPi ? Pi - x : (x < -HalfPi ? -Pi - x : x);
-    float y = x + HalfPi; // cos(x) = sin(x + pi/2)
-    y = y > Pi ? y - Tau : y;
-    const float cy = y > HalfPi ? Pi - y : (y < -HalfPi ? -Pi - y : y);
-    s = sin_half(sx);
-    c = sin_half(cy);
-}
-
-// Random point inside a grid cell, in [0, 1)^3 (10 bits of one hash each).
-glm::vec3 cell_offset(const glm::ivec3 &cell)
-{
-    const uint32_t h = hash_u32(uint32_t(cell.x) * 0x8da6b343U ^ uint32_t(cell.y) * 0xd8163841U ^ uint32_t(cell.z) * 0xcb1ab31fU);
-    constexpr float Scale = 1.0f / 1024.0f;
-    return glm::vec3(float(h & 0x3FF), float((h >> 10) & 0x3FF), float((h >> 20) & 0x3FF)) * Scale;
-}
 } // namespace
 
 void JarTerrainSdf::frame(const glm::vec3 &pos, glm::dvec3 &surface, glm::vec3 &up, float &above) const
@@ -509,6 +481,7 @@ JarTerrainSdf::Sample JarTerrainSdf::erode(const glm::dvec3 &surface, const glm:
     const glm::vec3 offsetAxes = sphere ? glm::vec3(1.0f) : glm::vec3(1.0f, 0.0f, 1.0f);
 
     const int octaves = erosion_octaves();
+    const jar_simd::Kernels &kernels = jar_simd::kernels();
     for (int octave = 0; octave < octaves; ++octave)
     {
         const float len = glm::length(gullySlope);
@@ -537,6 +510,18 @@ JarTerrainSdf::Sample JarTerrainSdf::erode(const glm::dvec3 &surface, const glm:
             glm::vec3 fcd(0.0f), fsd(0.0f), fd(0.0f); // sums of falloff^2 * (cos, sin, 1) * d
             glm::vec3 wsd(0.0f), wcd(0.0f);           // sums of w * (sin, cos) * d
             const int ySpan = sphere ? 1 : 0;
+            // The pivots in reach, all worked out at once (see kernels.inl),
+            // then summed in order, which keeps the result the same to the
+            // bit whatever the kernel's width.
+            jar_simd::PivotInput pivots;
+            pivots.fx = f.x;
+            pivots.fy = f.y;
+            pivots.fz = f.z;
+            pivots.acrossX = across.x;
+            pivots.acrossY = across.y;
+            pivots.acrossZ = across.z;
+            pivots.flat = !sphere;
+            int pivotCount = 0;
             for (int dz = -1; dz <= 1; ++dz)
                 for (int dy = -ySpan; dy <= ySpan; ++dy)
                     for (int dx = -1; dx <= 1; ++dx)
@@ -548,30 +533,37 @@ JarTerrainSdf::Sample JarTerrainSdf::erode(const glm::dvec3 &surface, const glm:
                         const float bz = dz < 0 ? f.z : (dz > 0 ? 1.0f - f.z : 0.0f);
                         if (bx * bx + by * by + bz * bz >= 1.0f)
                             continue;
-                        const glm::ivec3 cell = base + glm::ivec3(dx, dy, dz);
-                        // From within the cell: small numbers, exact.
-                        glm::vec3 d = f - (glm::vec3(dx, dy, dz) + cell_offset(cell));
-                        if (!sphere)
-                            d.y = 0.0f; // pivots follow the sample height
-                        // Radius 1 cell: the farthest pivot that can be this close lies in
-                        // a neighbouring cell, so the 3x3(x3) loop never misses one
-                        // (a larger radius pops pivots in at cell borders).
-                        const float falloff = std::max(0.0f, 1.0f - glm::dot(d, d));
-                        const float w = falloff * falloff * falloff;
-                        if (w <= 0.0f)
-                            continue;
-                        float ps, pc;
-                        fast_sincos(glm::dot(d, across) * Tau, ps, pc);
-                        c += w * pc;
-                        s += w * ps;
-                        weights += w;
-                        const float f2 = falloff * falloff;
-                        fcd += (f2 * pc) * d;
-                        fsd += (f2 * ps) * d;
-                        fd += f2 * d;
-                        wsd += (w * ps) * d;
-                        wcd += (w * pc) * d;
+                        pivots.cellX[pivotCount] = base.x + dx;
+                        pivots.cellY[pivotCount] = base.y + dy;
+                        pivots.cellZ[pivotCount] = base.z + dz;
+                        pivots.stepX[pivotCount] = float(dx);
+                        pivots.stepY[pivotCount] = float(dy);
+                        pivots.stepZ[pivotCount] = float(dz);
+                        ++pivotCount;
                     }
+            float falloffs[27], sines[27], cosines[27], offsetX[27], offsetY[27], offsetZ[27];
+            kernels.pivots(pivots, pivotCount, falloffs, sines, cosines, offsetX, offsetY, offsetZ);
+            for (int p = 0; p < pivotCount; ++p)
+            {
+                // Radius 1 cell: the farthest pivot that can be this close lies in
+                // a neighbouring cell, so the 3x3(x3) loop never misses one
+                // (a larger radius pops pivots in at cell borders).
+                const float falloff = falloffs[p];
+                const float w = falloff * falloff * falloff;
+                if (w <= 0.0f)
+                    continue;
+                const float ps = sines[p], pc = cosines[p];
+                const glm::vec3 d(offsetX[p], offsetY[p], offsetZ[p]);
+                c += w * pc;
+                s += w * ps;
+                weights += w;
+                const float f2 = falloff * falloff;
+                fcd += (f2 * pc) * d;
+                fsd += (f2 * ps) * d;
+                fd += f2 * d;
+                wsd += (w * ps) * d;
+                wcd += (w * pc) * d;
+            }
             // Gradients (per meter): of the weights, -6 falloff^2 / cell * d
             // (in the axes the offset moves in), and of the phase, which turns
             // with the stripes as well as moving along them:

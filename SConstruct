@@ -46,13 +46,13 @@ sources = (
     + Glob("src/universe/*.cpp")
 )
 
-# The noise kernel: plain C++ everywhere, and on x86-64 a build for AVX2 as well,
+# The terrain kernels: plain C++ everywhere, and on x86-64 a build for AVX2 as well,
 # chosen at runtime by what the CPU has. Only that one file gets the flag.
-sources += Glob("src/sdf/simd/*.cpp", exclude=["src/sdf/simd/simplex_avx2.cpp"])
+sources += Glob("src/sdf/simd/*.cpp", exclude=["src/sdf/simd/kernels_avx2.cpp"])
 if env["arch"] == "x86_64":
     env.Append(CPPDEFINES=["JAR_HAS_AVX2"])
     sources.append(env.SharedObject(
-        "src/sdf/simd/simplex_avx2.cpp",
+        "src/sdf/simd/kernels_avx2.cpp",
         CCFLAGS=env["CCFLAGS"] + ["/arch:AVX2" if env.get("is_msvc", False) else "-mavx2"],
     ))
 
