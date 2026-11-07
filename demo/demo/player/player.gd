@@ -26,6 +26,8 @@ extends CharacterBody3D
 ## from one body's pull into another's swings up around calmly, not at once.
 @export var max_fly_turn_speed := 60.0
 @export var start_flying := false
+## Spawns on the nearest dry, gentle ground, not wherever the player was placed.
+@export var spawn_on_land := true
 
 @onready var head: Node3D = $Head
 @onready var hud: Label = $HUD/Label
@@ -163,6 +165,12 @@ func _try_spawn() -> bool:
 			var surface := volume.raycast_sdf(global_position, global_position - up_direction * 10000.0)
 			if surface:
 				global_position = surface.position + up_direction * 2.0
+				if spawn_on_land: # only here: the first volume hit is the one under the player
+					var land := volume.find_land(global_position)
+					up_direction = volume.get_up_direction_at(land)
+					var above := land + up_direction * 50.0
+					var ground := volume.raycast_sdf(above, above - up_direction * 10000.0)
+					global_position = (ground.position if ground else land) + up_direction * 2.0
 				volume.force_update_lod() # refine (and build colliders) here now
 				break
 		_moved_to_surface = true

@@ -1,6 +1,7 @@
 // Surface queries on a volume's field (see JarVoxelVolume::get_distance).
 #include "voxel_octree_node.h"
 #include "voxel_volume.h"
+#include "terrain_sdf.h"
 #include <godot_cpp/classes/character_body3d.hpp>
 #include <godot_cpp/classes/rigid_body3d.hpp>
 #include <cmath>
@@ -170,4 +171,61 @@ bool JarVoxelVolume::keep_above_surface(Node3D *body, float margin)
     else if (auto *character = Object::cast_to<CharacterBody3D>(body))
         character->set_velocity(without_inward(character->get_velocity()));
     return true;
+}
+
+Vector3 JarVoxelVolume::find_land(const Vector3 &global_position, float min_height, float max_height,
+                                  float max_slope) const
+{
+    const JarTerrainSdf *terrain = Object::cast_to<JarTerrainSdf>(_sdf.ptr());
+    if (terrain == nullptr)
+        return global_position;
+    const bool sphere = terrain->get_shape() == JarTerrainSdf::SHAPE_SPHERE;
+    const float radius = terrain->get_radius();
+    const float sea = terrain->get_sea_level();
+    const Vector3 startLocal = to_local(global_position);
+    // Height above the base shape at the column through a point, and that column's surface.
+    const auto surface_at = [&](const glm::vec3 &point, float &height) {
+        const glm::vec3 column = sphere ? glm::normalize(point) * radius : glm::vec3(point.x, 0.0f, point.z);
+        height = terrain->sample_height(Vector3(column.x, column.y, column.z));
+        return sphere ? glm::normalize(point) * (radius + height) : glm::vec3(point.x, height, point.z);
+    };
+    const glm::vec3 start(startLocal.x, startLocal.y, startLocal.z);
+    const glm::vec3 up = sphere ? glm::normalize(start) : glm::vec3(0.0f, 1.0f, 0.0f);
+    const glm::vec3 t1 = glm::normalize(glm::cross(up, std::abs(up.y) < 0.9f ? glm::vec3(0, 1, 0) : glm::vec3(1, 0, 0)));
+    const glm::vec3 t2 = glm::cross(up, t1);
+    const float steepest = std::tan(glm::radians(max_slope));
+    const auto suitable = [&](const glm::vec3 &point, glm::vec3 &found) {
+        float h, dx, dz;
+        found = surface_at(point, h);
+        if (h - sea < min_height || h - sea > max_height)
+            return false;
+        constexpr float Step = 8.0f;
+        surface_at(point + t1 * Step, dx);
+        surface_at(point + t2 * Step, dz);
+        if (std::hypot(dx - h, dz - h) / Step > steepest)
+            return false;
+        // Land around it too: not a sandbank.
+        constexpr float Around = 150.0f;
+        for (const glm::vec3 &offset : {t1, -t1, t2, -t2})
+        {
+            surface_at(point + offset * Around, dx);
+            if (dx - sea < 0.0f)
+                return false;
+        }
+        return true;
+    };
+    // Rings around the start, ever wider, so the nearest land is found first.
+    constexpr int Rings = 32, PerRing = 16;
+    glm::vec3 found;
+    if (suitable(start, found))
+        return to_global(Vector3(found.x, found.y, found.z));
+    float distance = 40.0f;
+    for (int ring = 0; ring < Rings; ++ring, distance *= 1.3f)
+        for (int i = 0; i < PerRing; ++i)
+        {
+            const float angle = 6.2831853f * (float(i) + 0.5f * float(ring & 1)) / float(PerRing);
+            if (suitable(start + (t1 * std::cos(angle) + t2 * std::sin(angle)) * distance, found))
+                return to_global(Vector3(found.x, found.y, found.z));
+        }
+    return global_position;
 }

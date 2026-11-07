@@ -121,6 +121,16 @@
 				Paints [param material] (an index into [member materials], 0-254) onto the surface inside [param sdf] (placed by [param transform], like [method edit]) without changing the shape. The weight fades out over one voxel outside the shape, so repeated strokes blend. Each voxel keeps its 4 strongest materials. Painted voxels are kept when level of detail drops.
 			</description>
 		</method>
+		<method name="find_land" qualifiers="const">
+			<return type="Vector3" />
+			<param index="0" name="global_position" type="Vector3" />
+			<param index="1" name="min_height" type="float" default="4.0" />
+			<param index="2" name="max_height" type="float" default="300.0" />
+			<param index="3" name="max_slope" type="float" default="20.0" />
+			<description>
+				The nearest point on a [JarTerrainSdf]'s ground around [param global_position], between the given heights above sea level, no steeper than [param max_slope] degrees and with land around it. Returns [param global_position] if there is none, or with another SDF. Evaluates the terrain, so use it now and then, like when spawning.
+			</description>
+		</method>
 		<method name="raycast_sdf" qualifiers="const">
 			<return type="Dictionary" />
 			<param index="0" name="from" type="Vector3" />

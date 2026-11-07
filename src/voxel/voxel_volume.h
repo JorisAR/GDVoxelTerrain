@@ -255,6 +255,12 @@ class JarVoxelVolume : public Node3D
     // empty result. Main thread.
     // Signed distance to the surface (negative inside).
     float get_distance(const Vector3 &position);
+    // The nearest point on a JarTerrainSdf's ground, around `global_position`,
+    // at a height above sea level within the limits and no steeper than
+    // `max_slope` degrees; `global_position` itself if none is found (or for
+    // other SDFs). Evaluates the terrain, so for now and then, like spawning.
+    Vector3 find_land(const Vector3 &global_position, float min_height = 4.0f, float max_height = 300.0f,
+                      float max_slope = 20.0f) const;
     // The nearest surface point: {position, normal}; empty if unknown.
     Dictionary project_to_surface(const Vector3 &position);
     // The first surface point on the segment: {position, normal, distance};

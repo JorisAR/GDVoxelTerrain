@@ -160,6 +160,8 @@ void JarVoxelVolume::_bind_methods()
     ClassDB::bind_method(D_METHOD("get_up_direction_at", "global_position"), &JarVoxelVolume::get_up_direction_at);
     ClassDB::bind_method(D_METHOD("get_height_at", "global_position"), &JarVoxelVolume::get_height_at);
     ClassDB::bind_method(D_METHOD("save_edits"), &JarVoxelVolume::save_edits);
+    ClassDB::bind_method(D_METHOD("find_land", "global_position", "min_height", "max_height", "max_slope"),
+                         &JarVoxelVolume::find_land, DEFVAL(4.0f), DEFVAL(300.0f), DEFVAL(20.0f));
     ClassDB::bind_method(D_METHOD("apply_edit_command", "command"), &JarVoxelVolume::apply_edit_command);
     ADD_SIGNAL(MethodInfo("edit_made", PropertyInfo(Variant::DICTIONARY, "command")));
     ClassDB::bind_method(D_METHOD("load_edits", "data"), &JarVoxelVolume::load_edits);

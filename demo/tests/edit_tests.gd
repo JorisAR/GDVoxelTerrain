@@ -109,6 +109,7 @@ func _run(camera: Node3D) -> void:
 	await _large_edits()
 	await _climate_plot()
 	await _commands()
+	await _find_land()
 	await _save_and_load()
 	await _digs_while_moving()
 	_finish()
@@ -356,6 +357,23 @@ func _climate_plot() -> void:
 	plot.move_biome(1, Vector2(9000, -9000))
 	_check("plot: stays in range", is_equal_approx(warm.temperature, 1.0) and is_equal_approx(warm.moisture, 1.0))
 	plot.queue_free()
+	await get_tree().process_frame
+
+## find_land gives dry, gentle ground on a JarTerrainSdf.
+func _find_land() -> void:
+	var planet: JarTerrainSdf = load("res://demo/planet/planet_terrain.tres")
+	var holder := Node.new()
+	add_child(holder)
+	var world := TestWorld.flat(holder, Vector3(0, 30, 0), func(v: JarVoxelVolume):
+		v.sdf = planet
+		v.extent = 40000.0)
+	var v: JarVoxelVolume = world.volume
+	for direction: Vector3 in [Vector3(1, 0.2, 0), Vector3(-0.4, 0.9, 0.2), Vector3(0.3, -0.7, 0.6), Vector3(-1, -0.3, -0.6)]:
+		var from := direction.normalized() * (planet.radius + 200.0)
+		var land := v.find_land(from)
+		var height := land.length() - planet.radius - planet.sea_level
+		_check("land found", height >= 3.9 and height <= 300.1, "%.1f m up, %.0f m from the start" % [height, land.distance_to(from)])
+	holder.queue_free()
 	await get_tree().process_frame
 
 func _save_and_load() -> void:
