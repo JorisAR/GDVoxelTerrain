@@ -5,7 +5,7 @@
 	</brief_description>
 	<description>
 		A flat annulus in the plane across the body's [member JarCelestialBody.spin_axis], from [member inner_radius] to [member outer_radius] times the body's radius. Opacity and color along the radius come from a profile made when the settings change (a 2048 texel texture, about a millisecond, nothing baked ahead): Saturn's by default (the faint C ring, the dense B ring, the Cassini division, the A ring with the Encke gap, the narrow F ring), or [member profile]. Fine ringlets are added on top.
-		Lit by the star: brighter from the lit side, dark from the unlit side where they are dense, glowing with the sun behind them (dust scatters forward), opaque seen edge-on, and darkened by the planet's shadow. A [JarBodyGasGiant] on the same body shows the rings' shadow.
+		Lit by the star as a thin layer of icy particles (single scattering, with the phase of big rough particles): bright from the lit side with the sun behind the viewer, darker looking towards the sun; from the unlit side dense rings go dark and thin rings and gaps glow with the light that gets through; dust scatters forward with the sun behind them; opaque seen edge-on, and darkened by the planet's shadow. Lit by the star's own light above any air (its color times energy), so they keep their color from a planet at sunset. A [JarBodyGasGiant] on the same body shows the rings' shadow.
 		Beyond the camera's far plane they are drawn in scaled space (see [JarBodyLayer]), so they show from anywhere in the system.
 	</description>
 	<tutorials>

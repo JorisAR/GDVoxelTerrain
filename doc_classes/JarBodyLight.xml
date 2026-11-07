@@ -39,6 +39,9 @@
 		<member name="energy" type="float" setter="set_energy" getter="get_energy" default="0.08">
 			Of a moon: its light's energy at full moon.
 		</member>
+		<member name="space_min_sensitivity" type="float" setter="set_space_min_sensitivity" getter="get_space_min_sensitivity" default="0.0">
+			Of a star: in space and in its light, auto exposure adapts to the sunlit bodies instead of the black around them, so a planet seen from afar does not burn out to white. Raises the camera attributes' [member CameraAttributesPractical.auto_exposure_min_sensitivity] (the darkest scene auto exposure brightens for) to this value, blending in from half the nearest body's rotating frame height to its top and out in its shadow. Near the ground (night, caves) the scene's own value is kept. About [code]auto_exposure_scale * 800[/code] keeps a sunlit white surface just below white. 0: off.
+		</member>
 		<member name="physical_size" type="bool" setter="set_physical_size" getter="get_physical_size" default="false">
 			Sets the light's angular size ([member Light3D.light_angular_distance]) to the star's apparent size at the camera: physically sized soft shadows (PCSS). These need more shadow bias than Godot's default (else striped shadow acne). Off: the light's own setting is kept. Either way a shader sky gets the star's real size as [code]jar_sun_size[/code] (radians), for its sun disk.
 		</member>

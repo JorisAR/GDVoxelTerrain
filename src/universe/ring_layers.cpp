@@ -295,8 +295,7 @@ void JarBodyRings::update(const JarCelestialBody &body)
     material->set_shader_parameter("ring_inner", _innerRadius * radius);
     material->set_shader_parameter("ring_outer", _outerRadius * radius);
     material->set_shader_parameter("ring_profile", get_profile_texture());
-    apply_sun(material);
-    material->set_shader_parameter("sun_direction", star_direction_at(frame.center));
+    apply_star(material, frame.center);
 }
 
 // ------------------------------------------------------------- JarBodyGasGiant
@@ -359,8 +358,7 @@ void JarBodyGasGiant::update(const JarCelestialBody &body)
     // Bands and storms turn with the body.
     material->set_shader_parameter("world_to_body", body.get_global_basis().orthonormalized().transposed());
     material->set_shader_parameter("spin_axis", body.get_global_basis().orthonormalized().transposed().xform(spin_axis(body)));
-    apply_sun(material);
-    material->set_shader_parameter("sun_direction", star_direction_at(frame.center));
+    apply_star(material, frame.center);
     auto *rings = Object::cast_to<JarBodyRings>(ObjectDB::get_instance(_rings));
     material->set_shader_parameter("has_rings", rings != nullptr && rings->is_visible_in_tree());
     if (rings)

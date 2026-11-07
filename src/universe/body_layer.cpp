@@ -2,6 +2,7 @@
 #include <godot_cpp/classes/array_mesh.hpp>
 #include "voxel_stats.h"
 #include <godot_cpp/classes/camera3d.hpp>
+#include <godot_cpp/classes/camera_attributes_practical.hpp>
 #include <godot_cpp/classes/engine.hpp>
 #include <godot_cpp/classes/environment.hpp>
 #include <godot_cpp/classes/sky.hpp>
@@ -22,6 +23,7 @@ const char *AtmosphereShader = "res://addons/jar_voxel_terrain/nodes/atmosphere/
 const char *ExtinctionShader = "res://addons/jar_voxel_terrain/nodes/atmosphere/atmosphere_extinction.gdshader";
 // Light a JarBodyLight gives its light before any atmosphere tints it.
 const char *BaseColorMeta = "jar_base_color";
+const char *BaseSensitivityMeta = "jar_base_min_sensitivity";
 // The Environment's own ambient light (starlight), under the sky's.
 const char *AmbientFloorMeta = "jar_ambient_floor";
 // On a star's light: the JarBodyLight driving it.
@@ -248,6 +250,17 @@ void JarBodyLayer::apply_sun(const Ref<ShaderMaterial> &material)
     material->set_shader_parameter("moon_color", Vector3(moon.r, moon.g, moon.b));
 }
 
+void JarBodyLayer::apply_star(const Ref<ShaderMaterial> &material, const Vector3 &at)
+{
+    material->set_shader_parameter("sun_direction", star_direction_at(at));
+    if (DirectionalLight3D *light = find_sun())
+    {
+        const Color base = light->has_meta(BaseColorMeta) ? Color(light->get_meta(BaseColorMeta)) : light->get_color();
+        const float energy = light->get_param(Light3D::PARAM_ENERGY);
+        material->set_shader_parameter("sun_color", Vector3(base.r, base.g, base.b) * energy);
+    }
+}
+
 Vector3 JarBodyLayer::star_direction_at(const Vector3 &global_position)
 {
     if (SceneTree *tree = get_tree())
@@ -298,6 +311,10 @@ void JarBodyLight::_bind_methods()
     ClassDB::bind_method(D_METHOD("set_energy", "value"), &JarBodyLight::set_energy);
     ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "energy", PROPERTY_HINT_RANGE, "0,2,0.001,or_greater"), "set_energy",
                  "get_energy");
+    ClassDB::bind_method(D_METHOD("get_space_min_sensitivity"), &JarBodyLight::get_space_min_sensitivity);
+    ClassDB::bind_method(D_METHOD("set_space_min_sensitivity", "value"), &JarBodyLight::set_space_min_sensitivity);
+    ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "space_min_sensitivity", PROPERTY_HINT_RANGE, "0,800,1,or_greater"),
+                 "set_space_min_sensitivity", "get_space_min_sensitivity");
     ClassDB::bind_method(D_METHOD("get_phase_at", "global_position"), &JarBodyLight::get_phase_at);
     ClassDB::bind_method(D_METHOD("get_direction_at", "global_position"), &JarBodyLight::get_direction_at);
     ClassDB::bind_method(D_METHOD("get_angular_diameter_at", "global_position"),
@@ -423,6 +440,55 @@ void JarBodyLight::update(const JarCelestialBody &body)
     const Color color(base.r * tint.r, base.g * tint.g, base.b * tint.b);
     if (!light->get_color().is_equal_approx(color))
         light->set_color(color);
+    if (!_reflects)
+        apply_space_exposure(camera, at, towards);
+}
+
+// In space and in sunlight the eye is adapted to the sunlit bodies: auto
+// exposure may not brighten a dark frame as much as at night, or a planet
+// against black space burns out to white. Raises the camera attributes'
+// auto_exposure_min_sensitivity (the darkest scene luminance auto exposure
+// adapts to) to space_min_sensitivity, blending in with altitude and out in a
+// body's shadow. Near the ground (caves, night) the scene's own value is kept.
+void JarBodyLight::apply_space_exposure(Camera3D *camera, const Vector3 &at, const Vector3 &towards)
+{
+    if (_spaceMinSensitivity <= 0.0f || camera == nullptr)
+        return;
+    Ref<CameraAttributesPractical> attributes = camera->get_attributes();
+    if (attributes.is_null())
+        if (Ref<World3D> world = camera->get_world_3d(); world.is_valid())
+            attributes = world->get_camera_attributes();
+    if (attributes.is_null() || !attributes->is_auto_exposure_enabled())
+        return;
+    if (!attributes->has_meta(BaseSensitivityMeta))
+        attributes->set_meta(BaseSensitivityMeta, attributes->get_auto_exposure_min_sensitivity());
+    const float base = attributes->get_meta(BaseSensitivityMeta);
+    float space = 0.0f;
+    if (JarVoxelUniverse *universe = JarVoxelUniverse::get_singleton())
+    {
+        const JarCelestialBody *near = universe->get_dominant_body(at);
+        space = 1.0f;
+        if (near != nullptr && near != get_body())
+        {
+            // Out of the air: from half the rotating frame's height to its top.
+            const float height = std::max(near->get_effective_rotating_frame_height(), 1.0f);
+            const float t = std::clamp((near->get_altitude(at) / height - 0.5f) * 2.0f, 0.0f, 1.0f);
+            space = t * t * (3.0f - 2.0f * t);
+            // In its shadow: a cylinder behind it, soft over a few percent of its radius.
+            const Vector3 d = at - near->get_center();
+            const float along = d.dot(towards);
+            if (along < 0.0f)
+            {
+                const float radius = near->get_effective_radius();
+                const float off = (d - towards * along).length();
+                const float lit = std::clamp((off / std::max(radius, 1.0f) - 0.97f) / 0.06f, 0.0f, 1.0f);
+                space *= lit * lit * (3.0f - 2.0f * lit);
+            }
+        }
+    }
+    const float sensitivity = base + (std::max(base, _spaceMinSensitivity) - base) * space;
+    if (std::abs(attributes->get_auto_exposure_min_sensitivity() - sensitivity) > 0.5f)
+        attributes->set_auto_exposure_min_sensitivity(sensitivity);
 }
 
 // ---------------------------------------------------------------- JarBodyWater

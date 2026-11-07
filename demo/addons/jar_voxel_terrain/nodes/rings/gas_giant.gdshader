@@ -13,10 +13,10 @@ uniform vec3 spin_axis = vec3(0.0, 1.0, 0.0); // in body space
 uniform bool has_rings = false;
 
 group_uniforms bands;
-uniform vec3 color_light : source_color = vec3(0.90, 0.84, 0.68);
-uniform vec3 color_dark : source_color = vec3(0.70, 0.55, 0.38);
-uniform vec3 color_accent : source_color = vec3(0.80, 0.62, 0.42);
-uniform vec3 color_polar : source_color = vec3(0.55, 0.60, 0.62);
+uniform vec3 color_light : source_color = vec3(0.80, 0.72, 0.55);
+uniform vec3 color_dark : source_color = vec3(0.62, 0.49, 0.34);
+uniform vec3 color_accent : source_color = vec3(0.72, 0.55, 0.38);
+uniform vec3 color_polar : source_color = vec3(0.50, 0.55, 0.58);
 // Number of bands from pole to pole.
 uniform float band_count = 14.0;
 uniform float band_contrast : hint_range(0.0, 1.0) = 0.55;
@@ -29,7 +29,7 @@ uniform int seed = 3;
 // Turns per hour of the fastest wind relative to the body (bands drift).
 uniform float wind_speed = 0.02;
 group_uniforms light;
-uniform float brightness = 1.4;
+uniform float brightness = 1.0;
 // Minnaert exponent: 0.5 flat disk, 1 Lambert. Gas giants are dark at the limb.
 uniform float limb_darkening : hint_range(0.5, 1.5) = 0.85;
 uniform vec3 ambient_light = vec3(0.004, 0.004, 0.005);

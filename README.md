@@ -221,7 +221,7 @@ Bodies beyond the camera's far plane (500 km from the ground, see clip planes ab
 
 All create their default material at runtime (not saved with the scene); assign your own `material` to tweak or replace the shaders.
 
-The demo's sky (`demo/demo/assets/space/space_sky.gdshader`) draws stars with a realistic brightness distribution and colors, a faint galactic band and the sun's disk, in physical-ish brightness: with auto exposure (the demo environment's camera attributes) the stars disappear behind a bright day sky and come out in space.
+The demo's sky (`demo/demo/assets/space/space_sky.gdshader`) draws stars with a realistic brightness distribution and colors, a faint galactic band and the sun's disk, in physical-ish brightness: with auto exposure (the demo environment's camera attributes) the stars disappear behind a bright day sky and come out in space. In sunlit space the star's `JarBodyLight.space_min_sensitivity` keeps auto exposure adapted to the sunlit bodies, so a planet or a ringed giant against black space is not burnt out to white (the stars are fainter there, as in real photos).
 
 ### Resolution and level of detail
 

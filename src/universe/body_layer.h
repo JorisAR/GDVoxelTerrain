@@ -4,6 +4,7 @@
 #include "atmosphere_model.h"
 #include "celestial_body.h"
 #include <algorithm>
+#include <godot_cpp/classes/camera3d.hpp>
 #include <godot_cpp/classes/directional_light3d.hpp>
 #include <godot_cpp/classes/image_texture.hpp>
 #include <godot_cpp/classes/mesh_instance3d.hpp>
@@ -43,6 +44,9 @@ class JarBodyLayer : public Node3D
     Vector3 eye(const JarCelestialBody::Frame &frame) const;
     // Sun direction and color to `material` (sun_direction, sun_color).
     void apply_sun(const Ref<ShaderMaterial> &material);
+    // The star's light at `at` above any air (sun_direction, sun_color: its
+    // color above the atmosphere times its energy), for bodies far away.
+    void apply_star(const Ref<ShaderMaterial> &material, const Vector3 &at);
     // Direction from a global position towards the star (a JarBodyLight's
     // body), else towards the sun light. Far bodies need their own: the light
     // is aimed at the camera.
@@ -252,10 +256,12 @@ class JarBodyLight : public JarBodyLayer
     bool _physicalSize = false;
     JarBodyLight *_reflects = nullptr;
     float _energy = 0.08f;
+    float _spaceMinSensitivity = 0.0f;
 
   protected:
     static void _bind_methods();
     void update(const JarCelestialBody &body) override;
+    void apply_space_exposure(Camera3D *camera, const Vector3 &at, const Vector3 &towards);
 
   public:
     // Lights driven by a JarBodyLight are in this group (JarVoxelUniverse
@@ -280,6 +286,8 @@ class JarBodyLight : public JarBodyLayer
     void set_reflects(JarBodyLight *value) { _reflects = value; }
     float get_energy() const { return _energy; }
     void set_energy(float value) { _energy = std::max(0.0f, value); }
+    float get_space_min_sensitivity() const { return _spaceMinSensitivity; }
+    void set_space_min_sensitivity(float value) { _spaceMinSensitivity = std::max(0.0f, value); }
 };
 
 #endif // JAR_BODY_LAYER_H

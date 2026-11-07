@@ -107,6 +107,7 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1684048.3, 19448558, 3491300
 
 [node name="Light" type="JarBodyLight" parent="Sun" unique_id=1659315502 node_paths=PackedStringArray("sun")]
 sun = NodePath("../../SunLight")
+space_min_sensitivity = 150.0
 
 [node name="PlanetOrbit" type="JarBodyOrbit" parent="Sun" unique_id=318843216]
 radius = 40000000.0
