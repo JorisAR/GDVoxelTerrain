@@ -107,6 +107,7 @@ func _run(camera: Node3D) -> void:
 	await _cleanup()
 	await _skip_outside()
 	await _large_edits()
+	await _save_and_load()
 	await _digs_while_moving()
 	_finish()
 
@@ -270,6 +271,101 @@ func _large_edits() -> void:
 		"weights %s" % [weights.slice(0, 3)])
 	holder.queue_free()
 	await get_tree().process_frame
+
+## What edits changed survives a save: a new volume loading it has the same
+## ground, and features stay gone; damaged bytes change nothing.
+func _save_and_load() -> void:
+	var holder := Node.new()
+	add_child(holder)
+	var feature := JarTerrainFeature.new()
+	feature.mesh = BoxMesh.new()
+	feature.density = 0.02
+	feature.draw_distance = 150.0
+	feature.maximum_slope = 90.0
+	var world := TestWorld.flat(holder, Vector3(0, 30, 0), func(v: JarVoxelVolume):
+		TestWorld.populate(v, [feature]))
+	var v: JarVoxelVolume = world.volume
+	await _settle_on(v)
+	await _settle_features(v)
+	var ground: float = v.raycast(Vector3(0, 300, 0), Vector3(0, -300, 0)).position.y
+	var pit := Vector3(0, ground, 0)
+	v.sphere_edit(pit, 12.0, false, 5)
+	var spot := pit + Vector3(30, 0, 0)
+	var brush := JarSphereSdf.new()
+	brush.radius = 6.0
+	spot = v.raycast(spot + Vector3.UP * 60.0, spot + Vector3.DOWN * 60.0).position
+	v.paint(brush, Transform3D(Basis(), spot), 5)
+	await _settle_on(v)
+	await _settle_features(v)
+	volume = v
+	volume = v
+	var painted := _material_weights_near(spot, 3.0)
+	_check("paint before saving", painted.size() > 0 and painted.max() > 0.9, "weights %s" % [painted.slice(0, 3)])
+	var population: JarVoxelPopulation = TestWorld.population(v)
+	var chopped: Vector3 = population.get_features_near(pit + Vector3(50, 0, 30), 40.0)[0].transform.origin
+	population.remove_features(chopped, 0.5)
+	var before := _origins_of(population, Vector3.ZERO, 120.0)
+	var floor_before: Vector3 = v.raycast(pit + Vector3.UP * 40.0, pit + Vector3.DOWN * 40.0).position
+	var bytes := v.save_edits()
+	_check("save: small", bytes.size() > 100 and bytes.size() < 2000000, "%d bytes" % bytes.size())
+	holder.queue_free()
+	await get_tree().process_frame
+
+	holder = Node.new()
+	add_child(holder)
+	var again := TestWorld.flat(holder, Vector3(0, 30, 0), func(n: JarVoxelVolume):
+		TestWorld.populate(n, [feature])
+		_check("load before the tree", n.load_edits(bytes) == OK))
+	var loaded: JarVoxelVolume = again.volume
+	await _settle_on(loaded)
+	await _settle_features(loaded)
+	var floor_after: Vector3 = loaded.raycast(pit + Vector3.UP * 40.0, pit + Vector3.DOWN * 40.0).position
+	_check("load: same ground", floor_after.distance_to(floor_before) < 0.05, "%s, was %s" % [floor_after, floor_before])
+	volume = loaded
+	var weights := _material_weights_near(spot, 3.0)
+	_check("load: paint", weights.size() > 0 and weights.max() > 0.9, "weights %s" % [weights.slice(0, 3)])
+	var r := Topology.analyze(loaded, loaded.project_to_surface(pit + Vector3(12, 0, 0)).position, 20.0)
+	_check("load: mesh closed", r.open == 0 and r.triangles > 200, "%d open edges in %d triangles" % [r.open, r.triangles])
+	var after := _origins_of(TestWorld.population(loaded), Vector3.ZERO, 120.0)
+	var regrown := after.filter(func(p): return not before.has(p)).size()
+	_check("load: features stay gone", regrown <= 1, "%d back of %d, %d before" % [regrown, after.size(), before.size()])
+	_check("load: chopped stays gone", TestWorld.population(loaded).get_features_near(chopped, 0.5).is_empty())
+
+	# Over an edited volume: it starts over from the save.
+	loaded.sphere_edit(pit + Vector3(-40, 0, 0), 10.0, false, 2)
+	await _settle_on(loaded)
+	_check("load again", loaded.load_edits(bytes) == OK)
+	await _settle_on(loaded)
+	var open: Vector3 = pit + Vector3(-40, 0, 0)
+	_check("load: later edits gone", absf(loaded.raycast(open + Vector3.UP * 40.0, open + Vector3.DOWN * 40.0).position.y - ground) < 6.0)
+	_check("save: same size again", absi(loaded.save_edits().size() - bytes.size()) < bytes.size() / 2 + 200,
+		"%d, was %d" % [loaded.save_edits().size(), bytes.size()])
+
+	var damaged := bytes.duplicate()
+	damaged.resize(bytes.size() / 2)
+	_check("load: damaged refused", loaded.load_edits(damaged) != OK and loaded.load_edits(PackedByteArray([1, 2, 3])) != OK)
+	var other := TestWorld.flat(holder, Vector3(0, 30, 0), func(n: JarVoxelVolume): n.voxel_size = 0.5)
+	_check("load: other voxel size refused", other.volume.load_edits(bytes) != OK)
+	holder.queue_free()
+	await get_tree().process_frame
+
+func _origins_of(population: JarVoxelPopulation, at: Vector3, radius: float) -> Array:
+	var result := []
+	for f in population.get_features_near(at, radius):
+		result.append(f.transform.origin.snapped(Vector3.ONE * 0.01))
+	return result
+
+## Features keep arriving after meshing is done.
+func _settle_features(v: JarVoxelVolume) -> void:
+	var population: JarVoxelPopulation = TestWorld.population(v)
+	var last := -1
+	var still := 0
+	var start := Time.get_ticks_msec()
+	while still < 30 and Time.get_ticks_msec() - start < 20000:
+		await get_tree().process_frame
+		var count: int = population.get_features_near(Vector3.ZERO, 200.0).size()
+		still = still + 1 if count == last and count > 0 else 0
+		last = count
 
 ## Digs ahead of a moving viewer, so edits land in LOD updates still being
 ## meshed: their whole group goes first, ahead of the queue it was in.

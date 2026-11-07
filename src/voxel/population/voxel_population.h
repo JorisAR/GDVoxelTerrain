@@ -2,6 +2,7 @@
 #define JAR_VOXEL_POPULATION_H
 
 #include "biome_map.h"
+#include "bounds.h"
 #include "population_layer.h"
 #include "terrain_detail.h"
 #include "terrain_feature.h"
@@ -43,6 +44,7 @@ class JarVoxelPopulation : public Node, public VolumeExtension
     JarVoxelVolume *_volume = nullptr;
     std::unique_ptr<FeatureManager> _features;
     std::unique_ptr<DetailScheduler> _details;
+    std::vector<Bounds> _loadedRemovals; // for when the features start
 
     void attach();
     void detach();
@@ -90,6 +92,8 @@ class JarVoxelPopulation : public Node, public VolumeExtension
     void chunk_meshed(JarVoxelVolume &volume, JarVoxelChunk *chunk) override;
     void chunk_gone(JarVoxelVolume &volume, JarVoxelChunk *chunk) override;
     void population_invalidated(JarVoxelVolume &volume) override;
+    void save_state(std::vector<uint8_t> &state) override;
+    void load_state(const uint8_t *data, size_t size) override;
     void volume_cleared(JarVoxelVolume &volume) override;
     bool is_generating(const JarVoxelVolume &volume) const override;
 

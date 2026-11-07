@@ -66,6 +66,8 @@ class FeatureManager
     void remove_edited(const ModifySettings &edit, float reach);
     // Main thread: drops everything (features or settings changed).
     void reset();
+    // Bounds of what remove_in removed, for a save.
+    std::vector<Bounds> removed_bounds() const;
     std::vector<Instance> instances_near(const glm::vec3 &position, float radius) const;
     int cell_count() const { return int(_cells.size()); }
     Ref<JarTerrainFeature> feature_at(int index) const

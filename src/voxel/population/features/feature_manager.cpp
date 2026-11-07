@@ -132,6 +132,15 @@ bool FeatureManager::is_removed(const glm::vec3 &position) const
     return false;
 }
 
+std::vector<Bounds> FeatureManager::removed_bounds() const
+{
+    std::vector<Bounds> result;
+    for (const Removal &removal : _removed)
+        if (!removal.edit)
+            result.push_back(removal.bounds);
+    return result;
+}
+
 void FeatureManager::remove_in(const Bounds &bounds)
 {
     apply_removal({bounds, nullptr, 0.0f});
@@ -297,6 +306,11 @@ void FeatureManager::start_generation(const glm::ivec3 &key)
 
 void FeatureManager::apply_results()
 {
+    // After a load the ground tells where edits took features away, and the
+    // octree can only be read between builds.
+    const bool checkGround = _volume.has_restored_edits();
+    if (checkGround && _volume.is_building())
+        return;
     std::vector<glm::ivec3> scanned;
     bool scanDone = false;
     std::vector<std::pair<glm::ivec3, std::vector<Instance>>> generated;
@@ -327,6 +341,12 @@ void FeatureManager::apply_results()
             bool removed = false;
             for (const Removal *r : removals)
                 removed = removed || r->hits(instance.transform);
+            if (!removed && checkGround)
+            {
+                const Vector3 upward = instance.transform.basis.get_column(1).normalized();
+                removed = _volume.ground_changed_at(p) ||
+                          _volume.ground_changed_at(p + glm::vec3(upward.x, upward.y, upward.z));
+            }
             if (!removed)
                 cell.perFeature[instance.feature].push_back({instance.transform, instance.ground});
         }

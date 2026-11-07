@@ -158,6 +158,8 @@ void JarVoxelVolume::_bind_methods()
     ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "sea_level"), "set_sea_level", "get_sea_level");
     ClassDB::bind_method(D_METHOD("get_up_direction_at", "global_position"), &JarVoxelVolume::get_up_direction_at);
     ClassDB::bind_method(D_METHOD("get_height_at", "global_position"), &JarVoxelVolume::get_height_at);
+    ClassDB::bind_method(D_METHOD("save_edits"), &JarVoxelVolume::save_edits);
+    ClassDB::bind_method(D_METHOD("load_edits", "data"), &JarVoxelVolume::load_edits);
     ClassDB::bind_method(D_METHOD("get_lod_at", "global_position"), &JarVoxelVolume::get_lod_at);
     ClassDB::bind_method(D_METHOD("raycast_sdf", "from", "to"), &JarVoxelVolume::raycast_sdf);
     ClassDB::bind_method(D_METHOD("get_region_mesh", "region"), &JarVoxelVolume::get_region_mesh);
@@ -231,6 +233,7 @@ void JarVoxelVolume::build_worker()
     for (;;)
     {
         bool rebuild;
+        PackedByteArray restore;
         {
             std::unique_lock<std::mutex> lock(_buildMutex);
             _buildCv.wait(lock, [this] { return _buildRequested || !_workerEdits.empty() || _buildShutdown; });
@@ -239,9 +242,16 @@ void JarVoxelVolume::build_worker()
             rebuild = _buildRequested;
             _buildRequested = false;
             edits.swap(_workerEdits);
+            if (rebuild)
+            {
+                restore = _pendingRestore;
+                _pendingRestore = PackedByteArray();
+            }
         }
         if (_voxelRoot)
         {
+            if (!restore.is_empty())
+                restore_edits(restore);
             {
                 const VoxelStats::Scope stage(VoxelStats::WorkerEdit);
                 for (const ModifySettings &settings : edits)
@@ -1027,6 +1037,7 @@ void JarVoxelVolume::process()
     if (!_initialBuildRequested)
     {
         _initialBuildRequested = true;
+        deliver_saved_state();
         _voxelLod.update_viewers(*this, true);
         build();
         return;

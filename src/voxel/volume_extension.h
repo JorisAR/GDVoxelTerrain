@@ -1,6 +1,10 @@
 #ifndef JAR_VOLUME_EXTENSION_H
 #define JAR_VOLUME_EXTENSION_H
 
+#include <cstddef>
+#include <cstdint>
+#include <vector>
+
 class JarVoxelChunk;
 class JarVoxelVolume;
 struct ModifySettings;
@@ -57,6 +61,16 @@ class VolumeExtension
     // Main thread: the volume is about to free its chunks and octree (editor
     // preview off), though the volume itself stays.
     virtual void volume_cleared(JarVoxelVolume &volume)
+    {
+    }
+
+    // Main thread, saving: appends what must survive a load to `state`.
+    virtual void save_state(std::vector<uint8_t> &state)
+    {
+    }
+
+    // Main thread, loading, after volume_cleared: what save_state wrote.
+    virtual void load_state(const uint8_t *data, size_t size)
     {
     }
 

@@ -155,6 +155,19 @@
 				Rebuilds the runtime material (palette and texture arrays) before the next frame. Changes to [member materials] and its resources do this automatically.
 			</description>
 		</method>
+		<method name="load_edits">
+			<return type="int" enum="Error" />
+			<param index="0" name="data" type="PackedByteArray" />
+			<description>
+				Starts the volume over from bytes made by [method save_edits], of a volume with the same SDF, [member voxel_size] and [member extent]; anything edited since is gone. Works before or after the volume enters the tree. Damaged or unsuitable data changes nothing and returns an error.
+			</description>
+		</method>
+		<method name="save_edits">
+			<return type="PackedByteArray" />
+			<description>
+				Returns what edits changed as compressed bytes for a save file. Only edited voxels are stored, the rest comes from the SDF again. Applies queued edits first, which can take a frame or two.
+			</description>
+		</method>
 	</methods>
 	<members>
 		<member name="chunk_scene" type="PackedScene" setter="set_chunk_scene" getter="get_chunk_scene">

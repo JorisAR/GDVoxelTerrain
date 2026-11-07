@@ -1,4 +1,5 @@
 #include "voxel_octree_node.h"
+#include "edit_stream.h"
 #include "voxel_stats.h"
 #include "voxel_volume.h"
 #include <algorithm>
@@ -512,6 +513,63 @@ void VoxelOctreeNode::update_chunk(JarVoxelVolume &terrain, ChunkMeshData *chunk
     }
 
     _chunk->update_chunk(terrain, this, chunkMeshData);
+}
+
+void VoxelOctreeNode::save_edits(EditWriter &writer) const
+{
+    uint8_t mask = 0;
+    if (!is_leaf())
+        for (int i = 0; i < 8; ++i)
+            mask |= (*_children)[i].has_flag(FlagEdited) ? uint8_t(1 << i) : uint8_t(0);
+    writer.put(mask);
+    writer.put(uint8_t(is_leaf() ? 1 : 0));
+    writer.put(_value);
+    writer.put(_normal);
+    writer.put(_materials);
+    if (!is_leaf())
+        for (int i = 0; i < 8; ++i)
+            if ((mask >> i) & 1)
+                (*_children)[i].save_edits(writer);
+}
+
+void VoxelOctreeNode::load_edits(EditReader &reader, const JarVoxelVolume &terrain)
+{
+    const uint8_t mask = reader.get<uint8_t>();
+    const bool leaf = reader.get<uint8_t>() != 0;
+    _value = reader.get<float>();
+    _normal = reader.get<uint32_t>();
+    _materials = reader.get<MaterialWeights>();
+    set_flag(FlagGenerated | FlagEdited, true);
+    if (leaf)
+    {
+        mark_materialized();
+        return;
+    }
+    subdivide(terrain.get_voxel_size());
+    if (is_leaf())
+        return;
+    for (int i = 0; i < 8; ++i)
+    {
+        VoxelOctreeNode &child = (*_children)[i];
+        if ((mask >> i) & 1)
+            child.load_edits(reader, terrain);
+        else
+            child.set_flag(FlagGenerated | FlagEdited, false); // from the SDF
+    }
+}
+
+void VoxelOctreeNode::check_edits(EditReader &reader, int size)
+{
+    const uint8_t mask = reader.get<uint8_t>();
+    const bool leaf = reader.get<uint8_t>() != 0;
+    reader.get<float>();
+    reader.get<uint32_t>();
+    reader.get<MaterialWeights>();
+    if ((leaf && mask != 0) || (mask != 0 && size <= 0))
+        reader.ok = false;
+    for (int i = 0; i < 8 && reader.ok; ++i)
+        if ((mask >> i) & 1)
+            check_edits(reader, size - 1);
 }
 
 void VoxelOctreeNode::mark_edited()

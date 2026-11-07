@@ -118,6 +118,10 @@ The default shaders are procedural (no textures needed): large brightness / hue 
 
 To customize, set the volume's `material` to your own `ShaderMaterial` (a copy of a default material to tweak its rule and look settings, or your own shader). The volume copies it per volume and fills in the material palette, texture arrays, its transform and up field (chunks need no instance uniforms). The easiest way to write a new shader is to include `terrain_common.gdshaderinc` like the defaults do; the inputs are documented there and on `JarVoxelVolume.material`.
 
+### Saving edits
+
+`volume.save_edits()` returns what edits changed as bytes for your save file, and `volume.load_edits(bytes)` starts the volume over from them, before or after it enters the tree. Only edited voxels are stored (the rest comes from the SDF again), so a save's size depends on how much was edited, not on the planet. Features stay removed. The volume loading a save needs the same SDF, `voxel_size` and `extent`; debris still falling is not saved.
+
 ### Moving fast
 
 Give a `JarVoxelViewer` `predict_motion` to also refine around where it will be `predict_seconds` from now, at its smoothed velocity, on top of where it is: terrain and colliders are ready on arrival, at the cost of extra building while moving. `predict_max_distance` limits how far ahead that goes.

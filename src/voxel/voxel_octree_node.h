@@ -16,6 +16,8 @@
 #include <vector>
 
 class JarVoxelVolume;
+class EditReader;
+class EditWriter;
 
 class VoxelOctreeNode : public OctreeNode<VoxelOctreeNode>
 {
@@ -153,6 +155,14 @@ class VoxelOctreeNode : public OctreeNode<VoxelOctreeNode>
         _normal = normal;
         set_flag(FlagGenerated, true);
     }
+    // Saving (see JarVoxelVolume::save_edits): the subtree's edited nodes. Nodes
+    // an edit never touched come from the SDF again, so a save's size depends
+    // on how much was edited, not on the planet.
+    bool has_edits() const { return has_flag(FlagEdited); }
+    void save_edits(EditWriter &writer) const;
+    void load_edits(EditReader &reader, const JarVoxelVolume &terrain);
+    // Walks saved nodes without a tree: false in reader.ok if they do not fit one.
+    static void check_edits(EditReader &reader, int size);
     // Copies this subtree's leaves into the block's cells they cover (build
     // worker: the tree must not change meanwhile).
     void sample_into(const JarVoxelVolume &terrain, VoxelBlock &block);

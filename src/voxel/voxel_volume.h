@@ -68,6 +68,13 @@ class JarVoxelVolume : public Node3D
     void apply_rendering_to_chunks();
     void on_terrain_material_changed();
     void on_biome_map_changed();
+    PackedByteArray _pendingRestore; // unpacked: applied before the first build
+    bool _restoredEdits = false;     // this volume's edits came from a save
+    std::vector<uint8_t> _pendingState; // for the extensions
+    void deliver_saved_state();
+    void settle_edits();
+    PackedByteArray unpack_edits(const PackedByteArray &data) const;
+    void restore_edits(const PackedByteArray &raw);
     void invalidate_population();
     void rebuild_materials(); // main thread
     // The terrain shader's per-volume inputs (world to volume space, up field)
@@ -417,6 +424,18 @@ class JarVoxelVolume : public Node3D
     float distance_to_nearest_viewer(const glm::vec3 &position) const;
     int get_lod_at(const Vector3 &global_position) const; // the level of detail wanted there
     // Full-detail chunks with new mesh data / none any more (main thread).
+    // What edits changed, as bytes to keep in a save file (they are small: only
+    // edited voxels; the rest comes from the SDF). Applies queued edits first,
+    // which can take a frame or two.
+    PackedByteArray save_edits();
+    // Starts the volume over from saved edits, of a volume with the same SDF,
+    // voxel_size and extent; everything edited since is gone. Any time, also
+    // before it enters the tree.
+    Error load_edits(const PackedByteArray &data);
+    // Features: edits made before a load left no record of what they removed,
+    // so the ground itself tells.
+    bool has_restored_edits() const { return _restoredEdits; }
+    bool ground_changed_at(const glm::vec3 &point);
     void chunk_meshed(JarVoxelChunk *chunk);
     void chunk_gone(JarVoxelChunk *chunk);
     int desired_lod(const VoxelOctreeNode &node);

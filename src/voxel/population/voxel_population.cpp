@@ -1,5 +1,6 @@
 #include "voxel_population.h"
 #include "detail_scheduler.h"
+#include "edit_stream.h"
 #include "feature_manager.h"
 #include "voxel_chunk.h"
 #include "voxel_stats.h"
@@ -54,6 +55,9 @@ bool JarVoxelPopulation::ensure_running()
     if (_volume == nullptr || _volume->get_sdf().is_null())
         return false;
     _features = std::make_unique<FeatureManager>(*_volume, *this);
+    for (const Bounds &bounds : _loadedRemovals)
+        _features->remove_in(bounds);
+    _loadedRemovals.clear();
     _details = std::make_unique<DetailScheduler>(*_volume, *this);
     return true;
 }
@@ -289,6 +293,44 @@ void JarVoxelPopulation::chunk_gone(JarVoxelVolume &volume, JarVoxelChunk *chunk
 void JarVoxelPopulation::population_invalidated(JarVoxelVolume &volume)
 {
     regenerate();
+}
+
+void JarVoxelPopulation::save_state(std::vector<uint8_t> &state)
+{
+    std::vector<Bounds> removed = _loadedRemovals;
+    if (_features)
+    {
+        const std::vector<Bounds> more = _features->removed_bounds();
+        removed.insert(removed.end(), more.begin(), more.end());
+    }
+    EditWriter writer;
+    writer.put(uint64_t(removed.size()));
+    for (const Bounds &bounds : removed)
+    {
+        writer.put(bounds.min);
+        writer.put(bounds.max);
+    }
+    state.insert(state.end(), writer.bytes.begin(), writer.bytes.end());
+}
+
+void JarVoxelPopulation::load_state(const uint8_t *data, size_t size)
+{
+    _loadedRemovals.clear();
+    EditReader reader(data, size);
+    const uint64_t count = reader.get<uint64_t>();
+    for (uint64_t i = 0; i < count && reader.ok; ++i)
+    {
+        const glm::vec3 lo = reader.get<glm::vec3>();
+        const glm::vec3 hi = reader.get<glm::vec3>();
+        if (reader.ok)
+            _loadedRemovals.emplace_back(lo, hi);
+    }
+    if (_features)
+    {
+        for (const Bounds &bounds : _loadedRemovals)
+            _features->remove_in(bounds);
+        _loadedRemovals.clear();
+    }
 }
 
 void JarVoxelPopulation::volume_cleared(JarVoxelVolume &volume)
