@@ -1,4 +1,4 @@
-[gd_resource type="JarTerrainSdf" format=3]
+[gd_resource type="JarTerrainSdf" format=3 uid="uid://dkaemc2l8w4h4"]
 
 [sub_resource type="FastNoiseLite" id="Noise"]
 noise_type = 2

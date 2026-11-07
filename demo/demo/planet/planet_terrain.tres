@@ -1,9 +1,5 @@
 [gd_resource type="JarTerrainSdf" format=3 uid="uid://dqn1tb1t75fft"]
 
-[sub_resource type="JarNoise" id="Continents"]
-seed = 3
-frequency = 0.0001
-
 [sub_resource type="JarNoise" id="MountainBelts"]
 seed = 11
 frequency = 0.00012
@@ -13,10 +9,13 @@ octaves = 3
 seed = 17
 frequency = 0.0003
 fractal_type = 2
-octaves = 5
 gain = 0.45
 warp_strength = 500.0
 warp_frequency = 0.0002
+
+[sub_resource type="JarNoise" id="Continents"]
+seed = 3
+frequency = 0.0001
 
 [resource]
 shape = 1
