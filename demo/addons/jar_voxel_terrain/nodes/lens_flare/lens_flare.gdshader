@@ -35,6 +35,8 @@ uniform float ghost_strength = 0.06;
 uniform float ghost_softness = 0.3;
 uniform float ghost_fill = 0.25;
 uniform float ghost_chromatic = 0.03;
+uniform int ghost_sides = 6; // images of the aperture's blades; below 3: round
+uniform float ghost_rotation = 0.0;
 uniform int ghost_count = 0;
 uniform float ghost_positions[MAX_GHOSTS];
 uniform float ghost_sizes[MAX_GHOSTS];
@@ -71,12 +73,21 @@ float visibility(mat4 inv_projection) {
 	return open / 25.0;
 }
 
-// A lens ghost at distance d of a radius r: an image of the aperture, faint
-// inside and brightest towards its soft rim.
-float ghost_shape(float d, float r) {
-	float x = d / r;
-	if (x >= 1.0)
+// A lens ghost: an image of the aperture, a polygon of corner radius r around
+// the point `v` is measured from, faint inside and brightest towards its soft rim.
+float ghost_shape(vec2 v, float r) {
+	float d = length(v);
+	if (d >= r)
 		return 0.0;
+	float x = d / r;
+	if (ghost_sides >= 3) {
+		// 1 on the polygon's edge: how far along the normal of the nearest side.
+		float sector = TAU / float(ghost_sides);
+		float angle = mod(atan(v.y, v.x) + ghost_rotation, sector) - sector * 0.5;
+		x *= cos(angle) / cos(sector * 0.5);
+		if (x >= 1.0)
+			return 0.0;
+	}
 	float edge = 1.0 - smoothstep(1.0 - max(ghost_softness, 0.01), 1.0, x);
 	return edge * mix(x * x * x * x, 1.0, ghost_fill);
 }
@@ -125,7 +136,7 @@ void fragment() {
 	float ghosts = ghost_strength * smoothstep(0.02, 0.3, off_center);
 	if (ghosts > 0.0) {
 		for (int i = 0; i < min(ghost_count, MAX_GHOSTS); i++) {
-			float g = length(to_pixel - axis * ghost_positions[i]);
+			vec2 g = to_pixel - axis * ghost_positions[i];
 			float r = ghost_sizes[i];
 			vec3 shape = vec3(ghost_shape(g, r * (1.0 + ghost_chromatic)), ghost_shape(g, r), ghost_shape(g, r * (1.0 - ghost_chromatic)));
 			color += light * ghost_tints[i] * ghosts * shape;

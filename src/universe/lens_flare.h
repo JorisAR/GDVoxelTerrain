@@ -40,6 +40,7 @@ using namespace godot;
     X(ghost_softness, 0.3f, "0,1,0.01")                                                                                \
     X(ghost_fill, 0.25f, "0,1,0.01")                                                                                   \
     X(ghost_chromatic, 0.03f, "0,0.2,0.001")                                                                           \
+    X(ghost_rotation, 0.0f, "-180,180,0.1,radians_as_degrees")                                                         \
     X(occlusion_size, 2.0f, "0.5,8,0.01")
 
 class JarLensFlare : public Node3D
@@ -57,6 +58,7 @@ class JarLensFlare : public Node3D
     Color _streakTint = Color(1, 1, 1);
     int _ghostCount = 6;
     int _ghostSeed = 1;
+    int _ghostSides = 6;
     float _ghostSize = 0.05f;      // screen heights
     float _ghostSpread = 1.0f;     // how far along the line through the center
     float _ghostSaturation = 0.3f; // of their random colors
@@ -104,6 +106,8 @@ class JarLensFlare : public Node3D
     void set_ghost_count(int value);
     int get_ghost_seed() const { return _ghostSeed; }
     void set_ghost_seed(int value);
+    int get_ghost_sides() const { return _ghostSides; }
+    void set_ghost_sides(int value);
     float get_ghost_size() const { return _ghostSize; }
     void set_ghost_size(float value);
     float get_ghost_spread() const { return _ghostSpread; }

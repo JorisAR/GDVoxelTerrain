@@ -81,7 +81,7 @@ class JarTerrainSdf : public JarSignedDistanceField
     // cost of meshing new ground), a little off away from the surface (on
     // the demo planets, within 0.5 m of it under 2 degrees, at 1-1.5 m 99%
     // under 3-6 degrees, a few up to 10-18 degrees in steep gullies).
-    bool _fastNormals = false;
+    bool _fastNormals = true;
 
     static constexpr int MaxOctaves = 10;
     struct Sample

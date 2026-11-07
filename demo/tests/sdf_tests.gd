@@ -279,6 +279,7 @@ func _test_jar_noise() -> void:
 ## the distance itself.
 func _test_eroded_planet() -> void:
 	var sdf: JarTerrainSdf = load("res://demo/planet/planet_terrain.tres")
+	sdf.fast_normals = false # the exact normals are what is measured here
 	var worst := {0.9: 0.0, 0.8: 0.0}
 	for y0: float in worst:
 		for i in 200:
@@ -309,6 +310,8 @@ func _test_eroded_planet() -> void:
 
 ## Craters on flat ground: bowls lower it, rims raise it a little, the change
 ## stays within the crater size, and the field stays continuous.
+	sdf.fast_normals = true
+
 func _test_craters() -> void:
 	var ground := JarTerrainSdf.new() # no noise: a flat plane at y = 0
 	ground.erosion = false

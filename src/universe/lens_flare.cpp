@@ -106,6 +106,10 @@ void JarLensFlare::_bind_methods()
     PROPERTY_OF(ghost_softness, 0, "0,1,0.01")
     PROPERTY_OF(ghost_fill, 0, "0,1,0.01")
     PROPERTY_OF(ghost_chromatic, 0, "0,0.2,0.001")
+    ClassDB::bind_method(D_METHOD("get_ghost_sides"), &JarLensFlare::get_ghost_sides);
+    ClassDB::bind_method(D_METHOD("set_ghost_sides", "value"), &JarLensFlare::set_ghost_sides);
+    ADD_PROPERTY(PropertyInfo(Variant::INT, "ghost_sides", PROPERTY_HINT_RANGE, "0,12,1"), "set_ghost_sides", "get_ghost_sides");
+    PROPERTY_OF(ghost_rotation, 0, "-180,180,0.1,radians_as_degrees")
     ADD_GROUP("Occlusion", "occlusion_");
     PROPERTY_OF(occlusion_size, 0, "0.5,8,0.01")
 #undef PROPERTY_OF
@@ -133,6 +137,12 @@ void JarLensFlare::set_ghost_count(int value)
 void JarLensFlare::set_ghost_seed(int value)
 {
     _ghostSeed = value;
+    _lookDirty = true;
+}
+
+void JarLensFlare::set_ghost_sides(int value)
+{
+    _ghostSides = std::max(0, value);
     _lookDirty = true;
 }
 
@@ -169,17 +179,19 @@ void JarLensFlare::apply_look()
 #undef SET_ONE
     material->set_shader_parameter("starburst_rays", _starburstRays);
     material->set_shader_parameter("streak_tint", Vector3(_streakTint.r, _streakTint.g, _streakTint.b));
-    // Ghosts are scattered along the line through the screen's center: 1 is
-    // the center, 2 the sun's mirror image. A seed gives another set.
+    // Ghosts are scattered along the line through the screen's center: 0 is
+    // the sun, 1 the center, 2 the sun's mirror image; none on the far side of
+    // the sun, and small ones are fainter. A seed gives another set.
     PackedFloat32Array positions, sizes;
     PackedVector3Array tints;
     for (int i = 0; i < MaxGhosts; ++i)
     {
         const float place = (float(i) + ghost_random(_ghostSeed, i, 0)) / float(MaxGhosts);
-        positions.push_back(1.0f + (place * 2.0f - 1.0f) * 1.4f * _ghostSpread);
-        sizes.push_back(_ghostSize * (0.4f + 1.4f * ghost_random(_ghostSeed, i, 1)));
+        positions.push_back(std::max(0.25f, 1.0f + (place * 2.0f - 1.0f) * 0.85f * _ghostSpread));
+        const float scale = ghost_random(_ghostSeed, i, 1);
+        sizes.push_back(_ghostSize * (0.4f + 1.4f * scale));
         Color tint;
-        tint.set_hsv(ghost_random(_ghostSeed, i, 2), _ghostSaturation, 1.0f);
+        tint.set_hsv(ghost_random(_ghostSeed, i, 2), _ghostSaturation, 0.5f + 0.5f * scale);
         tints.push_back(Vector3(tint.r, tint.g, tint.b));
     }
     material->set_shader_parameter("ghost_count", _ghostCount);
