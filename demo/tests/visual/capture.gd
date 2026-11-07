@@ -43,6 +43,9 @@ func _ready() -> void:
 	if OS.get_environment("NOATMO") == "1":
 		for atmosphere in scene.find_children("*", "JarBodyAtmosphere", true, false):
 			atmosphere.free()
+	if OS.get_environment("GHOSTS") != "": # ghost_strength of the flare
+		for flare in scene.find_children("*", "JarLensFlare", true, false):
+			flare.ghost_strength = float(OS.get_environment("GHOSTS"))
 	if OS.get_environment("NOFLARE") == "1":
 		for flare in scene.find_children("*", "JarLensFlare", true, false):
 			flare.free()

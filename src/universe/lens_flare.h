@@ -36,7 +36,7 @@ using namespace godot;
     X(halo_width, 0.03f, "0.002,0.2,0.001")                                                                            \
     X(halo_chromatic, 0.04f, "0,0.2,0.001")                                                                            \
     X(halo_arc, 0.7f, "0,1,0.01")                                                                                      \
-    X(ghost_strength, 0.03f, "0,1,0.001,or_greater")                                                                   \
+    X(ghost_strength, 0.06f, "0,1,0.001,or_greater")                                                                   \
     X(ghost_softness, 0.3f, "0,1,0.01")                                                                                \
     X(ghost_fill, 0.25f, "0,1,0.01")                                                                                   \
     X(ghost_chromatic, 0.03f, "0,0.2,0.001")                                                                           \
