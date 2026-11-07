@@ -117,6 +117,13 @@ class FeatureManager
         bool nodes = false; // instantiate the scene per feature instead
     };
 
+    // Only the running scan uses it (one at a time).
+    struct ScanCache
+    {
+        std::unordered_map<glm::ivec3, bool> blocks, cells;
+    };
+    std::shared_ptr<ScanCache> _scanCache = std::make_shared<ScanCache>();
+
     JarVoxelVolume &_volume;
     const JarVoxelPopulation &_population;
     std::shared_ptr<Shared> _shared;
@@ -163,7 +170,7 @@ class FeatureManager
                                                const Ref<JarSignedDistanceField> &sdf, const UpField &up,
                                                const std::shared_ptr<const GroundPalette> &ground);
     static std::vector<glm::ivec3> scan_cells(const std::vector<glm::vec3> &viewers, float range, float cellSize,
-                                              const Ref<JarSignedDistanceField> &sdf);
+                                              const Ref<JarSignedDistanceField> &sdf, ScanCache &cache);
 };
 
 #endif // JAR_FEATURE_MANAGER_H

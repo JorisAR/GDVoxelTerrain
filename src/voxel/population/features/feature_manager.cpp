@@ -75,6 +75,7 @@ void FeatureManager::reset()
     _cells.clear();
     _toShow.clear();
     _toGenerate.clear();
+    _scanCache = std::make_shared<ScanCache>(); // the SDF or cell size may have changed
     _scanViewers.clear();
     {
         // Results of running jobs belong to the old settings: drop them.
@@ -240,11 +241,12 @@ void FeatureManager::start_scan(const std::vector<glm::vec3> &viewers)
     std::shared_ptr<Shared> shared = _shared;
     shared->activeJobs++;
     const float range = _range, cellSize = _cellSize;
-    JobSystem::get_pool().enqueue_background([shared, viewers, range, cellSize, sdf]() {
+    std::shared_ptr<ScanCache> cache = _scanCache;
+    JobSystem::get_pool().enqueue_background([shared, viewers, range, cellSize, sdf, cache]() {
         std::vector<glm::ivec3> keys;
         {
             const VoxelStats::Scope stage(VoxelStats::WorkerFeatures);
-            keys = scan_cells(viewers, range, cellSize, sdf);
+            keys = scan_cells(viewers, range, cellSize, sdf, *cache);
             // Nearest first, so features appear around the player before the
             // horizon. Sorted here: thousands of cells took 15-20 ms on the
             // main thread.
@@ -598,7 +600,7 @@ void FeatureManager::free_groups(Cell &cell)
 }
 
 std::vector<glm::ivec3> FeatureManager::scan_cells(const std::vector<glm::vec3> &viewers, float range, float cellSize,
-                                                   const Ref<JarSignedDistanceField> &sdf)
+                                                   const Ref<JarSignedDistanceField> &sdf, ScanCache &cache)
 {
     // Coarse blocks of 4^3 cells first: whole blocks far from the surface are
     // skipped with one sample. SDFs from noise are not exact distances, hence
@@ -606,6 +608,15 @@ std::vector<glm::ivec3> FeatureManager::scan_cells(const std::vector<glm::vec3> 
     constexpr int Block = 4;
     constexpr float Margin = 2.0f;
     const float blockSize = cellSize * Block;
+    // Whether the surface may pass through: the same every scan (edits do not
+    // count, the SDF is sampled), and a scan mostly sees what the last one did.
+    const auto near_surface = [&sdf](std::unordered_map<glm::ivec3, bool> &known, const glm::ivec3 &key,
+                                     const glm::vec3 &center, float reach) {
+        const auto found = known.find(key);
+        if (found != known.end())
+            return found->second;
+        return known.emplace(key, std::abs(sdf->distance(center)) <= reach).first->second;
+    };
     std::unordered_set<glm::ivec3> keys;
     for (const glm::vec3 &v : viewers)
     {
@@ -619,7 +630,7 @@ std::vector<glm::ivec3> FeatureManager::scan_cells(const std::vector<glm::vec3> 
                     const float blockRadius = blockSize * 0.8660254f;
                     if (glm::distance(blockCenter, v) > range + blockRadius)
                         continue;
-                    if (std::abs(sdf->distance(blockCenter)) > blockRadius * Margin)
+                    if (!near_surface(cache.blocks, glm::ivec3(bx, by, bz), blockCenter, blockRadius * Margin))
                         continue;
                     for (int z = 0; z < Block; ++z)
                         for (int y = 0; y < Block; ++y)
@@ -630,12 +641,24 @@ std::vector<glm::ivec3> FeatureManager::scan_cells(const std::vector<glm::vec3> 
                                 const float cellRadius = cellSize * 0.8660254f;
                                 if (glm::distance(center, v) > range + cellRadius)
                                     continue;
-                                if (std::abs(sdf->distance(center)) > cellRadius * Margin)
+                                if (!near_surface(cache.cells, key, center, cellRadius * Margin))
                                     continue;
                                 keys.insert(key);
                             }
                 }
     }
+    // Forget what is long out of range, or a long journey would keep it all.
+    const auto forget = [&viewers, range](std::unordered_map<glm::ivec3, bool> &known, float size) {
+        if (known.size() < 4096)
+            return;
+        for (auto it = known.begin(); it != known.end();)
+            if (nearest_distance(viewers, (glm::vec3(it->first) + 0.5f) * size) > 2.0f * range)
+                it = known.erase(it);
+            else
+                ++it;
+    };
+    forget(cache.blocks, blockSize);
+    forget(cache.cells, cellSize);
     return std::vector<glm::ivec3>(keys.begin(), keys.end());
 }
 
@@ -729,6 +752,30 @@ std::vector<FeatureManager::Instance> FeatureManager::generate_cell(
     // density per area right.
     const float side = cellSize * 1.7320508f;
 
+    // Biomes over the sampled square, for all layers. Biomes change over
+    // hundreds of meters, so these few points tell where a layer may grow:
+    // evaluating them per sample was two thirds of all generation time.
+    constexpr int BiomeGrid = 3;
+    BiomeWeights biomeGrid[BiomeGrid * BiomeGrid];
+    bool haveBiomeGrid = false;
+    const auto biome_grid = [&]() {
+        if (haveBiomeGrid)
+            return;
+        haveBiomeGrid = true;
+        for (int y = 0; y < BiomeGrid; ++y)
+            for (int x = 0; x < BiomeGrid; ++x)
+                biomeGrid[y * BiomeGrid + x] =
+                    biomes->evaluate(center + (t1 * float(x - 1) + t2 * float(y - 1)) * (side * 0.5f), upField);
+    };
+    // An upper estimate of a biome's weight at a point of the square.
+    const auto biome_estimate = [&](int biome, const glm::vec2 &s) {
+        const glm::vec2 g = glm::clamp(s / side * float(BiomeGrid - 1), glm::vec2(0.0f), glm::vec2(float(BiomeGrid - 1)));
+        const int x = std::min(int(g.x), BiomeGrid - 2), y = std::min(int(g.y), BiomeGrid - 2);
+        const float fx = g.x - float(x), fy = g.y - float(y);
+        const auto at = [&](int ix, int iy) { return biomeGrid[iy * BiomeGrid + ix].weight_of(biome); };
+        return glm::mix(glm::mix(at(x, y), at(x + 1, y), fx), glm::mix(at(x, y + 1), at(x + 1, y + 1), fx), fy) + 0.1f;
+    };
+
     // Each feature is its own layer, in list order: earlier features claim
     // their footprint first (trees, then rocks between them, then bushes...).
     for (int f = 0; f < int(features.size()); ++f)
@@ -748,12 +795,10 @@ std::vector<FeatureManager::Instance> FeatureManager::generate_cell(
         const int layerBiome = layer.biome;
         if (layerBiome >= 0 && biomes.is_valid())
         {
-            // Biomes change over hundreds of meters: a 3x3 grid over the cell finds them.
+            biome_grid();
             float most = 0.0f;
-            for (int y = -1; y <= 1 && most < 0.01f; ++y)
-                for (int x = -1; x <= 1 && most < 0.01f; ++x)
-                    most = std::max(most, biomes->evaluate(center + (t1 * float(x) + t2 * float(y)) * (cellSize * 0.5f), upField)
-                                              .weight_of(layerBiome));
+            for (const BiomeWeights &weights : biomeGrid)
+                most = std::max(most, weights.weight_of(layerBiome));
             if (most < 0.01f)
                 continue;
         }
@@ -820,8 +865,10 @@ std::vector<FeatureManager::Instance> FeatureManager::generate_cell(
             const auto biome_weight = [&](const glm::vec3 &at) {
                 return biome < 0 || biomes.is_null() ? 1.0f : biomes->evaluate(at, upField).weight_of(biome);
             };
-            const float spread = feature.distribution(onPlane, up) * biome_weight(onPlane);
+            const float spread = feature.distribution(onPlane, up);
             if (keep >= spread)
+                continue;
+            if (biome >= 0 && biomes.is_valid() && keep >= spread * biome_estimate(biome, s))
                 continue;
             // The first surface in the cell along the column (none if the
             // column enters the cell underground).
@@ -835,6 +882,11 @@ std::vector<FeatureManager::Instance> FeatureManager::generate_cell(
             const glm::vec3 p = entry - up * t;
             if (glm::any(glm::lessThan(p, lo)) || glm::any(glm::greaterThanEqual(p, hi)))
                 continue;
+            bool blocked = false;
+            for (size_t i = 0; i < placed.size() && !blocked; ++i)
+                blocked = glm::distance(placed[i], p) < std::max(footprint, placedFootprint[i]);
+            if (blocked)
+                continue;
             const glm::vec3 normal = sdf->normal(p);
             const glm::vec3 localUp = upField.up(p);
             // Ground fit, and the mask at the exact position (the projection
@@ -842,11 +894,6 @@ std::vector<FeatureManager::Instance> FeatureManager::generate_cell(
             const float fit = feature.terrain_fit(upField.height(p), normal, localUp);
             const float exact = feature.distribution(p, localUp) * biome_weight(p);
             if (keep >= fit * exact)
-                continue;
-            bool blocked = false;
-            for (size_t i = 0; i < placed.size() && !blocked; ++i)
-                blocked = glm::distance(placed[i], p) < std::max(footprint, placedFootprint[i]);
-            if (blocked)
                 continue;
             placed.push_back(p);
             placedFootprint.push_back(footprint);
