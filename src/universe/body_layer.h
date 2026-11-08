@@ -5,6 +5,7 @@
 #include "celestial_body.h"
 #include "voxel_universe.h"
 #include <algorithm>
+#include <future>
 #include <godot_cpp/classes/camera3d.hpp>
 #include <godot_cpp/classes/directional_light3d.hpp>
 #include <godot_cpp/classes/image_texture.hpp>
@@ -252,6 +253,11 @@ class JarBodyClouds : public JarBodyLayer
     MeshInstance3D *_shell = nullptr;
     float _shellRadius = -1.0f; // when a sphere; 0 when a box (flat)
     Ref<Texture> _noise;
+    int _seed = 1;
+    Ref<Texture> _weather; // CloudNoise::weather, made once the pole is known
+    std::future<std::vector<std::vector<uint8_t>>> _weatherJob; // its texels, on a thread
+    int _weatherSeed = -1;
+    Vector3 _weatherPole;
 
   protected:
     static void _bind_methods();
@@ -263,6 +269,10 @@ class JarBodyClouds : public JarBodyLayer
 
     float get_altitude() const { return _altitude; }
     void set_altitude(float value) { _altitude = value; }
+    int get_seed() const { return _seed; }
+    void set_seed(int value) { _seed = value; }
+    // The weather map in use (made at the first update; null on flat bodies).
+    Ref<Texture> get_weather() const { return _weather; }
     float get_thickness() const { return _thickness; }
     void set_thickness(float value) { _thickness = std::max(1.0f, value); }
     Ref<ShaderMaterial> get_material() const { return _material; }

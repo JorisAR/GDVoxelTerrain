@@ -1,6 +1,7 @@
 #include "cloud_noise.h"
 #include <algorithm>
 #include <cmath>
+#include <glm/glm.hpp>
 #include <cstdint>
 #include <godot_cpp/classes/image.hpp>
 #include <godot_cpp/core/object.hpp>
@@ -200,4 +201,197 @@ Ref<ImageTexture3D> CloudNoise::texture()
     Ref<ImageTexture3D> texture = build();
     s_id = texture->get_instance_id();
     return texture;
+}
+
+// ------------------------------------------------------------------ weather
+
+namespace
+{
+struct Vortex
+{
+    glm::vec3 center;
+    float radius;   // radians
+    float strength; // radians of turn at the center
+    float cover;    // extra coverage around it
+};
+
+// fbm of the tileable gradient noise over a direction (the unit cube's
+// [-1, 1] mapped onto one period): `cells` cells across the planet.
+float sphere_fbm(const glm::vec3 &d, int cells, int octaves, uint32_t seed)
+{
+    const glm::vec3 p = d * 0.5f + 0.5f;
+    float v = 0.0f, a = 0.5f, total = 0.0f;
+    for (int o = 0; o < octaves; ++o)
+    {
+        v += a * gradient(p.x, p.y, p.z, cells << o, seed + uint32_t(o) * 17u);
+        total += a;
+        a *= 0.5f;
+    }
+    return v / total * 0.5f + 0.5f;
+}
+
+glm::vec3 rotate_about(const glm::vec3 &v, const glm::vec3 &axis, float angle)
+{
+    const float c = std::cos(angle), s = std::sin(angle);
+    return v * c + glm::cross(axis, v) * s + axis * glm::dot(axis, v) * (1.0f - c);
+}
+
+float smooth(float a, float b, float x)
+{
+    const float t = std::clamp((x - a) / (b - a), 0.0f, 1.0f);
+    return t * t * (3.0f - 2.0f * t);
+}
+
+float gauss(float x, float center, float width)
+{
+    const float t = (x - center) / width;
+    return std::exp(-t * t);
+}
+
+// Direction of texel (x, y) of cube face `face` (+X, -X, +Y, -Y, +Z, -Z).
+glm::vec3 face_direction(int face, int x, int y, int size)
+{
+    const float s = 2.0f * (float(x) + 0.5f) / float(size) - 1.0f;
+    const float t = 2.0f * (float(y) + 0.5f) / float(size) - 1.0f;
+    glm::vec3 d;
+    switch (face)
+    {
+    case 0:
+        d = glm::vec3(1.0f, -t, -s);
+        break;
+    case 1:
+        d = glm::vec3(-1.0f, -t, s);
+        break;
+    case 2:
+        d = glm::vec3(s, 1.0f, t);
+        break;
+    case 3:
+        d = glm::vec3(s, -1.0f, -t);
+        break;
+    case 4:
+        d = glm::vec3(s, -t, 1.0f);
+        break;
+    default:
+        d = glm::vec3(-s, -t, -1.0f);
+        break;
+    }
+    return glm::normalize(d);
+}
+} // namespace
+
+Ref<Cubemap> CloudNoise::weather(int seed, const Vector3 &pole, int size)
+{
+    return weather_texture(weather_faces(seed, pole, size), size);
+}
+
+CloudNoise::WeatherFaces CloudNoise::weather_faces(int seed, const Vector3 &poleIn, int size)
+{
+    const glm::vec3 pole = glm::normalize(glm::vec3(poleIn.x, poleIn.y, poleIn.z));
+    const uint32_t s = uint32_t(seed) * 2654435761u + 7u;
+    // Cyclones in both storm belts and a few tropical ones; they turn the
+    // clouds around them (opposite ways in the two hemispheres).
+    std::vector<Vortex> vortices;
+    const glm::vec3 helper = std::abs(pole.y) < 0.9f ? glm::vec3(0, 1, 0) : glm::vec3(1, 0, 0);
+    const glm::vec3 east0 = glm::normalize(glm::cross(helper, pole));
+    const glm::vec3 north0 = glm::cross(pole, east0);
+    for (int k = 0; k < 34; ++k)
+    {
+        const bool tropical = k >= 28;
+        const float hemisphere = unit(hash(k, 1, 0, s)) < 0.5f ? -1.0f : 1.0f;
+        const float lat = tropical ? 0.18f + 0.15f * unit(hash(k, 2, 0, s)) : 0.5f + 0.32f * unit(hash(k, 2, 0, s));
+        const float lon = 6.2831853f * unit(hash(k, 3, 0, s));
+        const float r = std::sqrt(1.0f - lat * lat);
+        Vortex v;
+        v.center = glm::normalize(pole * (lat * hemisphere) + (east0 * std::cos(lon) + north0 * std::sin(lon)) * r);
+        v.radius = tropical ? 0.04f + 0.03f * unit(hash(k, 4, 0, s)) : 0.09f + 0.09f * unit(hash(k, 4, 0, s));
+        v.strength = hemisphere * (tropical ? 7.0f : 3.0f + 3.0f * unit(hash(k, 5, 0, s)));
+        v.cover = tropical ? 0.6f : 0.25f + 0.2f * unit(hash(k, 6, 0, s));
+        vortices.push_back(v);
+    }
+    std::vector<std::vector<uint8_t>> faces(6, std::vector<uint8_t>(size_t(size) * size * 4));
+    const int threads = std::max(1, std::min(int(std::thread::hardware_concurrency()), 16));
+    std::vector<std::thread> workers;
+    for (int t = 0; t < threads; ++t)
+        workers.emplace_back([&, t] {
+            for (int row = t; row < 6 * size; row += threads)
+            {
+                const int face = row / size, y = row % size;
+                uint8_t *out = faces[face].data() + size_t(y) * size * 4;
+                for (int x = 0; x < size; ++x)
+                {
+                    const glm::vec3 d = face_direction(face, x, y, size);
+                    // Swirled by the vortices nearby.
+                    glm::vec3 q = d;
+                    float vortexCover = 0.0f;
+                    for (const Vortex &v : vortices)
+                    {
+                        const float angle = std::acos(std::clamp(glm::dot(q, v.center), -1.0f, 1.0f));
+                        if (angle > 3.0f * v.radius)
+                            continue;
+                        const float k = angle / v.radius;
+                        q = rotate_about(q, v.center, v.strength * std::exp(-k * k));
+                        const float k2 = angle / (1.4f * v.radius);
+                        vortexCover = std::max(vortexCover, v.cover * std::exp(-k2 * k2));
+                    }
+                    const float lat = glm::dot(d, pole);
+                    const float zone = std::abs(lat) + 0.08f * (sphere_fbm(d, 3, 3, s + 11) - 0.5f) * 2.0f;
+                    // Drawn out east to west (fronts, bands): the pole-ward
+                    // part of the position counts more.
+                    const glm::vec3 stretched = glm::normalize(q + pole * glm::dot(q, pole) * 1.6f) * 0.98f;
+                    const float systems = sphere_fbm(stretched, 5, 5, s + 23);
+                    const float meso = sphere_fbm(q, 16, 6, s + 41);
+                    // Fine streaks along the fronts.
+                    const float streaks = sphere_fbm(glm::normalize(q + pole * glm::dot(q, pole) * 3.0f) * 0.98f, 40, 4, s + 47);
+                    // Fields of scattered heaped cloud (trade cumulus): cells of
+                    // a few tens of kilometers, in clusters.
+                    const float popcorn = smooth(0.5f, 0.78f, worley(d.x * 0.5f + 0.5f, d.y * 0.5f + 0.5f, d.z * 0.5f + 0.5f, 240, s + 83)) *
+                                          smooth(0.42f, 0.62f, sphere_fbm(d, 24, 3, s + 89));
+                    const float patches = sphere_fbm(d, 7, 3, s + 59);
+                    const float cells = worley(d.x * 0.5f + 0.5f, d.y * 0.5f + 0.5f, d.z * 0.5f + 0.5f, 90, s + 71);
+
+                    const float wItcz = gauss(zone, 0.0f, 0.12f);
+                    const float wSub = gauss(zone, 0.4f, 0.14f);
+                    const float wMid = gauss(zone, 0.7f, 0.15f);
+                    const float wPolar = smooth(0.8f, 0.95f, zone);
+                    const float total = wItcz + wSub + wMid + wPolar + 1e-4f;
+
+                    const float itcz = std::max(smooth(0.5f, 0.68f, meso * 0.75f + systems * 0.25f), popcorn * 0.6f);
+                    const float stratocumulus = smooth(0.55f, 0.68f, patches) * smooth(0.25f, 0.55f, cells);
+                    const float sub = std::max({smooth(0.66f, 0.76f, systems) * 0.7f, stratocumulus * 0.8f, popcorn * 0.55f});
+                    const float mid = std::max(smooth(0.44f, 0.62f, systems * 0.6f + meso * 0.3f + streaks * 0.1f + vortexCover * 0.4f),
+                                               popcorn * 0.4f);
+                    const float polar = 0.35f + 0.5f * smooth(0.35f, 0.65f, systems);
+                    float cover = (wItcz * itcz + wSub * sub + wMid * mid + wPolar * polar) / total;
+                    cover = std::max(cover, vortexCover * smooth(0.45f, 0.6f, meso + 0.1f) * 1.2f);
+                    const float tops = (wItcz * 1.0f + wSub * 0.3f + wMid * (0.55f + 0.35f * mid) + wPolar * 0.4f) / total;
+                    const float sheet =
+                        (wItcz * 0.05f + wSub * (0.2f + 0.6f * stratocumulus) + wMid * 0.55f + wPolar * 0.8f) / total;
+                    out[x * 4 + 0] = to_byte(cover);
+                    out[x * 4 + 1] = to_byte(tops);
+                    out[x * 4 + 2] = to_byte(sheet);
+                    out[x * 4 + 3] = 255;
+                }
+            }
+        });
+    for (std::thread &w : workers)
+        w.join();
+    return faces;
+}
+
+Ref<Cubemap> CloudNoise::weather_texture(const WeatherFaces &faces, int size)
+{
+    TypedArray<Image> images;
+    for (int f = 0; f < 6; ++f)
+    {
+        PackedByteArray bytes;
+        bytes.resize(int64_t(faces[f].size()));
+        std::copy(faces[f].begin(), faces[f].end(), bytes.ptrw());
+        Ref<Image> image = Image::create_from_data(size, size, false, Image::FORMAT_RGBA8, bytes);
+        image->generate_mipmaps();
+        images.push_back(image);
+    }
+    Ref<Cubemap> cubemap;
+    cubemap.instantiate();
+    cubemap->create_from_images(images);
+    return cubemap;
 }

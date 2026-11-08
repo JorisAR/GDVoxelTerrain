@@ -980,6 +980,10 @@ void JarBodyClouds::_bind_methods()
     ClassDB::bind_method(D_METHOD("set_thickness", "value"), &JarBodyClouds::set_thickness);
     ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "thickness", PROPERTY_HINT_RANGE, "1,10000,1,or_greater,suffix:m"),
                  "set_thickness", "get_thickness");
+    ClassDB::bind_method(D_METHOD("get_seed"), &JarBodyClouds::get_seed);
+    ClassDB::bind_method(D_METHOD("set_seed", "value"), &JarBodyClouds::set_seed);
+    ADD_PROPERTY(PropertyInfo(Variant::INT, "seed"), "set_seed", "get_seed");
+    ClassDB::bind_method(D_METHOD("get_weather"), &JarBodyClouds::get_weather);
     ClassDB::bind_method(D_METHOD("get_material"), &JarBodyClouds::get_material);
     ClassDB::bind_method(D_METHOD("set_material", "value"), &JarBodyClouds::set_material);
     ADD_PROPERTY(PropertyInfo(Variant::OBJECT, "material", PROPERTY_HINT_RESOURCE_TYPE, "ShaderMaterial"),
@@ -1062,7 +1066,23 @@ void JarBodyClouds::update(const JarCelestialBody &body)
     Vector3 axis = body.get_spin_axis();
     if (const auto *carrier = Object::cast_to<Node3D>(body.get_parent()); carrier && axis.length_squared() > 1e-12f)
         axis = carrier->get_global_basis().xform(axis);
-    material->set_shader_parameter("spin_axis", axis.length_squared() > 1e-12f ? toBody.xform(axis).normalized() : Vector3(0, 1, 0));
+    const Vector3 pole = axis.length_squared() > 1e-12f ? toBody.xform(axis).normalized() : Vector3(0, 1, 0);
+    material->set_shader_parameter("spin_axis", pole);
+    // The weather map: once (a fraction of a second), again only for another
+    // seed or pole.
+    // Its texels on a thread (half a second on all cores; the frame would
+    // stall), the texture when they are done; no clouds until then.
+    if (frame.radial && !_weatherJob.valid() && (_weatherSeed != _seed || !_weatherPole.is_equal_approx(pole)))
+    {
+        _weatherSeed = _seed;
+        _weatherPole = pole;
+        const int seed = _seed;
+        _weatherJob = std::async(std::launch::async, [seed, pole] { return CloudNoise::weather_faces(seed, pole); });
+    }
+    if (_weatherJob.valid() && _weatherJob.wait_for(std::chrono::seconds(0)) == std::future_status::ready)
+        _weather = CloudNoise::weather_texture(_weatherJob.get());
+    material->set_shader_parameter("weather_map", _weather);
+    material->set_shader_parameter("weather_ready", !frame.radial || _weather.is_valid());
     // The sun: in scaled space the star's own light here; else the scene's
     // light (reddened by the air the camera is in), with its energy.
     Vector3 direction, color, floor;

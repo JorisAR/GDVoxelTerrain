@@ -4,11 +4,17 @@
 		Volumetric clouds above the body's sea level.
 	</brief_description>
 	<description>
-		A layer of clouds between [member altitude] and [member altitude] + [member thickness] meters above sea level (a spherical shell, or a slab on a flat body), ray marched per pixel. Where clouds are comes from a weather field (systems of clear and overcast regions, optionally climate bands by latitude); their shapes from tileable 3D Perlin-Worley noise made at startup (about 70 ms, no baking), rounded at the base and eroded into cauliflower detail at the edges. Lit by the sun through the cloud above each point, with forward scattering (silver linings), approximate multiple scattering, sky light from above, the planet's shadow and moonlight at night. The same clouds at every distance: noise finer than a pixel averages out, so seen from orbit they are the same weather blurred. Beyond the far plane they are drawn in scaled space with the rest of the body. Coverage, weather, sizes, density, wind, colors and quality (steps) are set on [member material].
+		A layer of clouds between [member altitude] and [member altitude] + [member thickness] meters above sea level (a spherical shell, or a slab on a flat body). Where clouds are comes from the planet's weather map, made in C++ at startup (a cube map, about half a second, no baking; [member seed]): climate zones with noisy borders (storm clusters along the equator, mostly clear subtropics with fields of trade cumulus and cellular low cloud, cyclones with spiral arms and fronts drawn out east to west in the storm belts, stratus over the poles), how high the tops reach and how sheet-like they are. It drifts slowly around the planet. Near the camera (up to the material's [code]volume_distance[/code]) the clouds are ray marched through tileable 3D Perlin-Worley noise: rounded bases, domed tops, eroded edges, lit through the cloud towards the sun with silver linings, approximate multiple scattering, sky light, the planet's shadow and moonlight. Beyond that, and always from orbit, they are drawn as one look-up where the view crosses the layer (the covered part of the pixel, lit with the relief of the map's tops): the same weather, at a fraction of the cost. The two dissolve into each other. Beyond the far plane they are drawn in scaled space with the rest of the body. Coverage, sizes, density, wind, colors and quality are set on [member material].
 	</description>
 	<tutorials>
 	</tutorials>
 	<methods>
+		<method name="get_weather" qualifiers="const">
+			<return type="Texture" />
+			<description>
+				The weather map in use (a [Cubemap]: r coverage, g how high the tops reach, b how sheet-like), made at the layer's first update; null on flat bodies.
+			</description>
+		</method>
 		<method name="get_active_material">
 			<return type="ShaderMaterial" />
 			<description>
@@ -19,6 +25,9 @@
 	<members>
 		<member name="altitude" type="float" setter="set_altitude" getter="get_altitude" default="320.0">
 			Height of the bottom of the cloud layer above sea level, in meters.
+		</member>
+		<member name="seed" type="int" setter="set_seed" getter="get_seed" default="1">
+			Which weather: the weather map is made from it (cyclones, cloud fields).
 		</member>
 		<member name="thickness" type="float" setter="set_thickness" getter="get_thickness" default="400.0">
 			Height of the layer from its bottom to its top, in meters.
