@@ -84,7 +84,8 @@ func bake_feature(feature: JarTerrainFeature, parent: Node, folder := "") -> Err
 	var error := ResourceSaver.save(quad, path, ResourceSaver.FLAG_COMPRESS)
 	if error != OK:
 		return error
-	feature.impostor = load(path)
+	# Replacing the cached copy: a plain load() returns the impostor baked before.
+	feature.impostor = ResourceLoader.load(path, "", ResourceLoader.CACHE_MODE_REPLACE)
 	if feature.resource_path != "" and not feature.resource_path.contains("::"):
 		error = ResourceSaver.save(feature)
 	return error
@@ -108,6 +109,16 @@ func bake(source: Node3D, parent: Node, compress := false) -> QuadMesh:
 	var root := source
 	viewport.add_child(root)
 	var meshes := _source_meshes(root)
+	# Per-instance color variation of the source (leaves_color1 / 2, see
+	# impostor.gdshader), so impostors vary like the meshes they stand for.
+	var variation := []
+	for m in meshes:
+		var mat: Material = m.material_override
+		if mat == null and m.mesh != null and m.mesh.get_surface_count() > 0:
+			mat = m.get_active_material(0)
+		if mat is ShaderMaterial and mat.get_shader_parameter("leaves_color1") != null and mat.get_shader_parameter("leaves_color2") != null:
+			variation = [mat.get_shader_parameter("leaves_color1"), mat.get_shader_parameter("leaves_color2")]
+			break
 	for n: Node3D in root.find_children("*", "GeometryInstance3D", true, false) + [root]:
 		if not n is GeometryInstance3D:
 			continue
@@ -180,6 +191,10 @@ func bake(source: Node3D, parent: Node, compress := false) -> QuadMesh:
 	material.set_shader_parameter("imposterTextureAlbedo", ImageTexture.create_from_image(albedo))
 	material.set_shader_parameter("imposterTextureNormal", ImageTexture.create_from_image(normal))
 	material.set_shader_parameter("use_baked_normals", true)
+	if not variation.is_empty():
+		material.set_shader_parameter("variation", true)
+		material.set_shader_parameter("variation_a", variation[0])
+		material.set_shader_parameter("variation_b", variation[1])
 	var quad := QuadMesh.new()
 	quad.size = Vector2.ONE * radius * 2.0
 	quad.center_offset = center

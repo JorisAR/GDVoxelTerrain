@@ -54,11 +54,16 @@ float ease_out_quartic(float x) {
 
 void vertex() {
 	float height_factor = 1.0 - UV.y;
-	float hash0 = hash12(NODE_POSITION_WORLD.xz);
-	float hash1 = hash12(-NODE_POSITION_WORLD.zx);
-	float clump0 = texture(clump_noise, NODE_POSITION_WORLD.zx*0.075).x; // Noise
-	float clump1 = texture(clump_noise, NODE_POSITION_WORLD.xz*0.5).x;
-	float clump2 = texture(clump_noise,-NODE_POSITION_WORLD.zx*0.035).x;
+	// Per blade, from its own random number (custom data w, fixed where it
+	// stands in the volume): world positions change with floating origin
+	// shifts and turning planets, and NODE_POSITION_WORLD is the whole
+	// chunk's multimesh.
+	float r = INSTANCE_CUSTOM.w >= 0.5 ? fract(INSTANCE_CUSTOM.w) : hash12(NODE_POSITION_WORLD.xz);
+	float hash0 = r;
+	float hash1 = fract(r * 7.31 + 0.37);
+	float clump0 = texture(clump_noise, vec2(r, hash1) * 3.1).x; // Noise
+	float clump1 = texture(clump_noise, vec2(hash1, r) * 5.3).x;
+	float clump2 = texture(clump_noise, vec2(r * 1.7, 0.3)).x;
 
 	// --- GRASS BLADE HEIGHT/WIDTH ---
 	vec3 camera_offset = NODE_POSITION_WORLD - CAMERA_POSITION_WORLD;

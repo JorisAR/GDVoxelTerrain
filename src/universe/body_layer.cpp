@@ -130,6 +130,46 @@ Ref<PlaneMesh> make_plane(float size, int subdivisions)
 }
 } // namespace
 
+Ref<ShaderMaterial> JarMaterialCopy::of(const Ref<ShaderMaterial> &material)
+{
+    if (material.is_null())
+    {
+        copy.unref();
+        source = 0;
+        return material;
+    }
+    if (copy.is_null() || source != material->get_instance_id())
+    {
+        copy = material->duplicate();
+        source = material->get_instance_id();
+        synced = Engine::get_singleton()->get_process_frames();
+        return copy;
+    }
+    if (Engine::get_singleton()->is_editor_hint() && synced != Engine::get_singleton()->get_process_frames())
+    {
+        synced = Engine::get_singleton()->get_process_frames();
+        if (copy->get_shader() != material->get_shader())
+            copy->set_shader(material->get_shader());
+        if (copy->get_render_priority() != material->get_render_priority())
+            copy->set_render_priority(material->get_render_priority());
+        if (copy->get_next_pass() != material->get_next_pass())
+            copy->set_next_pass(material->get_next_pass());
+        if (const Ref<Shader> shader = material->get_shader(); shader.is_valid())
+        {
+            const Array uniforms = shader->get_shader_uniform_list(true);
+            for (int64_t i = 0; i < uniforms.size(); ++i)
+            {
+                const Dictionary u = uniforms[i];
+                const StringName name = u["name"];
+                const Variant value = material->get_shader_parameter(name);
+                if (value.get_type() != Variant::NIL && copy->get_shader_parameter(name) != value)
+                    copy->set_shader_parameter(name, value);
+            }
+        }
+    }
+    return copy;
+}
+
 // ---------------------------------------------------------------- JarBodyLayer
 
 void JarBodyLayer::_bind_methods()
@@ -543,7 +583,7 @@ void JarBodyWater::_bind_methods()
 Ref<ShaderMaterial> JarBodyWater::get_active_material()
 {
     if (_material.is_valid())
-        return _material;
+        return _materialCopy.of(_material); // never the user's own (see JarMaterialCopy)
     if (_defaultMaterial.is_null())
         _defaultMaterial = make_material(WaterShader, 0);
     return _defaultMaterial;
@@ -552,7 +592,7 @@ Ref<ShaderMaterial> JarBodyWater::get_active_material()
 Ref<ShaderMaterial> JarBodyWater::get_active_underwater_material()
 {
     if (_underwaterMaterial.is_valid())
-        return _underwaterMaterial;
+        return _underwaterCopy.of(_underwaterMaterial);
     if (_defaultUnderwater.is_null())
         _defaultUnderwater = make_material(UnderwaterShader, 10); // after the water surface, before clouds and air
     return _defaultUnderwater;
@@ -716,7 +756,7 @@ void JarBodyAtmosphere::_bind_methods()
 Ref<ShaderMaterial> JarBodyAtmosphere::get_active_material()
 {
     if (_material.is_valid())
-        return _material;
+        return _materialCopy.of(_material); // never the user's own (see JarMaterialCopy)
     if (_defaultMaterial.is_null())
         _defaultMaterial = make_material(AtmosphereShader, 100); // after opaque and transparent (water): covers them
     return _defaultMaterial;
@@ -950,7 +990,7 @@ void JarBodyClouds::_bind_methods()
 Ref<ShaderMaterial> JarBodyClouds::get_active_material()
 {
     if (_material.is_valid())
-        return _material;
+        return _materialCopy.of(_material); // never the user's own (see JarMaterialCopy)
     if (_defaultMaterial.is_null())
         _defaultMaterial = make_material(CloudShader, 50); // after water, before the atmosphere (which hazes them)
     return _defaultMaterial;

@@ -169,7 +169,8 @@ std::vector<PackedFloat32Array> ChunkDetailGenerator::generate_detail_buffers(
                 *w++ = t.origin[row];
             }
             // Custom data: the ground color; the chunk fills in the LOD range.
-            PopulationRendering::write_custom(w, colors[d][i], places[d][i], 0.0f);
+            PopulationRendering::write_custom(w, colors[d][i], places[d][i], 0.0f,
+                                              PopulationRendering::instance_random(t.origin));
             w += 4;
         }
     }

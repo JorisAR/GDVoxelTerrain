@@ -179,7 +179,7 @@ void JarBodyRings::set_seed(int value)
 Ref<ShaderMaterial> JarBodyRings::get_active_material()
 {
     if (_material.is_valid())
-        return _material;
+        return _materialCopy.of(_material); // never the user's own (see JarMaterialCopy)
     if (_defaultMaterial.is_null())
         _defaultMaterial = make_material(RingShader, 40); // after water, before clouds and the atmosphere
     return _defaultMaterial;
@@ -317,7 +317,7 @@ void JarBodyGasGiant::_bind_methods()
 Ref<ShaderMaterial> JarBodyGasGiant::get_active_material()
 {
     if (_material.is_valid())
-        return _material;
+        return _materialCopy.of(_material); // never the user's own (see JarMaterialCopy)
     if (_defaultMaterial.is_null())
         _defaultMaterial = make_material(GasGiantShader, 0);
     return _defaultMaterial;

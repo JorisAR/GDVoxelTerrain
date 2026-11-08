@@ -1,4 +1,14 @@
-[gd_resource type="JarTerrainSdf" format=3]
+[gd_resource type="JarTerrainSdf" format=3 uid="uid://luu6s6a8lcsy"]
+
+[sub_resource type="JarNoise" id="HillsMask"]
+seed = 272
+frequency = 4e-05
+octaves = 2
+
+[sub_resource type="JarNoise" id="Hills"]
+seed = 271
+frequency = 0.0007
+octaves = 6
 
 [sub_resource type="JarNoise" id="Volcanoes"]
 seed = 211
@@ -7,12 +17,12 @@ octaves = 3
 
 [sub_resource type="JarNoise" id="Ridges"]
 seed = 217
-frequency = 0.0001
+frequency = 4e-05
 fractal_type = 2
-octaves = 7
-gain = 0.45
-warp_strength = 4000.0
-warp_frequency = 5e-05
+octaves = 6
+gain = 0.42
+warp_strength = 1500.0
+warp_frequency = 3e-05
 
 [sub_resource type="JarNoise" id="Highlands"]
 seed = 203
@@ -20,15 +30,9 @@ frequency = 3.5e-06
 octaves = 11
 gain = 0.55
 
-[sub_resource type="JarNoise" id="Hills"]
-seed = 271
-frequency = 0.0007
-octaves = 6
-gain = 0.5
-
-[sub_resource type="JarNoise" id="HillsMask"]
-seed = 272
-frequency = 4e-05
+[sub_resource type="JarNoise" id="OutcropsMask"]
+seed = 274
+frequency = 0.0002
 octaves = 2
 
 [sub_resource type="JarNoise" id="Outcrops"]
@@ -36,34 +40,26 @@ seed = 273
 frequency = 0.004
 fractal_type = 2
 octaves = 3
-gain = 0.5
-
-[sub_resource type="JarNoise" id="OutcropsMask"]
-seed = 274
-frequency = 0.0002
-octaves = 2
 
 [resource]
-hills_noise = SubResource("Hills")
-hills_mask = SubResource("HillsMask")
-hills_height = 140.0
-hills_threshold = -0.4
-hills_blend = 0.5
-outcrops_noise = SubResource("Outcrops")
-outcrops_mask = SubResource("OutcropsMask")
-outcrops_height = 22.0
-outcrops_threshold = -0.1
-outcrops_blend = 0.35
 shape = 1
 radius = 350000.0
 sea_level = -6000.0
 noise = SubResource("Highlands")
 height = 2500.0
 depth = 3000.0
+hills_noise = SubResource("Hills")
+hills_mask = SubResource("HillsMask")
+hills_height = 110.0
+hills_threshold = -0.4
+outcrops_noise = SubResource("Outcrops")
+outcrops_mask = SubResource("OutcropsMask")
+outcrops_height = 6.0
+outcrops_threshold = -0.1
+outcrops_blend = 0.35
 mountain_noise = SubResource("Ridges")
 mountain_mask = SubResource("Volcanoes")
-mountain_height = 5000.0
-mountain_threshold = 0.2
+mountain_height = 2600.0
 mountain_blend = 0.35
-erosion_strength = 0.25
+erosion_strength = 0.35
 erosion_scale = 400.0

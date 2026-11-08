@@ -647,7 +647,10 @@ void FeatureManager::build_groups(const glm::ivec3 &key, Cell &cell, const std::
                     *w++ = t.basis.rows[row].z;
                     *w++ = t.origin[row];
                 }
-                PopulationRendering::write_custom(w, p.ground, begin, end);
+                // Its random number from the feature's own place: the same for
+                // every part and level (the mesh and its impostor agree).
+                PopulationRendering::write_custom(w, p.ground, begin, end,
+                                                  PopulationRendering::instance_random(p.transform.origin));
                 w += 4;
             }
             Ref<MultiMesh> multimesh;

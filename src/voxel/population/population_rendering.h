@@ -1,6 +1,8 @@
 #ifndef JAR_POPULATION_RENDERING_H
 #define JAR_POPULATION_RENDERING_H
 
+#include <cstring>
+
 #include <godot_cpp/classes/geometry_instance3d.hpp>
 #include <godot_cpp/classes/material.hpp>
 #include <godot_cpp/classes/mesh.hpp>
@@ -55,16 +57,35 @@ inline void set_lod_range(GeometryInstance3D *instance, const Ref<Material> &mat
     }
 }
 
+// A number in [0, 1) for an instance, from where it stands in its volume (or
+// cell): the same in every frame and every level of detail, unlike anything
+// from world positions, which floating origin shifts and turning planets change.
+inline float instance_random(const Vector3 &where)
+{
+    uint32_t h = 0x9e3779b9u;
+    for (int i = 0; i < 3; ++i)
+    {
+        uint32_t bits;
+        const float v = where[i];
+        std::memcpy(&bits, &v, sizeof(bits));
+        h ^= bits + 0x7f4a7c15u + (h << 6) + (h >> 2);
+        h *= 0x85ebca6bu;
+        h ^= h >> 13;
+    }
+    return float(h >> 8) / float(1u << 24);
+}
+
 // Multimesh custom data per instance, as jar_population.gdshaderinc reads it:
 // the ground color (linear; sqrt-encoded, 8 bits per channel, packed into an
-// integer a float holds exactly), the LOD range, and 1.
-inline void write_custom(float *out, const glm::vec3 &ground, float begin, float end)
+// integer a float holds exactly), the LOD range, and 1 + the instance's random
+// number (instance_random).
+inline void write_custom(float *out, const glm::vec3 &ground, float begin, float end, float random = 0.0f)
 {
     auto channel = [](float v) { return uint32_t(std::lround(std::sqrt(std::clamp(v, 0.0f, 1.0f)) * 255.0f)); };
     out[0] = float((channel(ground.x) << 16) | (channel(ground.y) << 8) | channel(ground.z));
     out[1] = begin;
     out[2] = end > 0.0f ? end : 1e20f;
-    out[3] = 1.0f;
+    out[3] = 1.0f + std::clamp(random, 0.0f, 0.999f);
 }
 } // namespace PopulationRendering
 

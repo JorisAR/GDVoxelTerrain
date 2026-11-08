@@ -31,6 +31,7 @@ class JarBodyRings : public JarBodyLayer
     float _opacity = 1.0f;
     int _seed = 1;
     Ref<ShaderMaterial> _material;
+    JarMaterialCopy _materialCopy;
     Ref<ShaderMaterial> _defaultMaterial;
     MeshInstance3D *_shell = nullptr;
     float _shellRadius = -1.0f; // the mesh's radii are stale below 0
@@ -81,6 +82,7 @@ class JarBodyGasGiant : public JarBodyLayer
 
   private:
     Ref<ShaderMaterial> _material;
+    JarMaterialCopy _materialCopy;
     Ref<ShaderMaterial> _defaultMaterial;
     MeshInstance3D *_shell = nullptr;
     uint64_t _rings = 0; // instance id of the rings found on the body

@@ -19,7 +19,8 @@
 // The volume writes each instance's custom data (INSTANCE_CUSTOM):
 //   x: ground color, sqrt-encoded 8 bits per channel packed into an integer
 //   y, z: LOD range (meters from the main camera)
-//   w: 1 (0 when not drawn by a volume: then nothing is hidden)
+//   w: 1 + the instance's random number in [0, 1) (0 when not drawn by a
+//      volume: then nothing is hidden)
 
 varying vec4 jar_instance_data;
 
@@ -62,6 +63,14 @@ float jar_dither(vec2 pixel) {
 // level fading out and the next fading in use opposite pixels of the same
 // noise, so together they cover everything, with no holes.
 #define JAR_POPULATION_FRAGMENT if (jar_fade.x < 1.0 || jar_fade.y > 0.0) { float jar_noise = jar_dither(FRAGCOORD.xy); if (jar_noise >= jar_fade.x || jar_noise < jar_fade.y) { discard; } }
+
+// The instance's random number in [0, 1): fixed to where it stands in its
+// volume, the same for its mesh and its impostor. Use it for per-instance
+// variation instead of hashing world positions (floating origin shifts and
+// turning planets change those). `fallback` when not drawn by a volume.
+float jar_instance_random(vec4 custom, float fallback) {
+	return custom.w >= 0.5 ? fract(custom.w) : fallback;
+}
 
 // The ground color under this instance (linear), or `fallback` where the
 // volume did not provide one (e.g. the mesh is not drawn by a volume).

@@ -18,6 +18,12 @@ render_mode cull_disabled, depth_draw_opaque;
 #include "res://addons/jar_voxel_terrain/shaders/jar_population.gdshaderinc"
 
 uniform vec4 albedo : source_color = vec4(1.0);
+// Per-instance variation, as the source's shader does it: color a at random
+// number 0, b at 1, baked at 0.5 (the baker copies them from the source's
+// leaves_color1 / leaves_color2). The impostor is tinted to the instance's.
+uniform bool variation = false;
+uniform vec4 variation_a : source_color = vec4(1.0);
+uniform vec4 variation_b : source_color = vec4(1.0);
 uniform float specular : hint_range(0.0, 1.0) = 0.5;
 uniform float metallic : hint_range(0.0, 1.0) = 0.0; // baked materials often say 1: set 0 for plants
 uniform float roughness : hint_range(0.0, 1.0) = 1.0;
@@ -172,6 +178,10 @@ void fragment() {
 	}
 	NORMAL = normalize((VIEW_MATRIX * (MODEL_MATRIX * vec4(n, 0.0))).xyz);
 	ALBEDO = color.rgb * albedo.rgb;
+	if (variation) {
+		vec3 baked = max(mix(variation_a.rgb, variation_b.rgb, 0.5), vec3(1e-3));
+		ALBEDO *= mix(variation_a.rgb, variation_b.rgb, jar_instance_random(jar_instance_data, 0.5)) / baked;
+	}
 	SPECULAR = specular;
 	METALLIC = metallic;
 	ROUGHNESS = roughness;

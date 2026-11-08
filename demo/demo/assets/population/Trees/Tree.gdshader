@@ -41,8 +41,10 @@ void vertex() {
 	VERTEX += get_wind_displacement(VERTEX, wind_affect + 5.0 * dissolve) * COLOR.g * COLOR.g;
 	// Sink while dissolving, along the tree's own up.
 	VERTEX -= normalize(MODEL_MATRIX[1].xyz) * (2.5 * dissolve) * (0.9 + 0.025 * dot(VERTEX - MODEL_MATRIX[3].xyz, normalize(MODEL_MATRIX[1].xyz)));
-	id = sin(1.1123 * dot(MODEL_MATRIX[3].xyz, vec3(43,54,12))); // the instance (NODE_POSITION_WORLD is the multimesh)
 #endif
+	// The instance's own number (fixed in its volume; the middle when baking
+	// an impostor, which then varies the same way, see impostor.gdshader).
+	id = jar_instance_random(INSTANCE_CUSTOM, 0.5);
 	JAR_POPULATION_VERTEX
 }
 

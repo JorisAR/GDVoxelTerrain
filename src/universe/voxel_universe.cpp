@@ -5,6 +5,7 @@
 #include "floating_origin.h"
 #include "voxel_viewer.h"
 #include "voxel_chunk.h"
+#include "voxel_volume.h"
 #include "voxel_stats.h"
 #include <algorithm>
 #include <climits>
@@ -362,10 +363,27 @@ void JarVoxelUniverse::adapt_camera(Node *context)
     const float ownNear = _cameraNear.try_emplace(camera->get_instance_id(), camera->get_near()).first->second;
     const Vector3 at = camera->get_global_position();
     float altitude = std::numeric_limits<float>::infinity();
+    const JarCelestialBody *nearest = nullptr;
     for (const JarCelestialBody *body : _bodies)
-        altitude = std::min(altitude, body->get_altitude(at));
+        if (const float a = body->get_altitude(at); a < altitude)
+        {
+            altitude = a;
+            nearest = body;
+        }
     if (!std::isfinite(altitude))
         return;
+    // Above its terrain, not its sea level: on high ground far above the sea
+    // (Mars-like worlds have no sea, kilometers below) the near plane would
+    // otherwise cut through the ground at your feet. The terrain's distance
+    // at the camera (one sample).
+    if (const JarVoxelVolume *volume = nearest ? nearest->get_terrain() : nullptr; volume && volume->is_inside_tree())
+        if (const Ref<JarSignedDistanceField> sdf = volume->get_sdf(); sdf.is_valid())
+        {
+            const Vector3 local = volume->get_global_transform().affine_inverse().xform(at);
+            const JarSignedDistanceField::DetailScope detail(0.0f);
+            const float ground = sdf->distance(glm::vec3(local.x, local.y, local.z));
+            altitude = std::min(altitude, std::max(ground, 0.0f));
+        }
     const float near = std::clamp(altitude * 0.002f, ownNear, 1.0e4f);
     if (camera->get_near() != near)
         camera->set_near(near);
@@ -626,20 +644,52 @@ JarCelestialBody *JarVoxelUniverse::choose_anchor() const
     auto *current = Object::cast_to<JarCelestialBody>(ObjectDB::get_instance(_anchor));
     if (found)
     {
-        // The smallest sphere of influence the viewer is in (a moon's inside
-        // its planet's): well before its surface, where its gravity is still
-        // weaker than the planet's. A little hysteresis on leaving it.
-        JarCelestialBody *best = nullptr;
-        float bestReach = INFINITY;
+        // Spheres of influence, from the top down: among those the viewer is
+        // in, the outermost ones first (a planet's around its star), there
+        // the one it is deepest in relative to its size (neighbouring planets'
+        // spheres overlap when their star is light: each is capped at its
+        // orbit radius), then on into that body's moons while it is inside
+        // one of theirs. A little hysteresis on leaving the current one.
+        struct Candidate
+        {
+            JarCelestialBody *body;
+            const JarCelestialBody *parent;
+            float depth;
+        };
+        std::vector<Candidate> candidates;
         for (JarCelestialBody *body : _bodies)
         {
             const float sphere = body->get_sphere_of_influence();
+            if (!std::isfinite(sphere))
+                continue;
             const float reach = body == current ? 1.1f * sphere : sphere;
-            if (std::isfinite(sphere) && reach < bestReach && (at - body->get_center()).length() < reach)
+            const float depth = (at - body->get_center()).length() / reach;
+            if (depth < 1.0f)
             {
-                best = body;
-                bestReach = reach;
+                const auto *orbit = Object::cast_to<JarBodyOrbit>(body->get_carrier());
+                candidates.push_back({body, orbit ? orbit->get_parent_body() : nullptr, depth});
             }
+        }
+        const auto is_candidate = [&](const JarCelestialBody *body) {
+            for (const Candidate &c : candidates)
+                if (c.body == body)
+                    return true;
+            return false;
+        };
+        JarCelestialBody *best = nullptr;
+        for (bool top = true;; top = false)
+        {
+            JarCelestialBody *next = nullptr;
+            float nextDepth = INFINITY;
+            for (const Candidate &c : candidates)
+                if ((top ? !is_candidate(c.parent) : c.parent == best) && c.depth < nextDepth)
+                {
+                    next = c.body;
+                    nextDepth = c.depth;
+                }
+            if (next == nullptr)
+                break;
+            best = next;
         }
         if (best)
             return best;

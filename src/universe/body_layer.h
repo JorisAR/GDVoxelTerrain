@@ -14,6 +14,20 @@
 
 using namespace godot;
 
+// The material a layer draws with when the user assigned one: a copy of it,
+// never the user's own. Layers set values on their material every frame
+// (positions, the sun, generated textures); on the user's material those were
+// saved with the scene (Godot saves it before running it). The copy follows
+// the user's material: made again when that changes identity, and in the
+// editor its values are copied over every frame, so edits show at once.
+struct JarMaterialCopy
+{
+    Ref<ShaderMaterial> copy;
+    uint64_t source = 0;
+    uint64_t synced = UINT64_MAX; // process frame of the last sync
+    Ref<ShaderMaterial> of(const Ref<ShaderMaterial> &material);
+};
+
 // Something drawn around a JarCelestialBody from its frame (center, up, sea
 // level): water, atmosphere, clouds. Put it under the body (any depth); it
 // updates every frame, in the editor too. Without a body it does nothing.
@@ -94,7 +108,9 @@ class JarBodyWater : public JarBodyLayer
     float _levelOffset = 0.0f;
     float _discRadius = 0.0f;
     Ref<ShaderMaterial> _material;
+    JarMaterialCopy _materialCopy;
     Ref<ShaderMaterial> _underwaterMaterial;
+    JarMaterialCopy _underwaterCopy;
     Ref<ShaderMaterial> _defaultMaterial;
     Ref<ShaderMaterial> _defaultUnderwater;
     MeshInstance3D *_far = nullptr;
@@ -152,6 +168,7 @@ class JarBodyAtmosphere : public JarBodyLayer
     float _sunsetStrength = 5.0f;
 
     Ref<ShaderMaterial> _material;
+    JarMaterialCopy _materialCopy;
     Ref<ShaderMaterial> _defaultMaterial;
     Ref<ShaderMaterial> _extinction; // first pass, dims what is behind
     MeshInstance3D *_shell = nullptr;
@@ -230,6 +247,7 @@ class JarBodyClouds : public JarBodyLayer
     float _altitude = 320.0f;
     float _thickness = 400.0f;
     Ref<ShaderMaterial> _material;
+    JarMaterialCopy _materialCopy;
     Ref<ShaderMaterial> _defaultMaterial;
     MeshInstance3D *_shell = nullptr;
     float _shellRadius = -1.0f; // when a sphere; 0 when a box (flat)
