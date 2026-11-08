@@ -147,6 +147,27 @@ Ref<ImageTexture3D> build()
         });
     for (std::thread &w : workers)
         w.join();
+    // Each channel stretched to the full range (its 1st to 99th percentile):
+    // the noises come out narrow (most of Perlin-Worley within 0.45 - 0.63),
+    // and coverage thresholds need values spread evenly over 0 - 1.
+    for (int c = 0; c < 4; ++c)
+    {
+        int histogram[256] = {};
+        for (size_t i = size_t(c); i < data.size(); i += 4)
+            histogram[data[i]]++;
+        const size_t total = data.size() / 4;
+        int lo = 0, hi = 255;
+        size_t count = 0;
+        while (lo < 255 && (count += histogram[lo]) < total / 100)
+            ++lo;
+        count = 0;
+        while (hi > 0 && (count += histogram[hi]) < total / 100)
+            --hi;
+        if (hi <= lo)
+            continue;
+        for (size_t i = size_t(c); i < data.size(); i += 4)
+            data[i] = to_byte(float(int(data[i]) - lo) / float(hi - lo));
+    }
     TypedArray<Image> images;
     std::vector<uint8_t> level = data;
     for (int size = N; size >= 1; size /= 2)

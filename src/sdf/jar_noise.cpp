@@ -57,9 +57,10 @@ JarNoise::Sample JarNoise::sample(const glm::dvec3 &position, float broadWavelen
     int groupSize = 0, groupNext = 0;
     for (int o = 0; o < octaves; ++o)
     {
-        if (minWavelength > 0.0f && frequency * minWavelength > 1.0f)
+        if (minWavelength > 0.0f && frequency * minWavelength > 0.5f)
         {
-            // Too fine for this sample's spacing: its mean, no slope.
+            // Too fine for this sample's spacing (under two samples per
+            // wavelength: it would alias into false patterns): its mean, no slope.
             sum += amplitude * (_fractal == FRACTAL_RIDGED ? RidgedOctaveMean : 0.0f);
             norm += amplitude;
             frequency *= _lacunarity;
@@ -74,7 +75,7 @@ JarNoise::Sample JarNoise::sample(const glm::dvec3 &position, float broadWavelen
             float f = frequency;
             for (int q = o; q < octaves && groupSize < Group; ++q, f *= _lacunarity)
             {
-                if (minWavelength > 0.0f && f * minWavelength > 1.0f)
+                if (minWavelength > 0.0f && f * minWavelength > 0.5f)
                     continue;
                 px[groupSize] = p.x * double(f);
                 py[groupSize] = p.y * double(f);
@@ -114,6 +115,15 @@ JarNoise::Sample JarNoise::sample(const glm::dvec3 &position, float broadWavelen
         }
         else if (keep)
             broad += weight * amplitude * g;
+        // Fading out from four samples per wavelength to two, so a level of
+        // detail more or less changes the shape gradually.
+        if (minWavelength > 0.0f)
+        {
+            const float fade = std::clamp((0.5f - frequency * minWavelength) / 0.25f, 0.0f, 1.0f);
+            const float mean = _fractal == FRACTAL_RIDGED ? RidgedOctaveMean : 0.0f;
+            n = mean + (n - mean) * fade;
+            g *= fade;
+        }
         sum += amplitude * n;
         gradient += amplitude * g;
         norm += amplitude;

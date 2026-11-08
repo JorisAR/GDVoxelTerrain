@@ -134,6 +134,40 @@ glm::vec3 StitchedSurfaceNets::project_to_volume_sdf(glm::vec3 point, glm::vec3 
     return point;
 }
 
+glm::vec3 StitchedSurfaceNets::onto_surface(const glm::vec3 &vertex, const std::vector<int> &neighbours,
+                                            const glm::vec3 &normal) const
+{
+    if (_sdf == nullptr || _cubicVoxels || _voxelSize <= 0.0f || glm::dot(normal, normal) < 1e-8f)
+        return vertex;
+    glm::vec3 lo(std::numeric_limits<float>::max()), hi(std::numeric_limits<float>::lowest());
+    for (int i = 0; i < 8; ++i)
+    {
+        const VoxelOctreeNode *n = _meshChunk.nodes[neighbours[i]];
+        if (n->has_normal())
+            return vertex; // edited: its samples are exact, keep its features
+        lo = glm::min(lo, n->_center);
+        hi = glm::max(hi, n->_center);
+    }
+    const float cell = hi.x - lo.x;
+    if (cell < ProjectCells * _voxelSize)
+        return vertex;
+    const JarSignedDistanceField::DetailScope detail(cell);
+    const glm::vec3 n = glm::normalize(normal);
+    // In the cell's frame (its lowest corner, on the grid): the same numbers
+    // in every chunk that has the cell, so they all move it alike (from the
+    // chunk's own origin, rounding differed and opened LOD seams).
+    const glm::vec3 rel = vertex - (lo - _origin); // exact: vertex was rounded in this frame
+    glm::vec3 offset(0.0f);
+    for (int step = 0; step < 2; ++step)
+    {
+        const float d = _sdf->distance(lo + rel + offset);
+        offset -= d * n;
+        if (glm::length(offset) > cell)
+            return vertex; // no surface nearby along it: leave it
+    }
+    return from_cell(rel + offset, lo);
+}
+
 glm::vec3 StitchedSurfaceNets::place_dual_contouring_vertex(const std::vector<int> &neighbours,
                                                              glm::vec3 &averageNormal, uint16_t edgeMask)
 {
@@ -336,6 +370,8 @@ void StitchedSurfaceNets::create_vertex(const int cell, const std::vector<int> &
         if (glm::dot(exactNormal, exactNormal) > 0.5f)
             normal = exactNormal; // exact surface normal instead of the value-difference estimate
     }
+    if (!_cubicVoxels)
+        vertexPosition = onto_surface(vertexPosition, neighbours, normal);
 
     _cells[cell].vertex = _verts.size();
     _sharp.push_back(_dualContouring && _lastVertexSharp ? 1 : 0);
@@ -699,6 +735,7 @@ void StitchedSurfaceNets::create_component_vertices(const int cell, const std::v
             if (glm::dot(exactNormal, exactNormal) > 0.5f)
                 normal = exactNormal;
         }
+        position = onto_surface(position, neighbours, normal);
         _sharp.push_back(_dualContouring && _lastVertexSharp ? 1 : 0);
         _sharpPlanes.push_back(_dualContouring && _lastVertexSharp ? _lastPlanes : SharpPlanes());
         _verts.push_back({position.x, position.y, position.z});

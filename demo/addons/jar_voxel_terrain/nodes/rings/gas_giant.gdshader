@@ -143,7 +143,7 @@ void fragment() {
 			color = mix(color, color_light, collar * 0.6 * great_spot.w);
 		}
 		// Poles: bluer, smoother.
-		color = mix(color, color_polar, smoothstep(polar_latitude, polar_latitude + 0.12, abs(lat)));
+		color = mix(color, color_polar, smoothstep(polar_latitude - 0.08, polar_latitude + 0.16, abs(lat) + (streak - 0.5) * 0.08));
 
 		// Light: Minnaert limb darkening, the rings' shadow, a soft terminator.
 		vec3 to_eye = normalize(CAMERA_POSITION_WORLD - world_position);

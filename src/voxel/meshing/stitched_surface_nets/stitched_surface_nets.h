@@ -121,6 +121,14 @@ class StitchedSurfaceNets
     std::shared_ptr<SampleGradients> _newGradients;
     glm::vec3 gradient_at(int node_id);
     glm::vec3 project_to_volume_sdf(glm::vec3 point, glm::vec3 &normal) const;
+    // A coarse cell's vertex moved onto the volume SDF's surface along
+    // `normal`: on a planet, the planes of a few cells across a curved surface
+    // meet far above it (cell^2 / 2R: a kilometer for 38 km cells on a 600 km
+    // planet), which put snow and seas in a pattern of the mesh. Only
+    // untouched cells of at least ProjectCells voxels; depends on the cell
+    // alone, so every chunk with the cell moves it alike.
+    static constexpr float ProjectCells = 4.0f;
+    glm::vec3 onto_surface(const glm::vec3 &vertex, const std::vector<int> &neighbours, const glm::vec3 &normal) const;
     // Returns NaN if no dual contouring position fits the cell. `normal` gets the
     // average surface normal of the cell's samples (exact, for shading).
     glm::vec3 place_dual_contouring_vertex(const std::vector<int> &neighbours, glm::vec3 &normal,

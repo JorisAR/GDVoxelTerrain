@@ -73,7 +73,7 @@ roughness = 0.8
 [sub_resource type="ShaderMaterial" id="CloudMaterial"]
 render_priority = 50
 shader = ExtResource("30_clouds")
-shader_parameter/coverage = 0.38
+shader_parameter/coverage = 0.3
 shader_parameter/weather_size = 40000.0
 shader_parameter/latitude_bands = 0.6
 shader_parameter/cloud_size = 1800.0

@@ -82,15 +82,28 @@ uniform float detail_distance = 120.0;
 uniform float normal_strength : hint_range(0.0, 2.0) = 1.0;
 group_uniforms;
 
+// Height above sea level of a volume-space position.
+float jar_height_at(vec3 position) {
+	vec3 to_center = position - jar_up_center.xyz;
+	return jar_up_axis.w > 0.5 ? length(to_center) - jar_up_center.w : dot(to_center, jar_up_axis.xyz) - jar_up_center.w;
+}
+
 varying vec3 jar_position;   // volume space (large: fine for coarse things only)
 varying flat vec3 jar_chunk; // volume space, the chunk's center
 varying vec3 jar_local;      // from the chunk's center (small: precise)
 varying vec3 jar_normal;     // volume space
 varying vec4 jar_biomes;     // weights of biomes 0-3
+// Height above sea level, exact at the vertices and interpolated: on coarse
+// LODs a flat triangle's middle sags far below the sphere (300 m for 38 km
+// cells on a 600 km planet), and heights from the pixel's position put
+// shores, snow and seabed in a pattern of the mesh instead of the terrain.
+varying float jar_height;
 
 // Use in vertex(): fills the varyings above (varyings may only be written in
 // the stage functions themselves).
-#define JAR_VERTEX jar_chunk = (jar_world_to_volume * MODEL_MATRIX[3]).xyz; jar_local = VERTEX; jar_position = jar_chunk + VERTEX; jar_normal = NORMAL; jar_biomes = CUSTOM1;
+#define JAR_VERTEX jar_chunk = (jar_world_to_volume * MODEL_MATRIX[3]).xyz; jar_local = VERTEX; jar_position = jar_chunk + VERTEX; jar_normal = NORMAL; jar_biomes = CUSTOM1; jar_height = jar_height_at(jar_position);
+// Use in fragment(): the per-pixel context (see jar_context).
+#define JAR_CONTEXT jar_context(jar_chunk, jar_local, jar_normal, jar_biomes, -VERTEX.z, jar_height)
 
 // Use at the end of fragment(), after everything else: in scaled space the
 // scene's lights are aimed at the camera, not at this body, so it is lit here
@@ -181,8 +194,9 @@ struct JarContext {
 	float pixel;    // meters a pixel covers here
 };
 
-// Use in fragment(): JarContext c = jar_context(jar_chunk, jar_local, jar_normal, jar_biomes, -VERTEX.z);
-JarContext jar_context(vec3 chunk, vec3 local, vec3 normal, vec4 biomes, float view_distance) {
+// Use in fragment(): JarContext c = JAR_CONTEXT; (`height`: above sea level,
+// see jar_height; jar_height_at(chunk + local) without the varying).
+JarContext jar_context(vec3 chunk, vec3 local, vec3 normal, vec4 biomes, float view_distance, float height) {
 	JarContext c;
 	view_distance /= jar_view_scale; // meters (scaled space draws it nearer)
 	c.biomes = biomes;
@@ -195,7 +209,7 @@ JarContext jar_context(vec3 chunk, vec3 local, vec3 normal, vec4 biomes, float v
 	bool radial = jar_up_axis.w > 0.5;
 	vec3 to_center = position - jar_up_center.xyz;
 	c.up = radial ? normalize(to_center) : jar_up_axis.xyz;
-	c.height = radial ? length(to_center) - jar_up_center.w : dot(to_center, jar_up_axis.xyz) - jar_up_center.w;
+	c.height = height;
 	vec3 w = pow(abs(c.normal), vec3(triplanar_sharpness));
 	c.triplanar = w / max(w.x + w.y + w.z, 1e-5);
 	// Noise sizes are rounded to powers of two (see jar_noise_at).

@@ -61,7 +61,7 @@ uniform float sky_strength : hint_range(0.0, 1.0) = 0.25;
 // Forward scattering: bright edges with the sun behind the clouds.
 uniform float forward : hint_range(0.0, 0.95) = 0.6;
 group_uniforms quality;
-uniform int steps : hint_range(8, 128) = 56;
+uniform int steps : hint_range(8, 160) = 96;
 uniform int light_steps : hint_range(1, 8) = 5;
 // Rays stop this far (meters); flat worlds also fade out towards it.
 uniform float max_distance = 60000.0;
@@ -102,10 +102,14 @@ float lod_for(float pixel, float size) {
 float weather(vec3 b, float pixel) {
 	vec3 q = b / weather_size;
 	float lod = lod_for(pixel, weather_size);
-	vec3 warp = textureLod(cloud_noise, q * 0.21 + 0.37, lod).gba - 0.5;
-	float w = textureLod(cloud_noise, q + warp * 0.8, lod).r * 0.65
-		+ textureLod(cloud_noise, q * 0.31 + 0.71, max(lod - 1.7, 0.0)).r * 0.35;
-	float c = coverage + (w - 0.42) * 2.2 * weather_strength;
+	vec3 warp = textureLod(cloud_noise, q * 0.21 + 0.37, max(lod - 2.2, 0.0)).gba - 0.5;
+	vec3 qw = q + warp * 0.8;
+	// Systems, and inside them clusters and gaps a tenth their size (what
+	// gives cloud fields their look from orbit), sharpened.
+	float w = textureLod(cloud_noise, qw, lod).r * 0.5
+		+ textureLod(cloud_noise, qw * 3.1 + 0.29, lod + 1.63).r * 0.3
+		+ textureLod(cloud_noise, qw * 9.7 + 0.53, lod + 3.28).r * 0.2;
+	float c = coverage + (w - 0.5) * 2.0 * weather_strength;
 	if (radial && latitude_bands > 0.0) {
 		float lat = dot(normalize(b), normalize(spin_axis));
 		float a = abs(lat);
@@ -130,9 +134,19 @@ float cloud_density(vec3 b, float h, float pixel, bool cheap) {
 	float lod = lod_for(pixel, cloud_size);
 	float n = textureLod(cloud_noise, moved / cloud_size, lod).r;
 	float shape = clamp((n * profile - (1.0 - c)) / max(c, 0.05), 0.0, 1.0);
-	// Unresolved (finer than a pixel): what the clouds there add up to.
+	// Unresolved (single clouds finer than a pixel): a pixel sees a fraction
+	// of it covered, not a thin fog over all of it. A thin fog of the same
+	// average density would be opaque through the whole layer; this one is as
+	// opaque as the covered fraction (optical depth -ln(1 - fraction) through
+	// the layer, spread like the clouds' height profile).
 	float unresolved = smoothstep(2.0, 5.0, lod);
-	shape = mix(shape, profile * c * c * 0.75, unresolved);
+	if (unresolved > 0.0) {
+		float fraction = smoothstep(0.22, 0.7, c);
+		float column = -log(1.0 - 0.96 * fraction);
+		float mean_profile = 0.55 + 0.35 * c;
+		float fog = column / ((cloud_top - cloud_bottom) * mean_profile) * profile;
+		return mix(shape * density, fog, unresolved);
+	}
 	if (shape <= 0.0)
 		return 0.0;
 	if (!cheap && erosion > 0.0) {
@@ -238,9 +252,12 @@ void fragment() {
 	float near_pixel = max(seg_a.x, 1.0) * pixel_angle;
 	if (near_pixel > cloud_size)
 		count = max(steps / 3, 12);
-	float dt = total / float(count);
+	// Steps short near the camera, longer further away (quadratic spacing):
+	// the near clouds are the ones seen in detail.
 	for (int i = 0; i < count; i++) {
-		float x = (float(i) + jitter) * dt;
+		float u = (float(i) + jitter) / float(count);
+		float x = u * u * total;
+		float dt = 2.0 * u * total / float(count) + total / float(count * count);
 		float t = x < len_a ? seg_a.x + x : seg_b.x + (x - len_a);
 		vec3 p = o + dir * t;
 		float h = layer_height(p);
@@ -256,7 +273,9 @@ void fragment() {
 		vec3 direct = vec3(0.0);
 		if (daylight > 0.0) {
 			float od = optical_depth_to_sun(p, sun, pixel);
-			float scatter = exp(-od) * phase0 + 0.5 * exp(-od * 0.25) * phase1 + 0.25 * exp(-od * 0.0625) * phase2;
+			// Octaves of 1, 1/2 and 1/4: normalized (/ 1.75) so a cloud's lit
+			// edge sends back about what it receives, as real clouds do.
+			float scatter = (exp(-od) * phase0 + 0.5 * exp(-od * 0.25) * phase1 + 0.25 * exp(-od * 0.0625) * phase2) / 1.75;
 			direct = sun_color * daylight * scatter;
 		}
 		float day = smoothstep(-0.25, 0.3, dot(up, sun));

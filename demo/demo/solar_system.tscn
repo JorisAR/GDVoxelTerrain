@@ -76,7 +76,7 @@ roughness = 0.8
 [sub_resource type="ShaderMaterial" id="CloudMaterial"]
 render_priority = 50
 shader = ExtResource("30_clouds")
-shader_parameter/coverage = 0.38
+shader_parameter/coverage = 0.3
 shader_parameter/weather_size = 40000.0
 shader_parameter/latitude_bands = 0.6
 shader_parameter/cloud_size = 1800.0
@@ -110,10 +110,10 @@ variation = 0.1
 
 [sub_resource type="ShaderMaterial" id="JupiterMaterial"]
 shader = ExtResource("42_giant")
-shader_parameter/color_light = Color(0.92, 0.86, 0.74, 1)
-shader_parameter/color_dark = Color(0.6, 0.42, 0.3, 1)
-shader_parameter/color_accent = Color(0.85, 0.56, 0.36, 1)
-shader_parameter/color_polar = Color(0.52, 0.5, 0.5, 1)
+shader_parameter/color_light = Color(0.84, 0.76, 0.62, 1)
+shader_parameter/color_dark = Color(0.52, 0.34, 0.22, 1)
+shader_parameter/color_accent = Color(0.78, 0.47, 0.28, 1)
+shader_parameter/color_polar = Color(0.5, 0.46, 0.42, 1)
 shader_parameter/band_count = 18.0
 shader_parameter/band_contrast = 0.75
 shader_parameter/turbulence = 1.1
@@ -129,7 +129,8 @@ shader = ExtResource("42_giant")
 shader_parameter/color_light = Color(0.86, 0.79, 0.6, 1)
 shader_parameter/color_dark = Color(0.7, 0.6, 0.42, 1)
 shader_parameter/color_accent = Color(0.8, 0.68, 0.48, 1)
-shader_parameter/color_polar = Color(0.5, 0.56, 0.6, 1)
+shader_parameter/color_polar = Color(0.6, 0.6, 0.56, 1)
+shader_parameter/polar_latitude = 0.9
 shader_parameter/band_count = 14.0
 shader_parameter/band_contrast = 0.35
 shader_parameter/turbulence = 0.4
@@ -138,10 +139,10 @@ shader_parameter/seed = 3
 
 [sub_resource type="ShaderMaterial" id="NeptuneMaterial"]
 shader = ExtResource("42_giant")
-shader_parameter/color_light = Color(0.5, 0.68, 0.95, 1)
-shader_parameter/color_dark = Color(0.22, 0.38, 0.8, 1)
-shader_parameter/color_accent = Color(0.85, 0.9, 1, 1)
-shader_parameter/color_polar = Color(0.32, 0.46, 0.82, 1)
+shader_parameter/color_light = Color(0.36, 0.55, 0.9, 1)
+shader_parameter/color_dark = Color(0.16, 0.3, 0.72, 1)
+shader_parameter/color_accent = Color(0.82, 0.88, 1, 1)
+shader_parameter/color_polar = Color(0.22, 0.36, 0.76, 1)
 shader_parameter/band_count = 8.0
 shader_parameter/band_contrast = 0.3
 shader_parameter/turbulence = 0.5
@@ -153,7 +154,7 @@ shader_parameter/great_spot_color = Color(0.1, 0.18, 0.45, 1)
 
 [sub_resource type="Gradient" id="NeptuneRings"]
 offsets = PackedFloat32Array(0, 0.1, 0.11, 0.515, 0.526, 0.537, 0.68, 0.69, 0.927, 0.937, 0.947, 1)
-colors = PackedColorArray(0.35, 0.3, 0.28, 0.04, 0.35, 0.3, 0.28, 0.04, 0.35, 0.3, 0.28, 0, 0.35, 0.3, 0.28, 0, 0.4, 0.35, 0.32, 0.14, 0.35, 0.3, 0.28, 0.025, 0.35, 0.3, 0.28, 0.025, 0.35, 0.3, 0.28, 0, 0.35, 0.3, 0.28, 0, 0.42, 0.36, 0.33, 0.18, 0.35, 0.3, 0.28, 0, 0.35, 0.3, 0.28, 0)
+colors = PackedColorArray(0.5, 0.46, 0.44, 0.012, 0.5, 0.46, 0.44, 0.012, 0.5, 0.46, 0.44, 0, 0.5, 0.46, 0.44, 0, 0.55, 0.5, 0.48, 0.05, 0.5, 0.46, 0.44, 0.008, 0.5, 0.46, 0.44, 0.008, 0.5, 0.46, 0.44, 0, 0.5, 0.46, 0.44, 0, 0.55, 0.5, 0.48, 0.07, 0.5, 0.46, 0.44, 0, 0.5, 0.46, 0.44, 0)
 
 [sub_resource type="Sky" id="Sky"]
 sky_material = ExtResource("15_sky")
@@ -361,13 +362,6 @@ unique_name_in_owner = true
 material = SubResource("JupiterMaterial")
 flattening = 0.065
 
-[node name="Atmosphere" type="JarBodyAtmosphere" parent="Sun/JupiterOrbit/Jupiter"]
-thickness = 0.01
-rayleigh_depth = Vector3(0.01, 0.02, 0.04)
-mie_depth = 0.01
-ozone_depth = Vector3(0, 0, 0)
-ground_albedo = Color(0.7, 0.6, 0.5, 1)
-
 [node name="SaturnOrbit" type="JarBodyOrbit" parent="Sun"]
 radius = 100000000.0
 period = 30000000.0
@@ -409,13 +403,7 @@ inner_radius = 1.65
 outer_radius = 2.6
 profile = SubResource("NeptuneRings")
 ringlets = 0.3
-
-[node name="Atmosphere" type="JarBodyAtmosphere" parent="Sun/NeptuneOrbit/Neptune"]
-thickness = 0.012
-rayleigh_depth = Vector3(0.02, 0.06, 0.15)
-mie_depth = 0.005
-ozone_depth = Vector3(0, 0, 0)
-ground_albedo = Color(0.4, 0.55, 0.9, 1)
+opacity = 0.35
 
 [node name="Player" parent="." unique_id=184981125 instance=ExtResource("14_player")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -471305.6, -236888.8, 286738)
