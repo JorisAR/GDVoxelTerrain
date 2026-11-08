@@ -3,7 +3,7 @@
 [ext_resource type="PackedScene" uid="uid://c7kqgl1k10x14" path="res://addons/jar_voxel_terrain/src/chunk.tscn" id="1_chunk"]
 [ext_resource type="Shader" path="res://addons/jar_voxel_terrain/nodes/clouds/clouds.gdshader" id="30_clouds"]
 [ext_resource type="JarTerrainSdf" uid="uid://cks8y51ikg4ew" path="res://demo/giant/giant_terrain.tres" id="2_terrain"]
-[ext_resource type="Material" path="res://demo/planet/planet_material.tres" id="3_material"]
+[ext_resource type="Material" path="res://demo/giant/giant_material.tres" id="3_material"]
 [ext_resource type="JarCraterSdf" path="res://demo/giant/giant_moon_craters.tres" id="12_moon"]
 [ext_resource type="Material" path="res://demo/planet/moon_material.tres" id="13_moon_material"]
 [ext_resource type="PackedScene" uid="uid://cupyeuv1xe20s" path="res://demo/player/player.tscn" id="14_player"]

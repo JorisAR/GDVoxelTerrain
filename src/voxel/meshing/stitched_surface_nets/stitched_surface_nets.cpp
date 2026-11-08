@@ -487,8 +487,7 @@ ChunkMeshData *StitchedSurfaceNets::generate_mesh_data(const JarVoxelVolume &ter
     PackedFloat32Array painted;
     if (!generate_arrays(meshData, painted))
         return nullptr;
-    meshData[Mesh::ARRAY_CUSTOM1] = biome_weights(meshData[Mesh::ARRAY_VERTEX], terrain.get_biome_map(),
-                                                  terrain.get_up_field(), _origin);
+    set_biome_weights(meshData, terrain.get_biome_map(), terrain.get_up_field(), _origin);
     ChunkMeshData *output = new ChunkMeshData(meshData, _chunk->get_lod(), _meshChunk.is_edge_chunk(),
                                               _chunk->get_bounds(terrain.get_voxel_size()));
     output->boundaries = _meshChunk.boundaries;
@@ -507,28 +506,35 @@ ChunkMeshData *StitchedSurfaceNets::generate_mesh_data(const JarVoxelVolume &ter
     return output;
 }
 
-PackedByteArray StitchedSurfaceNets::biome_weights(const PackedVector3Array &verts, const Ref<JarBiomeMap> &biomes,
-                                                   const UpField &up, const glm::vec3 &origin)
+void StitchedSurfaceNets::set_biome_weights(Array &meshData, const Ref<JarBiomeMap> &biomes, const UpField &up,
+                                            const glm::vec3 &origin)
 {
-    PackedByteArray custom1;
-    custom1.resize(verts.size() * 4);
-    uint8_t *w = custom1.ptrw();
+    const PackedVector3Array verts = meshData[Mesh::ARRAY_VERTEX];
+    PackedByteArray low, high;
+    low.resize(verts.size() * 4);
+    high.resize(verts.size() * 4);
+    uint8_t *wl = low.ptrw();
+    uint8_t *wh = high.ptrw();
     for (int64_t v = 0; v < verts.size(); ++v)
     {
-        float weights[4] = {1.0f, 0.0f, 0.0f, 0.0f};
+        float weights[MaxBiomes] = {1.0f};
         if (biomes.is_valid() && biomes->biome_count() > 1)
         {
             const Vector3 p = verts[v];
             const BiomeWeights b = biomes->evaluate(glm::vec3(p.x, p.y, p.z) + origin, up);
             weights[0] = 0.0f;
             for (int i = 0; i < b.count; ++i)
-                if (b.ids[i] < 4)
+                if (b.ids[i] < MaxBiomes)
                     weights[b.ids[i]] += b.weights[i];
         }
         for (int i = 0; i < 4; ++i)
-            w[4 * v + i] = uint8_t(std::clamp(weights[i], 0.0f, 1.0f) * 255.0f + 0.5f);
+        {
+            wl[4 * v + i] = uint8_t(std::clamp(weights[i], 0.0f, 1.0f) * 255.0f + 0.5f);
+            wh[4 * v + i] = uint8_t(std::clamp(weights[4 + i], 0.0f, 1.0f) * 255.0f + 0.5f);
+        }
     }
-    return custom1;
+    meshData[Mesh::ARRAY_CUSTOM1] = low;
+    meshData[Mesh::ARRAY_CUSTOM2] = high;
 }
 
 bool StitchedSurfaceNets::generate_arrays(Array &meshData, PackedFloat32Array &painted)

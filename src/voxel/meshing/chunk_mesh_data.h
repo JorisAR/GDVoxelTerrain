@@ -61,6 +61,15 @@ struct SampleGradients
 
 class JarVoxelChunk;
 
+// Vertex format of terrain meshes: CUSTOM0 holds 4 bytes of material
+// weights, CUSTOM1 and CUSTOM2 the weights of biomes 0-3 and 4-7 (RGBA8).
+inline int64_t terrain_array_format()
+{
+    return (Mesh::ARRAY_CUSTOM_RGBA8_UNORM << Mesh::ARRAY_FORMAT_CUSTOM0_SHIFT) |
+           (Mesh::ARRAY_CUSTOM_RGBA8_UNORM << Mesh::ARRAY_FORMAT_CUSTOM1_SHIFT) |
+           (Mesh::ARRAY_CUSTOM_RGBA8_UNORM << Mesh::ARRAY_FORMAT_CUSTOM2_SHIFT);
+}
+
 class ChunkMeshData
 {
   public:
@@ -75,10 +84,8 @@ class ChunkMeshData
     void upload()
     {
         uploaded.instantiate();
-        // CUSTOM0 and CUSTOM1 hold 4 bytes per vertex (materials, biome weights).
         uploaded->add_surface_from_arrays(Mesh::PRIMITIVE_TRIANGLES, mesh_array, Array(), Dictionary(),
-                                          (Mesh::ARRAY_CUSTOM_RGBA8_UNORM << Mesh::ARRAY_FORMAT_CUSTOM0_SHIFT) |
-                                              (Mesh::ARRAY_CUSTOM_RGBA8_UNORM << Mesh::ARRAY_FORMAT_CUSTOM1_SHIFT));
+                                          terrain_array_format());
     }
     PackedVector3Array collision_mesh;
     int lod;

@@ -39,13 +39,24 @@ func _test_surface() -> void:
 			worst = maxf(worst, absf(heights[k + 1] - 2.0 * heights[k] + heights[k - 1]))
 	_check("surface smooth at 600 km", worst < 0.02, "largest second difference over 6.25 cm: %.5f m" % worst)
 
-## A direction from the player's start where the planet is dry land.
+## A direction from the player's start where the planet is dry, gentle land
+## (no hill to walk into or slope for a dropped box to slide down).
 func _land(sdf: JarTerrainSdf, start: Vector3) -> Vector3:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = 3
-	for i in 2000:
+	for i in 4000:
 		var dir := (start + Vector3(rng.randf_range(-1, 1), rng.randf_range(-1, 1), rng.randf_range(-1, 1)) * 0.05 * (1 + i / 100)).normalized()
-		if sdf.sample_height(dir * sdf.radius) > 30.0:
+		var h := sdf.sample_height(dir * sdf.radius)
+		if h < 30.0:
+			continue
+		var t1 := dir.cross(Vector3.UP if absf(dir.y) < 0.9 else Vector3.RIGHT).normalized()
+		var t2 := dir.cross(t1)
+		var flat := true
+		for offset: Vector3 in [t1, -t1, t2, -t2]:
+			var p := (dir * sdf.radius + offset * 25.0).normalized() * sdf.radius
+			if absf(sdf.sample_height(p) - h) > 1.5:
+				flat = false
+		if flat:
 			return dir
 	return start
 

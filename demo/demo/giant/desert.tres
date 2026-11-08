@@ -1,0 +1,9 @@
+[gd_resource type="JarBiome" format=3]
+
+[resource]
+temperature = 0.55
+moisture = -0.7
+ground_material = 2
+cliff_material = 7
+shore_material = 2
+resource_name = "Hot desert"

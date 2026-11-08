@@ -93,7 +93,7 @@ void TerrainMaterialPalette::apply(const TypedArray<JarTerrainMaterial> &materia
     {
         const TypedArray<JarBiome> list = biomes->get_biomes();
         biomeCount = int(list.size());
-        for (int b = 0; b < std::min(biomeCount, 4); ++b)
+        for (int b = 0; b < std::min(biomeCount, 8); ++b) // meshes carry 8 biome weights
         {
             Ref<JarBiome> biome = list[b];
             if (biome.is_null())

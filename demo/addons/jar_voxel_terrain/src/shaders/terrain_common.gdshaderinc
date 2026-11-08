@@ -42,7 +42,8 @@ uniform sampler2DArray jar_normal_textures : hint_normal, filter_linear_mipmap_a
 uniform bool jar_has_albedo_textures = false;
 uniform bool jar_has_normal_textures = false;
 uniform int jar_material_count = 0;
-// Biomes (JarBiomeMap): count, and per-vertex weights of biomes 0-3 (CUSTOM1).
+// Biomes (JarBiomeMap): count, and per-vertex weights of biomes 0-3 (CUSTOM1)
+// and 4-7 (CUSTOM2).
 // Biome b's ground rule materials are in the palette at (b, 2) and (b, 3).
 uniform int jar_biome_count = 0;
 
@@ -93,6 +94,7 @@ varying flat vec3 jar_chunk; // volume space, the chunk's center
 varying vec3 jar_local;      // from the chunk's center (small: precise)
 varying vec3 jar_normal;     // volume space
 varying vec4 jar_biomes;     // weights of biomes 0-3
+varying vec4 jar_biomes_high; // weights of biomes 4-7
 // Height above sea level, exact at the vertices and interpolated: on coarse
 // LODs a flat triangle's middle sags far below the sphere (300 m for 38 km
 // cells on a 600 km planet), and heights from the pixel's position put
@@ -101,9 +103,9 @@ varying float jar_height;
 
 // Use in vertex(): fills the varyings above (varyings may only be written in
 // the stage functions themselves).
-#define JAR_VERTEX jar_chunk = (jar_world_to_volume * MODEL_MATRIX[3]).xyz; jar_local = VERTEX; jar_position = jar_chunk + VERTEX; jar_normal = NORMAL; jar_biomes = CUSTOM1; jar_height = jar_height_at(jar_position);
+#define JAR_VERTEX jar_chunk = (jar_world_to_volume * MODEL_MATRIX[3]).xyz; jar_local = VERTEX; jar_position = jar_chunk + VERTEX; jar_normal = NORMAL; jar_biomes = CUSTOM1; jar_biomes_high = CUSTOM2; jar_height = jar_height_at(jar_position);
 // Use in fragment(): the per-pixel context (see jar_context).
-#define JAR_CONTEXT jar_context(jar_chunk, jar_local, jar_normal, jar_biomes, -VERTEX.z, jar_height)
+#define JAR_CONTEXT jar_context(jar_chunk, jar_local, jar_normal, jar_biomes, jar_biomes_high, -VERTEX.z, jar_height)
 
 // Use at the end of fragment(), after everything else: in scaled space the
 // scene's lights are aimed at the camera, not at this body, so it is lit here
@@ -191,15 +193,17 @@ struct JarContext {
 	float detail;   // 0..1 fine detail, faded with distance
 	float fade;     // fine detail strength (1 near, 0 far)
 	vec4 biomes;    // weights of biomes 0-3
+	vec4 biomes_high; // weights of biomes 4-7
 	float pixel;    // meters a pixel covers here
 };
 
 // Use in fragment(): JarContext c = JAR_CONTEXT; (`height`: above sea level,
 // see jar_height; jar_height_at(chunk + local) without the varying).
-JarContext jar_context(vec3 chunk, vec3 local, vec3 normal, vec4 biomes, float view_distance, float height) {
+JarContext jar_context(vec3 chunk, vec3 local, vec3 normal, vec4 biomes, vec4 biomes_high, float view_distance, float height) {
 	JarContext c;
 	view_distance /= jar_view_scale; // meters (scaled space draws it nearer)
 	c.biomes = biomes;
+	c.biomes_high = biomes_high;
 	c.pixel = length(fwidth(local));
 	c.chunk = chunk;
 	c.local = local;
@@ -281,7 +285,7 @@ void jar_add_material(inout JarSurface s, JarContext c, int id, float w) {
 
 // Rule material of a biome: its own (palette rows 2-3), or the shader's.
 int jar_biome_material(int biome, int rule, int fallback) {
-	if (biome >= jar_biome_count || biome > 3)
+	if (biome >= jar_biome_count || biome > 7)
 		return fallback;
 	vec4 a = texelFetch(jar_palette, ivec2(biome, 2), 0);
 	float id = rule == 0 ? a.x : rule == 1 ? a.y : rule == 2 ? a.z : rule == 3 ? a.w : texelFetch(jar_palette, ivec2(biome, 3), 0).x;
@@ -305,9 +309,9 @@ void jar_add_ground(inout JarSurface s, JarContext c, float amount) {
 	float shore = 1.0 - smoothstep(shore_height - shore_blend, shore_height + shore_blend, h);
 	float peak = smoothstep(peak_height - peak_blend, peak_height + peak_blend, c.height + r * peak_blend);
 
-	int biome_count = jar_biome_count > 0 ? min(jar_biome_count, 4) : 1;
+	int biome_count = jar_biome_count > 0 ? min(jar_biome_count, 8) : 1;
 	for (int b = 0; b < biome_count; b++) {
-		float weight = jar_biome_count > 0 ? c.biomes[b] : 1.0;
+		float weight = jar_biome_count > 0 ? (b < 4 ? c.biomes[b] : c.biomes_high[b - 4]) : 1.0;
 		if (weight < 0.004)
 			continue;
 		int m_ground = jar_biome_material(b, 0, ground_material);

@@ -1283,8 +1283,7 @@ Ref<ArrayMesh> JarVoxelVolume::get_region_mesh(const AABB &region) const
     PackedFloat32Array painted;
     if (!BlockMesher::mesh(block, MesherSettings::from(*this), meshData, painted))
         return Ref<ArrayMesh>();
-    meshData[Mesh::ARRAY_CUSTOM1] = StitchedSurfaceNets::biome_weights(meshData[Mesh::ARRAY_VERTEX], _biomeMap,
-                                                                       get_up_field(), block.origin);
+    StitchedSurfaceNets::set_biome_weights(meshData, _biomeMap, get_up_field(), block.origin);
     // Vertices relative to the block -> volume space.
     PackedVector3Array vertices = meshData[Mesh::ARRAY_VERTEX];
     const Vector3 origin(block.origin.x, block.origin.y, block.origin.z);
@@ -1295,8 +1294,7 @@ Ref<ArrayMesh> JarVoxelVolume::get_region_mesh(const AABB &region) const
     Ref<ArrayMesh> mesh;
     mesh.instantiate();
     mesh->add_surface_from_arrays(Mesh::PRIMITIVE_TRIANGLES, meshData, Array(), Dictionary(),
-                                  (Mesh::ARRAY_CUSTOM_RGBA8_UNORM << Mesh::ARRAY_FORMAT_CUSTOM0_SHIFT) |
-                                      (Mesh::ARRAY_CUSTOM_RGBA8_UNORM << Mesh::ARRAY_FORMAT_CUSTOM1_SHIFT));
+                                  terrain_array_format());
     return mesh;
 }
 

@@ -91,8 +91,8 @@ std::shared_ptr<const GroundPalette> GroundPalette::build(const TypedArray<JarTe
         for (int64_t b = 0; b < list.size(); ++b)
         {
             const Ref<JarBiome> biome = list[b];
-            // The terrain shaders give the first 4 biomes their own ground.
-            const int id = biome.is_valid() && b < 4 ? biome->get_ground_material() : -1;
+            // The terrain shaders give the first 8 biomes their own ground.
+            const int id = biome.is_valid() && b < 8 ? biome->get_ground_material() : -1;
             palette->_biomes.push_back(color_of(id, palette->_fallback));
         }
     }

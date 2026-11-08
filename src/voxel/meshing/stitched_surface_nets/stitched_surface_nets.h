@@ -176,10 +176,12 @@ class StitchedSurfaceNets
     // The mesh arrays (CUSTOM1 left empty) and painted amount per vertex;
     // false if there is no surface. Runs once per instance.
     bool generate_arrays(Array &meshData, PackedFloat32Array &painted);
-    // Biome weights for biomes 0-3 per vertex (CUSTOM1, RGBA8); vertices are
-    // relative to `origin` in the volume.
-    static PackedByteArray biome_weights(const PackedVector3Array &verts, const Ref<JarBiomeMap> &biomes,
-                                         const UpField &up, const glm::vec3 &origin);
+    // Biome weights per vertex into the mesh arrays: biomes 0-3 in CUSTOM1,
+    // 4-7 in CUSTOM2 (RGBA8 each, see terrain_array_format); vertices are
+    // relative to `origin` in the volume. Biomes past MaxBiomes are not drawn.
+    static constexpr int MaxBiomes = 8;
+    static void set_biome_weights(Array &meshData, const Ref<JarBiomeMap> &biomes, const UpField &up,
+                                  const glm::vec3 &origin);
 };
 
 #endif // SURFACE_NETS_H

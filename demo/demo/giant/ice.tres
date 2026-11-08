@@ -1,0 +1,8 @@
+[gd_resource type="JarBiome" format=3]
+
+[resource]
+temperature = -1.15
+moisture = 0.0
+ground_material = 4
+shore_material = 4
+resource_name = "Polar ice"

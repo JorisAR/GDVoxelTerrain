@@ -165,8 +165,7 @@ void JarVoxelDebris::start_cut(JarVoxelVolume &volume, const IslandFinder::Islan
         PackedFloat32Array painted;
         if (BlockMesher::mesh(block, settings, meshData, painted))
         {
-            meshData[Mesh::ARRAY_CUSTOM1] =
-                StitchedSurfaceNets::biome_weights(meshData[Mesh::ARRAY_VERTEX], biomes, up, block.origin);
+            StitchedSurfaceNets::set_biome_weights(meshData, biomes, up, block.origin);
             piece->meshData = meshData;
         }
         piece->meshed = true;
@@ -184,8 +183,7 @@ void JarVoxelDebris::spawn(JarVoxelVolume &volume, Piece &piece)
     Ref<ArrayMesh> mesh;
     mesh.instantiate();
     mesh->add_surface_from_arrays(Mesh::PRIMITIVE_TRIANGLES, piece.meshData, Array(), Dictionary(),
-                                  (Mesh::ARRAY_CUSTOM_RGBA8_UNORM << Mesh::ARRAY_FORMAT_CUSTOM0_SHIFT) |
-                                      (Mesh::ARRAY_CUSTOM_RGBA8_UNORM << Mesh::ARRAY_FORMAT_CUSTOM1_SHIFT));
+                                  terrain_array_format());
     MeshInstance3D *meshInstance = memnew(MeshInstance3D);
     meshInstance->set_mesh(mesh);
     meshInstance->set_position(meshOffset);

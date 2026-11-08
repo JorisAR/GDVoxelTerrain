@@ -1,22 +1,24 @@
-[gd_resource type="JarClimateBiomeMap" format=3]
+[gd_resource type="JarClimateBiomeMap" format=3 uid="uid://b5wb1fksgm0ro"]
 
 [ext_resource type="JarBiome" uid="uid://khfaq0u8m2va" path="res://demo/planet/temperate.tres" id="1"]
 [ext_resource type="JarBiome" uid="uid://bi4h1jyrnamyk" path="res://demo/planet/tundra.tres" id="2"]
 [ext_resource type="JarBiome" uid="uid://bgo5pwo1i768t" path="res://demo/planet/steppe.tres" id="3"]
+[ext_resource type="JarBiome" path="res://demo/giant/ice.tres" id="4"]
+[ext_resource type="JarBiome" path="res://demo/giant/desert.tres" id="5"]
 
 [sub_resource type="FastNoiseLite" id="Moisture"]
 seed = 47
-frequency = 2.5e-05
+frequency = 4e-06
 fractal_octaves = 3
 
 [sub_resource type="FastNoiseLite" id="Temperature"]
 seed = 31
-frequency = 2e-05
+frequency = 5e-06
 fractal_octaves = 3
 
 [resource]
-biomes = Array[JarBiome]([ExtResource("1"), ExtResource("2"), ExtResource("3")])
 temperature_noise = SubResource("Temperature")
 moisture_noise = SubResource("Moisture")
-latitude_effect = 0.5
-temperature_lapse = 0.08
+temperature_lapse = 0.02
+latitude_effect = 1.1
+biomes = Array[JarBiome]([ExtResource("1"), ExtResource("2"), ExtResource("3"), ExtResource("4"), ExtResource("5")])

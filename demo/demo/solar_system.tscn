@@ -3,7 +3,7 @@
 [ext_resource type="PackedScene" uid="uid://c7kqgl1k10x14" path="res://addons/jar_voxel_terrain/src/chunk.tscn" id="1_chunk"]
 [ext_resource type="Shader" path="res://addons/jar_voxel_terrain/nodes/clouds/clouds.gdshader" id="30_clouds"]
 [ext_resource type="JarTerrainSdf" uid="uid://cks8y51ikg4ew" path="res://demo/giant/giant_terrain.tres" id="2_terrain"]
-[ext_resource type="Material" path="res://demo/planet/planet_material.tres" id="3_material"]
+[ext_resource type="Material" path="res://demo/giant/giant_material.tres" id="3_material"]
 [ext_resource type="JarCraterSdf" path="res://demo/giant/giant_moon_craters.tres" id="12_moon"]
 [ext_resource type="Material" path="res://demo/planet/moon_material.tres" id="13_moon_material"]
 [ext_resource type="PackedScene" uid="uid://cupyeuv1xe20s" path="res://demo/player/player.tscn" id="14_player"]
@@ -406,7 +406,7 @@ ringlets = 0.3
 opacity = 0.35
 
 [node name="Player" parent="." unique_id=184981125 instance=ExtResource("14_player")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -471305.6, -236888.8, 286738)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -454712.8, 387522.0, -59561.6)
 
 [node name="WorldEnvironment" type="WorldEnvironment" parent="." unique_id=1854622839]
 environment = SubResource("Environment")

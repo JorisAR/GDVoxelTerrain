@@ -175,7 +175,7 @@ The demos use a generated low-poly pine and rock (`demo/demo/assets/population/f
 
 A volume's `population_biome_map` decides which `JarBiome` is where. `JarBiomeMap` itself is uniform (its first biome everywhere). `JarClimateBiomeMap` uses a simple climate model (with the plugin enabled, its inspector shows the biomes on a plot: drag them): temperature from a noise, colder with height above sea level and towards a planet's poles, and moisture from a second noise. Each biome sits at a point in (temperature, moisture) space and positions belong to the biomes nearest their climate, blended smoothly, so borders follow the climate rather than a grid.
 
-A biome brings its own **ground materials** for the shader's ground rules (ground, cliff, shore, seabed, peaks; `-1` keeps the shader's). The mesher passes per-vertex weights of the first 4 biomes in `CUSTOM1`.
+A biome brings its own **ground materials** for the shader's ground rules (ground, cliff, shore, seabed, peaks; `-1` keeps the shader's). The mesher passes per-vertex weights of the first 8 biomes in `CUSTOM1` (0-3) and `CUSTOM2` (4-7).
 
 What grows where is on the layers: *Everywhere*, or a density multiplier per biome (0: it does not grow there), listed by `resource_name` from the volume's biome map. Plain nodes between the population and its layers work as folders, and saving the branch as a scene shares a setup between planets. From a script: `population.add_layer(pine, {"Temperate forest": 1.0})`.
 

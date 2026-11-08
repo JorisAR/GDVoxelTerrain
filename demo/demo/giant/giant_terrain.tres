@@ -1,5 +1,15 @@
 [gd_resource type="JarTerrainSdf" format=3 uid="uid://cks8y51ikg4ew"]
 
+[sub_resource type="JarNoise" id="HillsMask"]
+seed = 72
+frequency = 5e-05
+octaves = 2
+
+[sub_resource type="JarNoise" id="Hills"]
+seed = 71
+frequency = 0.0009
+octaves = 6
+
 [sub_resource type="JarNoise" id="MountainBelts"]
 seed = 11
 frequency = 4e-06
@@ -16,19 +26,13 @@ warp_frequency = 6e-05
 
 [sub_resource type="JarNoise" id="Continents"]
 seed = 3
-frequency = 2.73e-06
+frequency = 1.1e-06
 octaves = 12
 gain = 0.55
 
-[sub_resource type="JarNoise" id="Hills"]
-seed = 71
-frequency = 0.0009
-octaves = 6
-gain = 0.5
-
-[sub_resource type="JarNoise" id="HillsMask"]
-seed = 72
-frequency = 5e-05
+[sub_resource type="JarNoise" id="OutcropsMask"]
+seed = 74
+frequency = 0.00025
 octaves = 2
 
 [sub_resource type="JarNoise" id="Outcrops"]
@@ -36,30 +40,23 @@ seed = 73
 frequency = 0.005
 fractal_type = 2
 octaves = 3
-gain = 0.5
-
-[sub_resource type="JarNoise" id="OutcropsMask"]
-seed = 74
-frequency = 0.00025
-octaves = 2
 
 [resource]
-hills_noise = SubResource("Hills")
-hills_mask = SubResource("HillsMask")
-hills_height = 90.0
-hills_threshold = -0.6
-hills_blend = 0.5
-outcrops_noise = SubResource("Outcrops")
-outcrops_mask = SubResource("OutcropsMask")
-outcrops_height = 16.0
-outcrops_threshold = -0.15
-outcrops_blend = 0.35
 shape = 1
 radius = 600000.0
 sea_level = -5.0
 noise = SubResource("Continents")
 height = 1200.0
 depth = 2500.0
+hills_noise = SubResource("Hills")
+hills_mask = SubResource("HillsMask")
+hills_height = 90.0
+hills_threshold = -0.6
+outcrops_noise = SubResource("Outcrops")
+outcrops_mask = SubResource("OutcropsMask")
+outcrops_height = 16.0
+outcrops_threshold = -0.15
+outcrops_blend = 0.35
 mountain_noise = SubResource("Ridges")
 mountain_mask = SubResource("MountainBelts")
 mountain_height = 3000.0
