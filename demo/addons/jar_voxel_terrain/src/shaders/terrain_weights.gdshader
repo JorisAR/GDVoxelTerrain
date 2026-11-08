@@ -29,4 +29,5 @@ void fragment() {
 	jar_add_ground(s, c, 1.0 - clamp(painted, 0.0, 1.0));
 	jar_finish(s, c, MODEL_MATRIX, VIEW_MATRIX, ALBEDO, ROUGHNESS, NORMAL);
 	SPECULAR = 0.25;
+	JAR_FAR_LIGHT
 }

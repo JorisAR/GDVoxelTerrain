@@ -12,6 +12,13 @@ uniform mat3 world_to_body = mat3(1.0);
 uniform vec3 water_axis = vec3(0.0, 1.0, 0.0);
 uniform float water_level = 0.0; // radius (radial) or height along the axis
 uniform bool water_radial = true;
+// Scaled space (far away): drawn this much smaller about the camera; lengths
+// on screen are divided by it to get meters. Lit by its own star then
+// (far_sun_*): the scene's light is aimed at the camera, not at this body.
+uniform float view_scale = 1.0;
+uniform vec3 far_sun_direction = vec3(0.0, 1.0, 0.0);
+uniform vec3 far_sun_color = vec3(1.0);
+uniform vec3 far_ambient = vec3(0.0);
 
 group_uniforms color;
 uniform vec4 shallow_color : source_color = vec4(0.10, 0.45, 0.50, 1.0);
@@ -56,7 +63,7 @@ void vertex() {
 	VERTEX = p;
 	NORMAL = surface_up;
 	world_position = p;
-	body_position = world_to_body * (p - water_center);
+	body_position = world_to_body * (p - water_center) / view_scale;
 }
 
 float hash(vec3 p) {
@@ -91,7 +98,7 @@ void fragment() {
 	float h = waves(body_position, t);
 	float hx = waves(body_position + world_to_body * t1 * e, t);
 	float hz = waves(body_position + world_to_body * t2 * e, t);
-	float view_distance = length(VERTEX);
+	float view_distance = length(VERTEX) / view_scale; // meters
 	float strength = wave_strength * (1.0 - smoothstep(wave_size * 20.0, wave_size * 120.0, view_distance));
 	vec3 n = normalize(up - (t1 * (hx - h) + t2 * (hz - h)) / e * strength * wave_size * 0.2);
 	NORMAL = normalize((VIEW_MATRIX * vec4(n, 0.0)).xyz);
@@ -99,7 +106,7 @@ void fragment() {
 	// Water depth behind this pixel along the view ray.
 	float scene_ndc = texture(depth_texture, SCREEN_UV).r;
 	vec4 scene_view = INV_PROJECTION_MATRIX * vec4(SCREEN_UV * 2.0 - 1.0, scene_ndc, 1.0);
-	float scene_distance = length(scene_view.xyz / scene_view.w);
+	float scene_distance = length(scene_view.xyz / scene_view.w) / view_scale;
 	float water = max(scene_distance - view_distance, 0.0);
 
 	float deep = 1.0 - exp(-water / depth_range);
@@ -112,4 +119,21 @@ void fragment() {
 	ALPHA = clamp(max(opacity, foam) * 0.92 + 0.08, 0.0, 1.0);
 	ROUGHNESS = mix(roughness, 0.8, foam);
 	SPECULAR = 0.5;
+	if (view_scale != 1.0) {
+		// Far away: lit here by its own star (diffuse, and the sun's glint).
+		vec3 to_eye = normalize(-VERTEX);
+		vec3 l = normalize((VIEW_MATRIX * vec4(far_sun_direction, 0.0)).xyz);
+		vec3 nv = normalize(NORMAL);
+		float lambert = max(dot(nv, l), 0.0);
+		vec3 h = normalize(l + to_eye);
+		float r = max(ROUGHNESS, 0.08);
+		float a2 = r * r * r * r;
+		float nh = max(dot(nv, h), 0.0);
+		float ggx = a2 / (PI * pow(nh * nh * (a2 - 1.0) + 1.0, 2.0));
+		float fresnel = 0.02 + 0.98 * pow(1.0 - max(dot(nv, to_eye), 0.0), 5.0);
+		EMISSION = ALBEDO * (far_sun_color * lambert + far_ambient) + far_sun_color * ggx * fresnel * lambert * 0.25;
+		ALBEDO = vec3(0.0);
+		SPECULAR = 0.0;
+		ROUGHNESS = 1.0;
+	}
 }

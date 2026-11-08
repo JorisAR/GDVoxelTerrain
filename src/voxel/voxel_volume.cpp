@@ -11,6 +11,10 @@
 #include "voxel_chunk.h"
 #include "floating_origin.h"
 #include "voxel_universe.h"
+#include "celestial_body.h"
+#include "body_layer.h"
+#include <godot_cpp/classes/camera3d.hpp>
+#include <godot_cpp/classes/viewport.hpp>
 #include "job_system.h"
 #include "voxel_stats.h"
 #include <chrono>
@@ -1075,6 +1079,7 @@ void JarVoxelVolume::process()
             FloatingOrigin::update_without_universe(this);
     if (_materialsDirty && _voxelRoot)
         rebuild_materials();
+    update_far_view();
     update_shader_frame();
     _voxelLod.track_viewers(*this, get_process_delta_time());
     {
@@ -1541,12 +1546,84 @@ void JarVoxelVolume::rebuild_materials()
     apply_rendering_to_chunks();
 }
 
+void JarVoxelVolume::update_far_view()
+{
+    JarFarView view;
+    const JarVoxelUniverse *universe = JarVoxelUniverse::get_singleton();
+    Viewport *viewport = is_inside_tree() ? get_viewport() : nullptr;
+    const Camera3D *camera = viewport ? viewport->get_camera_3d() : nullptr;
+    if (universe && universe->has_bodies() && camera && !is_previewing())
+    {
+        auto *body = Object::cast_to<JarCelestialBody>(ObjectDB::get_instance(_farBody));
+        if (body == nullptr || body->get_terrain() != this)
+        {
+            body = nullptr;
+            for (Node *n = get_parent(); n != nullptr && body == nullptr; n = n->get_parent())
+                if (auto *candidate = Object::cast_to<JarCelestialBody>(n); candidate && candidate->get_terrain() == this)
+                    body = candidate;
+            _farBody = body ? body->get_instance_id() : 0;
+        }
+        if (body)
+        {
+            const JarCelestialBody::Frame frame = body->get_frame();
+            if (frame.radial)
+            {
+                // Its size for scaled space: the sea level and room for
+                // mountains (within the volume's cube).
+                body->extend_view_radius(std::min(frame.seaLevel * 1.05f, _extent * 0.5f * float(std::sqrt(3.0))));
+                view = universe->get_far_view(body, camera);
+            }
+        }
+    }
+    const bool wasScaled = _farScaled;
+    _farView = view;
+    _farScaled = view.is_scaled();
+    if (!_farScaled && !wasScaled)
+        return;
+    // Each shown chunk's mesh instance, relative to its chunk, so that the
+    // chunk lands where the far view draws it: chunk^-1 * view * chunk.
+    for (int i = 0; i < get_child_count(); ++i)
+        if (auto *chunk = Object::cast_to<JarVoxelChunk>(get_child(i)); chunk && (!_farScaled || chunk->is_visible()))
+            place_far(*chunk);
+    if (const Ref<ShaderMaterial> material = _runtimeMaterial; material.is_valid())
+    {
+        material->set_shader_parameter("jar_view_scale", view.scale);
+        if (_farScaled)
+        {
+            Vector3 direction, color, ambient;
+            JarBodyLayer::far_light(this, get_global_transform().xform(Vector3(get_up_field().center.x, get_up_field().center.y, get_up_field().center.z)), direction, color, ambient);
+            material->set_shader_parameter("jar_far_sun_direction", direction);
+            material->set_shader_parameter("jar_far_sun_color", color);
+            material->set_shader_parameter("jar_far_ambient", ambient);
+        }
+    }
+}
+
+void JarVoxelVolume::place_far(JarVoxelChunk &chunk) const
+{
+    MeshInstance3D *mesh = chunk.get_mesh_instance();
+    if (mesh == nullptr)
+        return;
+    if (!_farScaled)
+    {
+        if (mesh->get_transform() != Transform3D())
+            mesh->set_transform(Transform3D());
+        return;
+    }
+    const Transform3D global = chunk.get_global_transform();
+    mesh->set_transform(global.affine_inverse() * _farView.transform() * global);
+}
+
 void JarVoxelVolume::update_shader_frame(bool force)
 {
     const Ref<ShaderMaterial> material = _runtimeMaterial;
     if (material.is_null() || !is_inside_tree())
         return;
-    const Transform3D toVolume = get_global_transform().affine_inverse();
+    // In scaled space the chunks are drawn through the far view: undo it first.
+    const Transform3D toVolume =
+        _farScaled ? get_global_transform().affine_inverse() *
+                         Transform3D(Basis().scaled(Vector3(1, 1, 1) / _farView.scale), _farView.eye * (1.0f - 1.0f / _farView.scale))
+                   : get_global_transform().affine_inverse();
     const UpField up = get_up_field();
     const Vector4 center(up.center.x, up.center.y, up.center.z, up.sea_level);
     const Vector4 axis(up.axis.x, up.axis.y, up.axis.z, float(up.mode));

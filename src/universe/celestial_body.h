@@ -61,6 +61,9 @@ class JarCelestialBody : public Node3D
     // pose relative to the carrier (or in the universe) at time 0.
     Node3D *_carrier = nullptr;
     DTransform _rest;
+    // How far from the center anything of it is drawn (its layers and terrain
+    // raise it as they update): its size for scaled space.
+    mutable float _viewRadius = 0.0f;
 
   protected:
     static void _bind_methods();
@@ -118,6 +121,10 @@ class JarCelestialBody : public Node3D
     // Not on an orbit: infinite.
     float get_sphere_of_influence() const;
     JarVoxelVolume *get_volume() const { return _volume; }
+    // Everything drawn of the body is within this distance of its center (0:
+    // nothing drawn yet). Layers and the terrain extend it as they update.
+    float get_view_radius() const { return _viewRadius; }
+    void extend_view_radius(float radius) const { _viewRadius = std::max(_viewRadius, radius); }
     void set_volume(JarVoxelVolume *value) { _volume = value; }
 };
 

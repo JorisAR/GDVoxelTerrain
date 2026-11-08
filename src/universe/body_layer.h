@@ -3,6 +3,7 @@
 
 #include "atmosphere_model.h"
 #include "celestial_body.h"
+#include "voxel_universe.h"
 #include <algorithm>
 #include <godot_cpp/classes/camera3d.hpp>
 #include <godot_cpp/classes/directional_light3d.hpp>
@@ -52,19 +53,25 @@ class JarBodyLayer : public Node3D
     // is aimed at the camera.
     Vector3 star_direction_at(const Vector3 &global_position);
 
-    // Where to draw something around a body center: beyond the camera's far
-    // plane it is drawn in scaled space, smaller and nearer by `scale` about
-    // the camera, which looks exactly the same (directions from the camera do
-    // not change) and keeps it inside the far plane. Centers go to between
-    // 0.6 and 0.85 of the far distance, in the order of their real distance.
-    struct FarView
+    // How the body is drawn for the camera (JarVoxelUniverse::get_far_view):
+    // far away, smaller and nearer by `scale` about the camera (scaled space),
+    // which looks the same and keeps it inside the far plane. `center`: where
+    // its center is drawn.
+    struct FarView : JarFarView
     {
         Vector3 center;
-        float scale = 1.0f;
     };
-    FarView far_view(const Vector3 &center) const;
+    FarView far_view(const JarCelestialBody &body) const;
+    // Far away a body is lit by its own star here (far_sun_direction,
+    // far_sun_color, far_ambient), see far_light.
+    void apply_far_light(const Ref<ShaderMaterial> &material, const Vector3 &at);
 
   public:
+    // The light at `at` for something drawn in scaled space, which the scene's
+    // lights do not light correctly (the star's light is aimed at the camera):
+    // the direction towards the star there, its light above any air (color
+    // times energy) and the starlight floor of the scene's ambient light.
+    static void far_light(Node *context, const Vector3 &at, Vector3 &direction, Vector3 &color, Vector3 &ambient);
     // The body this layer belongs to: the nearest JarCelestialBody above it.
     JarCelestialBody *get_body() const;
     // The light used as the sun: `sun`, or the first DirectionalLight3D in the scene.
@@ -154,7 +161,10 @@ class JarBodyAtmosphere : public JarBodyLayer
     bool _ownsAmbient = false;
 
     AtmosphereParams params_for(const JarCelestialBody::Frame &frame) const;
-    void apply_air(const Ref<ShaderMaterial> &material, const JarCelestialBody::Frame &frame) const;
+    // In scaled space (`view`): centered on its drawn center, every length
+    // times the scale and every per-meter coefficient divided by it, so the
+    // same shader draws the same picture.
+    void apply_air(const Ref<ShaderMaterial> &material, const FarView &view) const;
     void apply_ambient(const JarCelestialBody &body);
 
   protected:

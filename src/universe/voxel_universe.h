@@ -14,6 +14,10 @@ using namespace godot;
 
 class JarCelestialBody;
 class JarBodyOrbit;
+namespace godot
+{
+class Camera3D;
+}
 
 // Coordinates celestial bodies (JarCelestialBody) at runtime: one clock for
 // everything that moves (orbits, spins), gravity summed over all bodies, and
@@ -85,6 +89,17 @@ class JarVoxelUniverse : public Object
     Vector3 point_velocity(const DTransform &now, const DTransform &before, const Vector3 &position) const;
     Vector3 angular_velocity(const DTransform &now, const DTransform &before) const;
     double tick_time() const; // universe seconds per physics tick
+    // Scaled space for the current frame (see get_far_view).
+    struct FarCache
+    {
+        uint64_t frame = UINT64_MAX;
+        uint64_t camera = 0;
+        Vector3 eye;
+        float far = 0.0f;
+        std::unordered_map<uint64_t, float> scales; // body instance id -> scale (missing: 1)
+    };
+    mutable FarCache _far;
+    void compute_far_views(const Camera3D *camera) const;
 
   protected:
     static void _bind_methods();
@@ -162,6 +177,14 @@ class JarVoxelUniverse : public Object
     // The body the scene is currently relative to: its center stands still,
     // and near it (its rotating frame height) it does not turn either.
     JarCelestialBody *get_frame_anchor() const;
+    // How `body` is drawn for `camera` (see JarFarView). Bodies whose nearest
+    // point is beyond ScaledFrom of the far plane are scaled; each gets its own
+    // depth band between ScaledFrom and ScaledTo of the far plane, in the order
+    // of their real distance, so they hide each other correctly and stay
+    // behind everything drawn as it is. The scale only changes depth, never
+    // the picture, so bands may change from frame to frame.
+    JarFarView get_far_view(const JarCelestialBody *body, const Camera3D *camera) const;
+    static constexpr float ScaledFrom = 0.35f, ScaledTo = 0.98f;
     bool is_frame_rotating() const { return _frameRotating; }
     // Signals: anchor_changed(previous, current) when the anchor body changes;
     // frame_changed(anchor, rotating) on every switch (also between turning

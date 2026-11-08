@@ -276,23 +276,54 @@ Vector3 JarBodyLayer::star_direction_at(const Vector3 &global_position)
     return Vector3(0, 1, 0);
 }
 
-JarBodyLayer::FarView JarBodyLayer::far_view(const Vector3 &center) const
+void JarBodyLayer::far_light(Node *context, const Vector3 &at, Vector3 &direction, Vector3 &color, Vector3 &ambient)
 {
-    FarView view{center, 1.0f};
+    direction = Vector3(0, 1, 0);
+    color = Vector3(1, 1, 1);
+    ambient = Vector3();
+    SceneTree *tree = context && context->is_inside_tree() ? context->get_tree() : nullptr;
+    if (tree == nullptr)
+        return;
+    const TypedArray<Node> stars = tree->get_nodes_in_group(JarBodyLight::StarGroup);
+    if (!stars.is_empty())
+        if (const auto *light = Object::cast_to<DirectionalLight3D>(stars[0]))
+        {
+            direction = light->get_global_basis().get_column(2).normalized();
+            if (light->has_meta(StarLayerMeta))
+                if (const auto *layer = Object::cast_to<JarBodyLight>(ObjectDB::get_instance(uint64_t(light->get_meta(StarLayerMeta)))))
+                    direction = layer->get_direction_at(at);
+            const Color base = light->has_meta(BaseColorMeta) ? Color(light->get_meta(BaseColorMeta)) : light->get_color();
+            const float energy = light->get_param(Light3D::PARAM_ENERGY);
+            color = Vector3(base.r, base.g, base.b) * energy;
+        }
+    if (Viewport *viewport = context->get_viewport())
+        if (const Ref<World3D> world = viewport->find_world_3d(); world.is_valid() && world->get_environment().is_valid())
+        {
+            const Ref<Environment> environment = world->get_environment();
+            const Color floor = environment->has_meta(AmbientFloorMeta)
+                                    ? Color(environment->get_meta(AmbientFloorMeta))
+                                    : environment->get_ambient_light_color() * environment->get_ambient_light_energy();
+            ambient = Vector3(floor.r, floor.g, floor.b);
+        }
+}
+
+void JarBodyLayer::apply_far_light(const Ref<ShaderMaterial> &material, const Vector3 &at)
+{
+    Vector3 direction, color, ambient;
+    far_light(this, at, direction, color, ambient);
+    material->set_shader_parameter("far_sun_direction", direction);
+    material->set_shader_parameter("far_sun_color", color);
+    material->set_shader_parameter("far_ambient", ambient);
+}
+
+JarBodyLayer::FarView JarBodyLayer::far_view(const JarCelestialBody &body) const
+{
+    FarView view;
     Viewport *viewport = is_inside_tree() ? get_viewport() : nullptr;
     const Camera3D *camera = viewport ? viewport->get_camera_3d() : nullptr;
-    if (camera == nullptr)
-        return view;
-    const Vector3 eye = camera->get_global_position();
-    const float far = camera->get_far();
-    const float distance = eye.distance_to(center);
-    constexpr float Start = 0.6f, Room = 0.25f;
-    if (distance <= Start * far)
-        return view;
-    // Continuous at the start, approaching Start + Room far away.
-    const float drawn = far * (Start + Room * (1.0f - Start * far / distance));
-    view.scale = drawn / distance;
-    view.center = eye + (center - eye) * view.scale;
+    if (const JarVoxelUniverse *universe = JarVoxelUniverse::get_singleton(); universe && camera)
+        static_cast<JarFarView &>(view) = universe->get_far_view(&body, camera);
+    view.center = view.to_view(body.get_frame().center);
     return view;
 }
 
@@ -569,18 +600,37 @@ void JarBodyWater::update(const JarCelestialBody &body)
         return;
     const JarCelestialBody::Frame frame = body.get_frame();
     const float level = frame.seaLevel + _levelOffset;
+    if (frame.radial)
+        body.extend_view_radius(level);
+    const FarView view = frame.radial ? far_view(body) : FarView{};
+    const bool scaled = frame.radial && view.is_scaled();
     for (const Ref<ShaderMaterial> &material : {get_active_material(), get_active_underwater_material()})
     {
-        material->set_shader_parameter("water_center", frame.center);
+        material->set_shader_parameter("water_center", scaled ? view.center : frame.center);
         material->set_shader_parameter("water_axis", frame.axis);
-        material->set_shader_parameter("water_level", level);
+        material->set_shader_parameter("water_level", scaled ? level * view.scale : level);
         material->set_shader_parameter("water_radial", frame.radial);
+        material->set_shader_parameter("view_scale", scaled ? view.scale : 1.0f);
         // Waves and foam move with the body when it turns in the scene.
         material->set_shader_parameter("world_to_body", body.get_global_basis().orthonormalized().transposed());
     }
+    if (scaled)
+        apply_far_light(get_active_material(), frame.center);
     const Vector3 at = eye(frame);
     _fog->set_global_position(at);
-    if (frame.radial)
+    if (scaled)
+    {
+        // Far away: only the sphere, scaled.
+        if (!Math::is_equal_approx(_sphereRadius, level))
+        {
+            _far->set_mesh(make_sphere(level, 192, 96));
+            _sphereRadius = level;
+        }
+        _far->set_global_transform(Transform3D(Basis().scaled(Vector3(view.scale, view.scale, view.scale)), view.center));
+        _near->set_visible(false);
+        set_hole(Vector3(), 0.0f);
+    }
+    else if (frame.radial)
     {
         if (!Math::is_equal_approx(_sphereRadius, level))
         {
@@ -722,18 +772,19 @@ AtmosphereParams JarBodyAtmosphere::params_for(const JarCelestialBody::Frame &fr
     return p;
 }
 
-void JarBodyAtmosphere::apply_air(const Ref<ShaderMaterial> &material, const JarCelestialBody::Frame &frame) const
+void JarBodyAtmosphere::apply_air(const Ref<ShaderMaterial> &material, const FarView &view) const
 {
     const AtmosphereParams &p = _model.params();
-    const double thickness = p.top - p.bottom;
+    const double s = view.scale;
+    const double thickness = (p.top - p.bottom) * s;
     // The model's per-meter coefficients at sea level.
     const AtmosphereModel::Medium sea = _model.medium(0.0);
-    material->set_shader_parameter("planet_center", frame.center);
-    material->set_shader_parameter("planet_radius", float(p.bottom));
-    material->set_shader_parameter("atmosphere_radius", float(p.top));
-    material->set_shader_parameter("rayleigh_scattering", DTransform::to(sea.rayleighScattering));
+    material->set_shader_parameter("planet_center", view.center);
+    material->set_shader_parameter("planet_radius", float(p.bottom * s));
+    material->set_shader_parameter("atmosphere_radius", float(p.top * s));
+    material->set_shader_parameter("rayleigh_scattering", DTransform::to(sea.rayleighScattering / s));
     material->set_shader_parameter("rayleigh_scale_height", float(p.rayleighHeight * thickness));
-    material->set_shader_parameter("mie_scattering", float(sea.mieScattering.x));
+    material->set_shader_parameter("mie_scattering", float(sea.mieScattering.x / s));
     material->set_shader_parameter("mie_scale_height", float(p.mieHeight * thickness));
     material->set_shader_parameter("mie_absorption", float(p.mieAbsorption));
     material->set_shader_parameter("mie_anisotropy", float(p.mieAnisotropy));
@@ -843,7 +894,9 @@ void JarBodyAtmosphere::update(const JarCelestialBody &body)
         _shellRadius = outer * 1.02f;
         _shell->set_mesh(make_sphere(_shellRadius, 64, 32));
     }
-    _shell->set_global_transform(Transform3D(Basis(), frame.center));
+    body.extend_view_radius(outer);
+    const FarView view = far_view(body);
+    _shell->set_global_transform(Transform3D(Basis().scaled(Vector3(view.scale, view.scale, view.scale)), view.center));
     // The tables, when the air or the planet changed (a few milliseconds).
     const AtmosphereParams params = params_for(frame);
     if (!_model.is_built() || !(params == _model.params()))
@@ -857,8 +910,12 @@ void JarBodyAtmosphere::update(const JarCelestialBody &body)
         _extinction->set_next_pass(material);
     for (const Ref<ShaderMaterial> &m : {material, _extinction})
     {
-        apply_air(m, frame);
+        apply_air(m, view);
         apply_sun(m);
+        // Seen from outside, towards the star from this planet (the light
+        // is aimed at the camera, which may be on another body).
+        if (!contains(eye(frame)))
+            m->set_shader_parameter("sun_direction", star_direction_at(frame.center));
         // The light above the atmosphere: it reddens on the way down here.
         if (DirectionalLight3D *light = find_sun(); light && light->has_meta(BaseColorMeta))
         {

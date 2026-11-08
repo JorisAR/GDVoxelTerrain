@@ -8,7 +8,19 @@ extends Node
 
 var _failures := 0
 
+signal end_of_frame
+
+var _want_end := false
+
+## Last to process (lowest priority): end_of_frame is emitted once
+## everything else processed this frame.
+func _process(_delta: float) -> void:
+	if _want_end:
+		_want_end = false
+		end_of_frame.emit()
+
 func _ready() -> void:
+	process_priority = 1000000
 	await _test_single_body()
 	await _test_two_bodies()
 	await _test_orbit_and_spin()
@@ -23,6 +35,7 @@ func _ready() -> void:
 	await _test_volume_body()
 	await _test_space_gravity_restored()
 	await _test_space_round_trip()
+	await _test_far_terrain()
 	print("Universe tests: %s" % ("ALL PASSED" if _failures == 0 else "%d FAILED" % _failures))
 	get_tree().quit(1 if _failures > 0 else 0)
 
@@ -420,7 +433,9 @@ func _test_rings() -> void:
 		var d := shell.global_position.distance_to(camera.global_position)
 		var real := giant.get_center().distance_to(camera.global_position)
 		var scale := shell.global_basis.get_scale().x
-		_check("far %s inside the far plane" % layer.get_class(), d > 0.59 * far and d < 0.86 * far, "%.0f of %.0f" % [d, far])
+		# The whole body (to the rings' outer edge) within its depth band.
+		var reach := 2.33 * 6.0e5 * scale / 6.0e5
+		_check("far %s inside the far plane" % layer.get_class(), d - reach > 0.34 * far and d + reach < 0.99 * far, "%.0f +- %.0f of %.0f" % [d, reach, far])
 		_check("far %s same size on screen" % layer.get_class(), absf(scale / d - 6.0e5 / real) < 1e-3 * 6.0e5 / real, "%f vs %f" % [scale / d * 1e6, 6.0e5 / real * 1e6])
 		_check("far %s same direction" % layer.get_class(), (shell.global_position - camera.global_position).normalized().angle_to(giant.get_center() - camera.global_position) < 1e-5)
 	var normal: Vector3 = (rings.get_child(0, true) as Node3D).global_basis.y.normalized()
@@ -646,6 +661,73 @@ func _test_space_round_trip() -> void:
 	query.exclude = [player.get_rid()]
 	var hit := volume.get_world_3d().direct_space_state.intersect_ray(query)
 	_check("space round trip: ground solid again", not hit.is_empty())
+	scene.queue_free()
+	await get_tree().process_frame
+	Engine.max_fps = 0
+
+## On the giant planet's ground (far plane 500 km) its moon (1500 km) and the
+## ringed giant are beyond the far plane: drawn in scaled space. Each moon
+## chunk lands where the far view puts it (the same direction, nearer by the
+## body's scale), the terrain shader still finds its place in the volume, and
+## the bodies keep their depth order (the moon in front of the giant).
+func _test_far_terrain() -> void:
+	Engine.max_fps = 60
+	var scene: Node = load("res://demo/giant_planet.tscn").instantiate()
+	var player: DemoPlayer = scene.get_node("Player")
+	add_child(scene)
+	while not player._spawned:
+		await get_tree().physics_frame
+	var moon_volume: JarVoxelVolume = scene.get_node("%Moon/JarVoxelVolume")
+	var start := Time.get_ticks_msec()
+	var shown := 0
+	while Time.get_ticks_msec() - start < 30000:
+		await get_tree().process_frame
+		shown = 0
+		for c in moon_volume.get_children():
+			if c is JarVoxelChunk and c.visible:
+				shown += 1
+		if shown > 0 and not moon_volume.is_building() and not moon_volume.is_meshing():
+			break
+	# As drawn: after this frame's processing.
+	_want_end = true
+	await end_of_frame
+	var camera := get_viewport().get_camera_3d()
+	var eye := camera.global_position
+	var far := camera.far
+	var moon: JarCelestialBody = scene.get_node("%Moon")
+	var material: ShaderMaterial = moon_volume.get_runtime_material()
+	var s: float = material.get_shader_parameter("jar_view_scale")
+	_check("far terrain: moon beyond the far plane", moon.get_center().distance_to(eye) > far, "%.0f km, far %.0f km" % [moon.get_center().distance_to(eye) / 1000.0, far / 1000.0])
+	_check("far terrain: moon in scaled space", s < 1.0 and shown > 0, "scale %f, %d chunks" % [s, shown])
+	var to_volume: Projection = material.get_shader_parameter("jar_world_to_volume")
+	var worst_place := 0.0
+	var worst_volume := 0.0
+	var deepest := 0.0
+	var nearest := INF
+	for c in moon_volume.get_children():
+		if not (c is JarVoxelChunk and c.visible):
+			continue
+		var real: Vector3 = c.global_position
+		var drawn: Vector3 = c.get_mesh_instance().global_position
+		var expected := eye + (real - eye) * s
+		worst_place = maxf(worst_place, drawn.distance_to(expected) / expected.distance_to(eye))
+		var v := to_volume * Vector4(drawn.x, drawn.y, drawn.z, 1.0)
+		worst_volume = maxf(worst_volume, Vector3(v.x, v.y, v.z).distance_to(c.position))
+		deepest = maxf(deepest, drawn.distance_to(eye))
+		nearest = minf(nearest, drawn.distance_to(eye))
+	_check("far terrain: chunks drawn along their direction, scaled", worst_place < 1e-4, "%f" % worst_place)
+	# Float rounding of a 1.5e6 m position divided by the scale: meters, once per chunk.
+	_check("far terrain: shader finds the chunks in the volume", worst_volume < 200.0, "%.1f m" % worst_volume)
+	_check("far terrain: inside the far plane", nearest > 0.3 * far and deepest < far, "%.0f..%.0f of %.0f" % [nearest, deepest, far])
+	var giant: JarCelestialBody = scene.get_node("Sun/RingedOrbit/RingedGiant")
+	var giant_shell: MeshInstance3D = scene.get_node("Sun/RingedOrbit/RingedGiant/Rings").get_child(0, true)
+	var giant_near := giant_shell.global_position.distance_to(eye) - giant_shell.global_basis.get_scale().x * 2.4
+	_check("far terrain: the moon in front of the giant", deepest < giant_near, "moon to %.0f, giant from %.0f" % [deepest, giant_near])
+	var planet_material: ShaderMaterial = scene.get_node("%Planet/JarVoxelVolume").get_runtime_material()
+	var planet_scale = planet_material.get_shader_parameter("jar_view_scale")
+	_check("far terrain: the ground under the camera as it is", planet_scale == null or planet_scale == 1.0, str(planet_scale))
+	for shader in ["res://addons/jar_voxel_terrain/src/shaders/terrain_weights.gdshader", "res://addons/jar_voxel_terrain/src/shaders/terrain_split.gdshader", "res://addons/jar_voxel_terrain/src/shaders/terrain_indexed.gdshader", "res://addons/jar_voxel_terrain/nodes/water/water.gdshader"]:
+		_check("compiles " + shader.get_file(), (load(shader) as Shader).get_shader_uniform_list().size() > 5)
 	scene.queue_free()
 	await get_tree().process_frame
 	Engine.max_fps = 0

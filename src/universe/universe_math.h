@@ -80,4 +80,22 @@ struct DTransform
     }
 };
 
+// Scaled space: a body too far for the camera's far plane is drawn smaller and
+// nearer, scaled by `scale` about the camera (`eye`). That looks exactly the
+// same (directions from the camera do not change), but keeps it inside the
+// far plane. Everything of one body (terrain, water, atmosphere, clouds,
+// rings) uses the same view, so it all lines up.
+struct JarFarView
+{
+    Vector3 eye;
+    float scale = 1.0f;
+    bool is_scaled() const { return scale != 1.0f; }
+    // Where a real (global) position is drawn.
+    Vector3 to_view(const Vector3 &p) const { return eye + (p - eye) * scale; }
+    // The real position of a drawn one.
+    Vector3 to_real(const Vector3 &p) const { return eye + (p - eye) / scale; }
+    // to_view as a transform (a homothety about the eye).
+    Transform3D transform() const { return Transform3D(Basis().scaled(Vector3(scale, scale, scale)), eye * (1.0f - scale)); }
+};
+
 #endif // JAR_UNIVERSE_MATH_H

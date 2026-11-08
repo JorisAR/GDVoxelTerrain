@@ -373,6 +373,7 @@ void JarVoxelChunk::hide_multi_mesh_instance(MultiMeshInstance3D *instance)
 void JarVoxelChunk::apply_rendering(const JarVoxelVolume &terrain)
 {
     apply_terrain_rendering(mesh_instance, terrain);
+    terrain.place_far(*this);
 }
 
 void JarVoxelChunk::apply_terrain_rendering(GeometryInstance3D *instance, const JarVoxelVolume &terrain)

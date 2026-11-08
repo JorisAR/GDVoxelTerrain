@@ -10,6 +10,7 @@
 #include "bounds.h"
 #include "ground_palette.h"
 #include "up_field.h"
+#include "universe_math.h"
 #include "voxel_lod.h"
 #include "voxel_octree_node.h"
 #include "volume_extension.h"
@@ -87,6 +88,20 @@ class JarVoxelVolume : public Node3D
     void update_shader_frame(bool force = false);
     Transform3D _shaderWorldToVolume;
     Vector4 _shaderUpCenter, _shaderUpAxis;
+    // Scaled space (JarVoxelUniverse::get_far_view): far from the camera the
+    // chunks are drawn smaller and nearer about it, each mesh instance carrying
+    // the scale; the shader's world to volume transform undoes it.
+    JarFarView _farView;
+    bool _farScaled = false; // the chunks carry a far view's transform
+    uint64_t _farBody = 0;   // instance id of the body this is the terrain of
+    void update_far_view();
+
+  public:
+    // Places a chunk's mesh instance for the current far view (identity when
+    // not in scaled space). Chunks call it when they are (re)meshed.
+    void place_far(JarVoxelChunk &chunk) const;
+
+  private:
 
     std::atomic<bool> _isBuilding{false};
     // How long a frame may wait for an edit to be applied and meshed, so small

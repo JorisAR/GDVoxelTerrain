@@ -10,6 +10,12 @@
 //                        is relative to it)
 //   jar_up_center        xyz: up center, w: sea level (height along the axis, or radius)
 //   jar_up_axis          xyz: up axis, w: mode (0 axis, 1 radial)
+//   jar_view_scale       1, or in scaled space (a body too far for the far
+//                        plane, drawn smaller about the camera) its scale; the
+//                        chunks' transforms then include it and
+//                        jar_world_to_volume undoes it
+//   jar_far_sun_*, jar_far_ambient  in scaled space, the light of the body's
+//                        own star (JAR_FAR_LIGHT)
 // Set per volume from its JarTerrainMaterials (see TerrainMaterialPalette):
 //   jar_palette       256x2: (id, 0) = linear albedo, roughness;
 //                            (id, 1) = 1 / texture size, albedo layer, normal layer, variation
@@ -25,6 +31,10 @@
 uniform mat4 jar_world_to_volume = mat4(1.0);
 uniform vec4 jar_up_center = vec4(0.0);
 uniform vec4 jar_up_axis = vec4(0.0, 1.0, 0.0, 0.0);
+uniform float jar_view_scale = 1.0;
+uniform vec3 jar_far_sun_direction = vec3(0.0, 1.0, 0.0);
+uniform vec3 jar_far_sun_color = vec3(1.0);
+uniform vec3 jar_far_ambient = vec3(0.0);
 
 uniform sampler2D jar_palette : filter_nearest;
 uniform sampler2DArray jar_albedo_textures : source_color, filter_linear_mipmap_anisotropic, repeat_enable;
@@ -81,6 +91,11 @@ varying vec4 jar_biomes;     // weights of biomes 0-3
 // Use in vertex(): fills the varyings above (varyings may only be written in
 // the stage functions themselves).
 #define JAR_VERTEX jar_chunk = (jar_world_to_volume * MODEL_MATRIX[3]).xyz; jar_local = VERTEX; jar_position = jar_chunk + VERTEX; jar_normal = NORMAL; jar_biomes = CUSTOM1;
+
+// Use at the end of fragment(), after everything else: in scaled space the
+// scene's lights are aimed at the camera, not at this body, so it is lit here
+// by its own star instead (diffuse; shown as emission).
+#define JAR_FAR_LIGHT if (jar_view_scale != 1.0) { vec3 jar_l = normalize((VIEW_MATRIX * vec4(jar_far_sun_direction, 0.0)).xyz); EMISSION = ALBEDO * (jar_far_sun_color * max(dot(NORMAL, jar_l), 0.0) + jar_far_ambient); ALBEDO = vec3(0.0); SPECULAR = 0.0; ROUGHNESS = 1.0; METALLIC = 0.0; }
 
 // --- Noise ------------------------------------------------------------------
 
@@ -163,12 +178,15 @@ struct JarContext {
 	float detail;   // 0..1 fine detail, faded with distance
 	float fade;     // fine detail strength (1 near, 0 far)
 	vec4 biomes;    // weights of biomes 0-3
+	float pixel;    // meters a pixel covers here
 };
 
 // Use in fragment(): JarContext c = jar_context(jar_chunk, jar_local, jar_normal, jar_biomes, -VERTEX.z);
 JarContext jar_context(vec3 chunk, vec3 local, vec3 normal, vec4 biomes, float view_distance) {
 	JarContext c;
+	view_distance /= jar_view_scale; // meters (scaled space draws it nearer)
 	c.biomes = biomes;
+	c.pixel = length(fwidth(local));
 	c.chunk = chunk;
 	c.local = local;
 	vec3 position = chunk + local;
@@ -181,8 +199,11 @@ JarContext jar_context(vec3 chunk, vec3 local, vec3 normal, vec4 biomes, float v
 	vec3 w = pow(abs(c.normal), vec3(triplanar_sharpness));
 	c.triplanar = w / max(w.x + w.y + w.z, 1e-5);
 	// Noise sizes are rounded to powers of two (see jar_noise_at).
-	c.macro = jar_fbm_at(chunk, local, variation_size);
-	c.hue = jar_noise_at(chunk, local, variation_size * 2.0, 1.0, 41.0);
+	// Patches smaller than a pixel fade to their mean (far away they would
+	// only sparkle).
+	float coarse = smoothstep(0.2, 0.8, c.pixel / variation_size);
+	c.macro = coarse < 1.0 ? mix(jar_fbm_at(chunk, local, variation_size), 0.5, coarse) : 0.5;
+	c.hue = coarse < 0.5 ? mix(jar_noise_at(chunk, local, variation_size * 2.0, 1.0, 41.0), 0.5, coarse * 2.0) : 0.5;
 	c.fade = 1.0 - smoothstep(detail_distance * 0.5, detail_distance, view_distance);
 	c.detail = c.fade > 0.0 ? jar_fbm_at(chunk, local, detail_size) : 0.5;
 	return c;
@@ -260,6 +281,7 @@ void jar_add_ground(inout JarSurface s, JarContext c, float amount) {
 	if (amount < 0.004)
 		return;
 	float r = (jar_noise_at(c.chunk, c.local, rule_noise_size, 1.0, 0.0) - 0.5) * 2.0 * rule_noise;
+	r *= 1.0 - smoothstep(0.2, 0.8, c.pixel / rule_noise_size); // finer than a pixel: only sparkle
 	float h = c.height + r * max(shore_blend, 1.0) * 2.0;
 	float slope_cos = dot(c.normal, c.up) + r * 0.08;
 	float cliff_cos = cos(radians(cliff_angle));

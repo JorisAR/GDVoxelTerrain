@@ -20,4 +20,5 @@ void fragment() {
 		jar_add_material(s, c, v_material, 1.0);
 	jar_finish(s, c, MODEL_MATRIX, VIEW_MATRIX, ALBEDO, ROUGHNESS, NORMAL);
 	SPECULAR = 0.25;
+	JAR_FAR_LIGHT
 }

@@ -284,7 +284,8 @@ void JarBodyRings::update(const JarCelestialBody &body)
         _shell->set_mesh(make_annulus(_innerRadius, _outerRadius));
         _shellRadius = 1.0f;
     }
-    const FarView view = far_view(frame.center);
+    body.extend_view_radius(frame.seaLevel * _outerRadius);
+    const FarView view = far_view(body);
     const float radius = frame.seaLevel * view.scale;
     const Vector3 normal = spin_axis(body);
     _shell->set_global_transform(Transform3D(basis_with_up(normal).scaled(Vector3(radius, radius, radius)), view.center));
@@ -349,7 +350,8 @@ void JarBodyGasGiant::update(const JarCelestialBody &body)
     if (_shell == nullptr)
         return;
     const JarCelestialBody::Frame frame = body.get_frame();
-    const FarView view = far_view(frame.center);
+    body.extend_view_radius(frame.seaLevel);
+    const FarView view = far_view(body);
     const float radius = frame.seaLevel * view.scale;
     _shell->set_global_transform(Transform3D(Basis().scaled(Vector3(radius, radius, radius)), view.center));
     const Ref<ShaderMaterial> material = get_active_material();

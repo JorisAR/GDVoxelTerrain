@@ -876,3 +876,70 @@ void JarVoxelUniverseUpdater::_notification(int what)
             universe->step(this);
     }
 }
+
+// ------------------------------------------------------------- scaled space
+
+void JarVoxelUniverse::compute_far_views(const Camera3D *camera) const
+{
+    _far.frame = Engine::get_singleton()->get_process_frames();
+    _far.camera = camera->get_instance_id();
+    _far.eye = camera->get_global_position();
+    _far.far = camera->get_far();
+    _far.scales.clear();
+    struct Far
+    {
+        uint64_t id;
+        double distance, radius;
+    };
+    std::vector<Far> bodies;
+    const double from = double(ScaledFrom) * _far.far;
+    for (const JarCelestialBody *body : _bodies)
+    {
+        const double radius = body->get_view_radius();
+        if (radius <= 0.0 || !body->is_inside_tree())
+            continue;
+        const JarCelestialBody::Frame frame = body->get_frame();
+        if (!frame.radial)
+            continue;
+        const double distance = (frame.center - _far.eye).length();
+        if (distance - radius > from)
+            bodies.push_back({body->get_instance_id(), distance, radius});
+    }
+    if (bodies.empty())
+        return;
+    std::sort(bodies.begin(), bodies.end(), [](const Far &a, const Far &b) { return a.distance < b.distance; });
+    // Each body's depth range spans a ratio (far side / near side); the bands
+    // share the room between ScaledFrom and ScaledTo, with equal gaps. When
+    // they do not fit they are squeezed (neighbours may then overlap a little).
+    double need = 0.0;
+    std::vector<double> needs;
+    for (const Far &b : bodies)
+    {
+        needs.push_back(std::log((b.distance + b.radius) / (b.distance - b.radius)));
+        need += needs.back();
+    }
+    const double room = std::log(double(ScaledTo) / double(ScaledFrom));
+    const double squeeze = need > room ? room / need : 1.0;
+    const double gap = need > room ? 0.0 : (room - need) / double(bodies.size() + 1);
+    double near = from * std::exp(gap);
+    for (size_t i = 0; i < bodies.size(); ++i)
+    {
+        const Far &b = bodies[i];
+        _far.scales[b.id] = float(near / (b.distance - b.radius));
+        near *= std::exp(needs[i] * squeeze + gap);
+    }
+}
+
+JarFarView JarVoxelUniverse::get_far_view(const JarCelestialBody *body, const Camera3D *camera) const
+{
+    JarFarView view;
+    if (camera == nullptr || body == nullptr)
+        return view;
+    view.eye = camera->get_global_position();
+    if (_far.frame != Engine::get_singleton()->get_process_frames() || _far.camera != camera->get_instance_id() ||
+        _far.eye != view.eye || _far.far != camera->get_far())
+        compute_far_views(camera);
+    if (const auto it = _far.scales.find(body->get_instance_id()); it != _far.scales.end())
+        view.scale = it->second;
+    return view;
+}
