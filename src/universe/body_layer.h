@@ -216,19 +216,24 @@ class JarBodyAtmosphere : public JarBodyLayer
     void set_material(const Ref<ShaderMaterial> &value);
 };
 
-// A basic cloud layer: a shell `altitude` meters above the body's sea level (a
-// sphere, or a plane on a flat body). Shape, wind and lighting are set on
-// `material` (clouds.gdshader).
+// Volumetric clouds between `altitude` and `altitude + thickness` meters above
+// the body's sea level (a spherical shell, or a slab on a flat body), ray
+// marched per pixel through 3D noise (CloudNoise, made at startup, no
+// baking). Coverage, weather, shape, wind and lighting are set on `material`
+// (clouds.gdshader). The same clouds at every distance: from orbit their
+// detail averages out instead of switching to another look.
 class JarBodyClouds : public JarBodyLayer
 {
     GDCLASS(JarBodyClouds, JarBodyLayer);
 
   private:
     float _altitude = 320.0f;
+    float _thickness = 400.0f;
     Ref<ShaderMaterial> _material;
     Ref<ShaderMaterial> _defaultMaterial;
     MeshInstance3D *_shell = nullptr;
-    float _shellRadius = -1.0f; // when a sphere; 0 when a plane
+    float _shellRadius = -1.0f; // when a sphere; 0 when a box (flat)
+    Ref<Texture> _noise;
 
   protected:
     static void _bind_methods();
@@ -240,6 +245,8 @@ class JarBodyClouds : public JarBodyLayer
 
     float get_altitude() const { return _altitude; }
     void set_altitude(float value) { _altitude = value; }
+    float get_thickness() const { return _thickness; }
+    void set_thickness(float value) { _thickness = std::max(1.0f, value); }
     Ref<ShaderMaterial> get_material() const { return _material; }
     void set_material(const Ref<ShaderMaterial> &value);
 };

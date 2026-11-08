@@ -9,6 +9,8 @@
 #include <godot_cpp/classes/world3d.hpp>
 #include "voxel_universe.h"
 #include <godot_cpp/classes/plane_mesh.hpp>
+#include <godot_cpp/classes/box_mesh.hpp>
+#include "cloud_noise.h"
 #include <godot_cpp/classes/resource_loader.hpp>
 #include <godot_cpp/classes/scene_tree.hpp>
 #include <godot_cpp/classes/shader.hpp>
@@ -934,6 +936,10 @@ void JarBodyClouds::_bind_methods()
     ClassDB::bind_method(D_METHOD("set_altitude", "value"), &JarBodyClouds::set_altitude);
     ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "altitude", PROPERTY_HINT_NONE, "suffix:m"), "set_altitude",
                  "get_altitude");
+    ClassDB::bind_method(D_METHOD("get_thickness"), &JarBodyClouds::get_thickness);
+    ClassDB::bind_method(D_METHOD("set_thickness", "value"), &JarBodyClouds::set_thickness);
+    ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "thickness", PROPERTY_HINT_RANGE, "1,10000,1,or_greater,suffix:m"),
+                 "set_thickness", "get_thickness");
     ClassDB::bind_method(D_METHOD("get_material"), &JarBodyClouds::get_material);
     ClassDB::bind_method(D_METHOD("set_material", "value"), &JarBodyClouds::set_material);
     ADD_PROPERTY(PropertyInfo(Variant::OBJECT, "material", PROPERTY_HINT_RESOURCE_TYPE, "ShaderMaterial"),
@@ -961,6 +967,7 @@ void JarBodyClouds::build()
 {
     _shell = add_shell();
     _shell->set_material_override(get_active_material());
+    _noise = CloudNoise::texture();
 }
 
 void JarBodyClouds::update(const JarCelestialBody &body)
@@ -968,39 +975,71 @@ void JarBodyClouds::update(const JarCelestialBody &body)
     if (_shell == nullptr)
         return;
     const JarCelestialBody::Frame frame = body.get_frame();
-    const float level = frame.seaLevel + _altitude;
+    const float bottom = frame.seaLevel + _altitude;
+    const float top = bottom + _thickness;
+    const Ref<ShaderMaterial> material = get_active_material();
+    FarView view;
+    const Vector3 at = eye(frame);
     if (frame.radial)
     {
-        if (!Math::is_equal_approx(_shellRadius, level))
+        body.extend_view_radius(top);
+        view = far_view(body);
+        // Drawn on the back faces of a sphere just outside the layer: from
+        // inside they cover the screen, from outside the planet.
+        if (!Math::is_equal_approx(_shellRadius, top * 1.02f))
         {
-            _shellRadius = level;
-            _shell->set_mesh(make_sphere(level, 192, 96));
+            _shellRadius = top * 1.02f;
+            _shell->set_mesh(make_sphere(_shellRadius, 64, 32));
         }
-        _shell->set_global_transform(Transform3D(Basis(), frame.center));
+        _shell->set_global_transform(Transform3D(Basis().scaled(Vector3(view.scale, view.scale, view.scale)), view.center));
+        material->set_shader_parameter("planet_center", view.center);
     }
     else
     {
+        // A box around the camera (the shader fades the slab out before its walls).
+        constexpr float Box = 200000.0f;
         if (_shellRadius != 0.0f)
         {
             _shellRadius = 0.0f;
-            _shell->set_mesh(make_plane(20000.0f, 1));
+            Ref<BoxMesh> box;
+            box.instantiate();
+            box->set_size(Vector3(Box, Box, Box));
+            _shell->set_mesh(box);
         }
-        const Vector3 at = eye(frame);
-        const Vector3 onPlane = at - frame.axis * (at - frame.center).dot(frame.axis) + frame.axis * level;
-        _shell->set_global_transform(Transform3D(basis_with_up(frame.axis), onPlane));
+        _shell->set_global_transform(Transform3D(Basis(), at));
+        material->set_shader_parameter("planet_center", frame.center);
     }
-    const Ref<ShaderMaterial> material = get_active_material();
-    material->set_shader_parameter("planet_center", frame.center);
+    material->set_shader_parameter("cloud_bottom", bottom);
+    material->set_shader_parameter("cloud_top", top);
+    material->set_shader_parameter("ground_level", frame.seaLevel);
     material->set_shader_parameter("up_axis", frame.axis);
     material->set_shader_parameter("radial", frame.radial);
+    material->set_shader_parameter("view_scale", view.scale);
+    material->set_shader_parameter("cloud_noise", _noise);
     // Clouds and wind move with the body when it turns in the scene.
-    material->set_shader_parameter("world_to_body", body.get_global_basis().orthonormalized().transposed());
-    apply_sun(material);
-    // The scene's ambient light (sky and starlight) lights them too.
-    Color ambient(0, 0, 0);
-    if (Viewport *viewport = get_viewport())
-        if (const Ref<World3D> world = viewport->find_world_3d(); world.is_valid() && world->get_environment().is_valid())
-            ambient = world->get_environment()->get_ambient_light_color() *
-                      world->get_environment()->get_ambient_light_energy();
-    material->set_shader_parameter("ambient_light", Vector3(ambient.r, ambient.g, ambient.b));
+    const Basis toBody = body.get_global_basis().orthonormalized().transposed();
+    material->set_shader_parameter("world_to_body", toBody);
+    Vector3 axis = body.get_spin_axis();
+    if (const auto *carrier = Object::cast_to<Node3D>(body.get_parent()); carrier && axis.length_squared() > 1e-12f)
+        axis = carrier->get_global_basis().xform(axis);
+    material->set_shader_parameter("spin_axis", axis.length_squared() > 1e-12f ? toBody.xform(axis).normalized() : Vector3(0, 1, 0));
+    // The sun: in scaled space the star's own light here; else the scene's
+    // light (reddened by the air the camera is in), with its energy.
+    Vector3 direction, color, floor;
+    far_light(this, frame.center, direction, color, floor);
+    const bool inside = !frame.radial || (at - frame.center).length() < top * 1.5f;
+    if (!view.is_scaled() && inside)
+        if (DirectionalLight3D *light = find_sun())
+        {
+            direction = light->get_global_basis().get_column(2).normalized();
+            const Color c = light->get_color() * light->get_param(Light3D::PARAM_ENERGY);
+            color = Vector3(c.r, c.g, c.b);
+        }
+    material->set_shader_parameter("sun_direction", direction);
+    material->set_shader_parameter("sun_color", color);
+    material->set_shader_parameter("ambient_light", floor);
+    apply_sun(material); // the moon's light (moon_direction, moon_color)
+    material->set_shader_parameter("sun_direction", direction);
+    material->set_shader_parameter("sun_color", color);
 }
+

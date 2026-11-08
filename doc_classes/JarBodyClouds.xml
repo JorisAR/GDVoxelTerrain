@@ -1,10 +1,10 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <class name="JarBodyClouds" inherits="JarBodyLayer" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
 	<brief_description>
-		A basic cloud layer above the body's sea level.
+		Volumetric clouds above the body's sea level.
 	</brief_description>
 	<description>
-		A shell [member altitude] meters above sea level (a sphere, or a plane on a flat body), with drifting noise clouds, large-scale weather regions, self-shadowing and a dark night side.
+		A layer of clouds between [member altitude] and [member altitude] + [member thickness] meters above sea level (a spherical shell, or a slab on a flat body), ray marched per pixel. Where clouds are comes from a weather field (systems of clear and overcast regions, optionally climate bands by latitude); their shapes from tileable 3D Perlin-Worley noise made at startup (about 70 ms, no baking), rounded at the base and eroded into cauliflower detail at the edges. Lit by the sun through the cloud above each point, with forward scattering (silver linings), approximate multiple scattering, sky light from above, the planet's shadow and moonlight at night. The same clouds at every distance: noise finer than a pixel averages out, so seen from orbit they are the same weather blurred. Beyond the far plane they are drawn in scaled space with the rest of the body. Coverage, weather, sizes, density, wind, colors and quality (steps) are set on [member material].
 	</description>
 	<tutorials>
 	</tutorials>
@@ -18,7 +18,10 @@
 	</methods>
 	<members>
 		<member name="altitude" type="float" setter="set_altitude" getter="get_altitude" default="320.0">
-			Height of the cloud layer above sea level, in meters.
+			Height of the bottom of the cloud layer above sea level, in meters.
+		</member>
+		<member name="thickness" type="float" setter="set_thickness" getter="get_thickness" default="400.0">
+			Height of the layer from its bottom to its top, in meters.
 		</member>
 		<member name="material" type="ShaderMaterial" setter="set_material" getter="get_material">
 			The clouds' look. Empty: the default [code]clouds.gdshader[/code].

@@ -726,7 +726,12 @@ func _test_far_terrain() -> void:
 	var planet_material: ShaderMaterial = scene.get_node("%Planet/JarVoxelVolume").get_runtime_material()
 	var planet_scale = planet_material.get_shader_parameter("jar_view_scale")
 	_check("far terrain: the ground under the camera as it is", planet_scale == null or planet_scale == 1.0, str(planet_scale))
-	for shader in ["res://addons/jar_voxel_terrain/src/shaders/terrain_weights.gdshader", "res://addons/jar_voxel_terrain/src/shaders/terrain_split.gdshader", "res://addons/jar_voxel_terrain/src/shaders/terrain_indexed.gdshader", "res://addons/jar_voxel_terrain/nodes/water/water.gdshader"]:
+	var clouds: ShaderMaterial = (scene.get_node("%Planet/Clouds") as JarBodyClouds).get_active_material()
+	var noise = clouds.get_shader_parameter("cloud_noise")
+	_check("clouds: 3D noise made", noise is Texture3D and (noise as Texture3D).get_depth() == 64)
+	_check("clouds: a layer above the ground", clouds.get_shader_parameter("cloud_top") > clouds.get_shader_parameter("cloud_bottom") and clouds.get_shader_parameter("cloud_bottom") > clouds.get_shader_parameter("ground_level"))
+	_check("clouds: the planet's own as they are", clouds.get_shader_parameter("view_scale") == 1.0)
+	for shader in ["res://addons/jar_voxel_terrain/nodes/clouds/clouds.gdshader", "res://addons/jar_voxel_terrain/src/shaders/terrain_weights.gdshader", "res://addons/jar_voxel_terrain/src/shaders/terrain_split.gdshader", "res://addons/jar_voxel_terrain/src/shaders/terrain_indexed.gdshader", "res://addons/jar_voxel_terrain/nodes/water/water.gdshader"]:
 		_check("compiles " + shader.get_file(), (load(shader) as Shader).get_shader_uniform_list().size() > 5)
 	scene.queue_free()
 	await get_tree().process_frame
