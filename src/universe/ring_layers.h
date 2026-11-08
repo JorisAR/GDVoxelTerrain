@@ -84,6 +84,7 @@ class JarBodyGasGiant : public JarBodyLayer
     Ref<ShaderMaterial> _defaultMaterial;
     MeshInstance3D *_shell = nullptr;
     uint64_t _rings = 0; // instance id of the rings found on the body
+    float _flattening = 0.0f;
 
   protected:
     static void _bind_methods();
@@ -95,6 +96,10 @@ class JarBodyGasGiant : public JarBodyLayer
 
     Ref<ShaderMaterial> get_material() const { return _material; }
     void set_material(const Ref<ShaderMaterial> &value);
+    // How much shorter the polar radius is than the equator's (fast spinning
+    // giants bulge: Saturn 0.1, Jupiter 0.065).
+    float get_flattening() const { return _flattening; }
+    void set_flattening(float value) { _flattening = std::clamp(value, 0.0f, 0.5f); }
 };
 
 #endif // JAR_RING_LAYERS_H

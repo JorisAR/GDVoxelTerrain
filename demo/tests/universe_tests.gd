@@ -36,6 +36,7 @@ func _ready() -> void:
 	await _test_space_gravity_restored()
 	await _test_space_round_trip()
 	await _test_far_terrain()
+	await _test_solar_system()
 	print("Universe tests: %s" % ("ALL PASSED" if _failures == 0 else "%d FAILED" % _failures))
 	get_tree().quit(1 if _failures > 0 else 0)
 
@@ -733,6 +734,54 @@ func _test_far_terrain() -> void:
 	_check("clouds: the planet's own as they are", clouds.get_shader_parameter("view_scale") == 1.0)
 	for shader in ["res://addons/jar_voxel_terrain/nodes/clouds/clouds.gdshader", "res://addons/jar_voxel_terrain/src/shaders/terrain_weights.gdshader", "res://addons/jar_voxel_terrain/src/shaders/terrain_split.gdshader", "res://addons/jar_voxel_terrain/src/shaders/terrain_indexed.gdshader", "res://addons/jar_voxel_terrain/nodes/water/water.gdshader"]:
 		_check("compiles " + shader.get_file(), (load(shader) as Shader).get_shader_uniform_list().size() > 5)
+	scene.queue_free()
+	await get_tree().process_frame
+	Engine.max_fps = 0
+
+## The solar system demo: from the start, every other planet is beyond the far
+## plane and drawn in scaled space, each in its own depth band in the order of
+## its real distance (no two overlap, so they hide each other correctly), and
+## the red planet's terrain is meshed and placed.
+func _test_solar_system() -> void:
+	Engine.max_fps = 60
+	var scene: Node = load("res://demo/solar_system.tscn").instantiate()
+	var player: DemoPlayer = scene.get_node("Player")
+	add_child(scene)
+	var start := Time.get_ticks_msec()
+	while not player._spawned and Time.get_ticks_msec() - start < 60000:
+		await get_tree().physics_frame
+	var mars_volume: JarVoxelVolume = scene.get_node("%Mars/JarVoxelVolume")
+	start = Time.get_ticks_msec()
+	while Time.get_ticks_msec() - start < 30000:
+		await get_tree().process_frame
+		var shown := 0
+		for c in mars_volume.get_children():
+			if c is JarVoxelChunk and c.visible:
+				shown += 1
+		if shown > 0 and not mars_volume.is_building() and not mars_volume.is_meshing():
+			break
+	_want_end = true
+	await end_of_frame
+	var camera := get_viewport().get_camera_3d()
+	var eye := camera.global_position
+	var far := camera.far
+	var bands := []
+	for path in ["%Moon", "%Mars", "%Jupiter", "%Saturn", "%Neptune"]:
+		var body: JarCelestialBody = scene.get_node(path)
+		var s: float = JarVoxelUniverse.get_far_view_scale(body, camera)
+		var d := body.get_center().distance_to(eye)
+		var r := body.get_view_radius()
+		_check("solar system: %s in scaled space" % body.name, s < 1.0 and r > 0.0, "scale %f radius %.0f" % [s, r])
+		bands.append([d, (d - r) * s, (d + r) * s, body.name])
+		_check("solar system: %s inside the far plane" % body.name, (d - r) * s > 0.3 * far and (d + r) * s < far, "%.0f..%.0f of %.0f" % [(d - r) * s, (d + r) * s, far])
+	bands.sort_custom(func(a, b): return a[0] < b[0])
+	for i in bands.size() - 1:
+		_check("solar system: %s in front of %s" % [bands[i][3], bands[i + 1][3]], bands[i][2] <= bands[i + 1][1] * 1.0001, "%.0f vs %.0f" % [bands[i][2], bands[i + 1][1]])
+	var shown_mars := 0
+	for c in mars_volume.get_children():
+		if c is JarVoxelChunk and c.visible:
+			shown_mars += 1
+	_check("solar system: the red planet meshed", shown_mars > 0, "%d chunks" % shown_mars)
 	scene.queue_free()
 	await get_tree().process_frame
 	Engine.max_fps = 0

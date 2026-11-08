@@ -67,6 +67,12 @@
 				This body's up at [param global_position].
 			</description>
 		</method>
+		<method name="get_view_radius" qualifiers="const">
+			<return type="float" />
+			<description>
+				Everything drawn of the body (terrain, water, atmosphere, clouds, rings) lies within this distance of its center; its size for scaled space. Its layers and terrain extend it as they update (0 before they have).
+			</description>
+		</method>
 	</methods>
 	<members>
 		<member name="gravity_reach" type="float" setter="set_gravity_reach" getter="get_gravity_reach" default="0.0">

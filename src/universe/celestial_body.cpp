@@ -37,6 +37,7 @@ void JarCelestialBody::_bind_methods()
     ClassDB::bind_method(D_METHOD("get_effective_rotating_frame_height"),
                          &JarCelestialBody::get_effective_rotating_frame_height);
     ClassDB::bind_method(D_METHOD("get_altitude", "global_position"), &JarCelestialBody::get_altitude);
+    ClassDB::bind_method(D_METHOD("get_view_radius"), &JarCelestialBody::get_view_radius);
     ClassDB::bind_method(D_METHOD("get_sphere_of_influence"), &JarCelestialBody::get_sphere_of_influence);
 }
 

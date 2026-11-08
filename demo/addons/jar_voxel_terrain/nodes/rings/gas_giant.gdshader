@@ -10,6 +10,8 @@ render_mode unshaded, shadows_disabled, fog_disabled;
 
 uniform mat3 world_to_body = mat3(1.0);
 uniform vec3 spin_axis = vec3(0.0, 1.0, 0.0); // in body space
+uniform vec3 spin_axis_world = vec3(0.0, 1.0, 0.0);
+uniform float flattening = 0.0; // the shell is squashed along the spin axis
 uniform bool has_rings = false;
 
 group_uniforms bands;
@@ -28,6 +30,10 @@ uniform float storms : hint_range(0.0, 1.0) = 0.4;
 uniform int seed = 3;
 // Turns per hour of the fastest wind relative to the body (bands drift).
 uniform float wind_speed = 0.02;
+// One great long-lived storm (like Jupiter's red spot): its latitude (sine),
+// longitude (radians), size (radians across) and strength (0: none).
+uniform vec4 great_spot = vec4(-0.38, 1.0, 0.16, 0.0);
+uniform vec3 great_spot_color : source_color = vec3(0.75, 0.38, 0.24);
 group_uniforms light;
 uniform float brightness = 1.0;
 // Minnaert exponent: 0.5 flat disk, 1 Lambert. Gas giants are dark at the limb.
@@ -69,8 +75,13 @@ float fbm(vec3 p, float pixel) {
 }
 
 void fragment() {
-	vec3 normal = normalize(world_position - planet_center);
-	vec3 local = normalize(world_to_body * normal); // on the unit sphere, turning with the body
+	vec3 d = world_position - planet_center;
+	vec3 polar = normalize(spin_axis_world);
+	// The ellipsoid's normal: the polar part of the offset counts more.
+	float k = 1.0 / ((1.0 - flattening) * (1.0 - flattening));
+	vec3 normal = normalize(d + polar * dot(d, polar) * (k - 1.0));
+	// On the unit sphere (unsquashed), turning with the body.
+	vec3 local = normalize(world_to_body * (d + polar * dot(d, polar) * (1.0 / (1.0 - flattening) - 1.0)));
 	vec3 axis = normalize(spin_axis);
 	float lat = dot(local, axis); // sine of the latitude
 	float pixel = max(length(dFdx(local)), length(dFdy(local)));
@@ -107,6 +118,25 @@ void fragment() {
 		float d = length(vec2(east_west, north_south * 2.2)) * 5.0;
 		float storm = 1.0 - smoothstep(0.15, 0.35, d);
 		color = mix(color, storm_pick < storms * 0.12 ? color_light * 1.05 : color_accent * 0.8, storm * 0.8);
+	}
+	// The great storm: an oval swirl with a pale collar, drifting with its band.
+	if (great_spot.w > 0.0) {
+		float spot_drift = TIME / 3600.0 * wind_speed * 6.2832 * sin(great_spot.x * band_count * 1.5708);
+		float slon = great_spot.y + spot_drift;
+		float sr = sqrt(max(1.0 - great_spot.x * great_spot.x, 0.0));
+		vec3 spot_center = axis * great_spot.x + (east * cos(slon) + north * sin(slon)) * sr;
+		vec3 off = local - spot_center;
+		float ns = dot(off, axis);
+		vec3 ew_dir = off - axis * ns;
+		float ew = length(ew_dir);
+		float sd = length(vec2(ew, ns * 1.7)) / (great_spot.z * 0.5);
+		// Swirl: the inside turns, so its streaks curve around the center.
+		float angle = atan(ns * 1.7, dot(ew_dir, east * -sin(slon) + north * cos(slon))) + sd * 3.0;
+		float swirl = fbm(vec3(cos(angle) * sd * 3.0, sin(angle) * sd * 3.0, 4.2), pixel / max(great_spot.z, 1e-3) * 6.0);
+		float spot = 1.0 - smoothstep(0.55, 1.0, sd);
+		float collar = smoothstep(0.75, 1.0, sd) * (1.0 - smoothstep(1.0, 1.35, sd));
+		color = mix(color, great_spot_color * (0.8 + 0.4 * swirl), spot * great_spot.w);
+		color = mix(color, color_light, collar * 0.6 * great_spot.w);
 	}
 	// Poles: bluer, smoother.
 	color = mix(color, color_polar, smoothstep(polar_latitude, polar_latitude + 0.12, abs(lat)));

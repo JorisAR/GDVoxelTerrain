@@ -18,6 +18,9 @@
 		</method>
 	</methods>
 	<members>
+		<member name="flattening" type="float" setter="set_flattening" getter="get_flattening" default="0.0">
+			How much shorter the polar radius is than the equator's: fast spinning giants bulge at the equator (Saturn 0.1, Jupiter 0.065, Neptune 0.017).
+		</member>
 		<member name="material" type="ShaderMaterial" setter="set_material" getter="get_material">
 			The planet's look. Empty: the default [code]gas_giant.gdshader[/code].
 		</member>

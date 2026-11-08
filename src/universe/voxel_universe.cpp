@@ -127,6 +127,7 @@ void JarVoxelUniverse::_bind_methods()
     ClassDB::bind_method(D_METHOD("set_anchor_override", "body"), &JarVoxelUniverse::set_anchor_override);
     ClassDB::bind_method(D_METHOD("get_anchor_override"), &JarVoxelUniverse::get_anchor_override);
     ClassDB::bind_method(D_METHOD("get_frame_anchor"), &JarVoxelUniverse::get_frame_anchor);
+    ClassDB::bind_method(D_METHOD("get_far_view_scale", "body", "camera"), &JarVoxelUniverse::get_far_view_scale);
     ClassDB::bind_method(D_METHOD("is_frame_rotating"), &JarVoxelUniverse::is_frame_rotating);
     ClassDB::bind_method(D_METHOD("get_body_velocity_at", "body", "global_position"),
                          &JarVoxelUniverse::get_body_velocity_at);
@@ -928,6 +929,11 @@ void JarVoxelUniverse::compute_far_views(const Camera3D *camera) const
         _far.scales[b.id] = float(near / (b.distance - b.radius));
         near *= std::exp(needs[i] * squeeze + gap);
     }
+}
+
+float JarVoxelUniverse::get_far_view_scale(JarCelestialBody *body, Camera3D *camera) const
+{
+    return get_far_view(body, camera).scale;
 }
 
 JarFarView JarVoxelUniverse::get_far_view(const JarCelestialBody *body, const Camera3D *camera) const

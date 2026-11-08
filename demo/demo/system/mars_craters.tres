@@ -1,0 +1,11 @@
+[gd_resource type="JarCraterSdf" format=3]
+
+[ext_resource type="JarTerrainSdf" path="res://demo/system/mars_terrain.tres" id="1_terrain"]
+
+[resource]
+size = 30000.0
+octaves = 4
+density = 0.3
+depth = 0.1
+rim = 0.05
+sdf = ExtResource("1_terrain")

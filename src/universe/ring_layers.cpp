@@ -308,6 +308,10 @@ void JarBodyGasGiant::_bind_methods()
     ADD_PROPERTY(PropertyInfo(Variant::OBJECT, "material", PROPERTY_HINT_RESOURCE_TYPE, "ShaderMaterial"),
                  "set_material", "get_material");
     ClassDB::bind_method(D_METHOD("get_active_material"), &JarBodyGasGiant::get_active_material);
+    ClassDB::bind_method(D_METHOD("get_flattening"), &JarBodyGasGiant::get_flattening);
+    ClassDB::bind_method(D_METHOD("set_flattening", "value"), &JarBodyGasGiant::set_flattening);
+    ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "flattening", PROPERTY_HINT_RANGE, "0,0.5,0.001"), "set_flattening",
+                 "get_flattening");
 }
 
 Ref<ShaderMaterial> JarBodyGasGiant::get_active_material()
@@ -353,10 +357,16 @@ void JarBodyGasGiant::update(const JarCelestialBody &body)
     body.extend_view_radius(frame.seaLevel);
     const FarView view = far_view(body);
     const float radius = frame.seaLevel * view.scale;
-    _shell->set_global_transform(Transform3D(Basis().scaled(Vector3(radius, radius, radius)), view.center));
+    // Squashed along the spin axis by the flattening.
+    const Vector3 axis = spin_axis(body);
+    const Basis frameBasis = basis_with_up(axis);
+    const Basis squash = frameBasis * Basis().scaled(Vector3(radius, radius * (1.0f - _flattening), radius)) * frameBasis.transposed();
+    _shell->set_global_transform(Transform3D(squash, view.center));
     const Ref<ShaderMaterial> material = get_active_material();
     material->set_shader_parameter("planet_center", view.center);
     material->set_shader_parameter("planet_radius", radius);
+    material->set_shader_parameter("flattening", _flattening);
+    material->set_shader_parameter("spin_axis_world", axis);
     // Bands and storms turn with the body.
     material->set_shader_parameter("world_to_body", body.get_global_basis().orthonormalized().transposed());
     material->set_shader_parameter("spin_axis", body.get_global_basis().orthonormalized().transposed().xform(spin_axis(body)));

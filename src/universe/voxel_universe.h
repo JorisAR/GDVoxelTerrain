@@ -185,6 +185,8 @@ class JarVoxelUniverse : public Object
     // the picture, so bands may change from frame to frame.
     JarFarView get_far_view(const JarCelestialBody *body, const Camera3D *camera) const;
     static constexpr float ScaledFrom = 0.35f, ScaledTo = 0.98f;
+    // The scale of get_far_view (1: drawn as it is).
+    float get_far_view_scale(JarCelestialBody *body, Camera3D *camera) const;
     bool is_frame_rotating() const { return _frameRotating; }
     // Signals: anchor_changed(previous, current) when the anchor body changes;
     // frame_changed(anchor, rotating) on every switch (also between turning

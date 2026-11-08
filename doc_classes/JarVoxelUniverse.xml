@@ -121,6 +121,14 @@
 				Sets the tick count (e.g. from a server or a save game). Bodies move to the new time on the next physics frame.
 			</description>
 		</method>
+		<method name="get_far_view_scale" qualifiers="const">
+			<return type="float" />
+			<param index="0" name="body" type="JarCelestialBody" />
+			<param index="1" name="camera" type="Camera3D" />
+			<description>
+				How [param body] is drawn for [param camera] this frame: 1 as it is, below 1 in scaled space (that much smaller and nearer about the camera, which looks the same). A body is scaled when its nearest point is beyond 0.35 of the far plane; each gets its own depth band between 0.35 and 0.98 of the far plane, in the order of their real distance.
+			</description>
+		</method>
 	</methods>
 	<signals>
 		<signal name="origin_shifted">
