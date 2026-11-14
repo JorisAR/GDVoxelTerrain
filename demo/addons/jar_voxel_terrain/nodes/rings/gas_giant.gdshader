@@ -37,7 +37,7 @@ uniform vec3 great_spot_color : source_color = vec3(0.75, 0.38, 0.24);
 group_uniforms light;
 uniform float brightness = 1.0;
 // Minnaert exponent: 0.5 flat disk, 1 Lambert. Gas giants are dark at the limb.
-uniform float limb_darkening : hint_range(0.5, 1.5) = 0.85;
+uniform float limb_darkening : hint_range(0.5, 1.5) = 1.15;
 uniform vec3 ambient_light = vec3(0.004, 0.004, 0.005);
 group_uniforms;
 

@@ -302,6 +302,7 @@ class JarBodyLight : public JarBodyLayer
     JarBodyLight *_reflects = nullptr;
     float _energy = 0.08f;
     float _spaceMinSensitivity = 0.0f;
+    bool _inverseSquare = false;
 
   protected:
     static void _bind_methods();
@@ -331,6 +332,12 @@ class JarBodyLight : public JarBodyLayer
     void set_reflects(JarBodyLight *value) { _reflects = value; }
     float get_energy() const { return _energy; }
     void set_energy(float value) { _energy = std::max(0.0f, value); }
+    // Bodies far away (drawn by the layers in their own light) get the
+    // star's light falling off with the square of their distance from it,
+    // relative to the camera's: the camera's own light is the light as it is.
+    bool get_inverse_square() const { return _inverseSquare; }
+    void set_inverse_square(bool value) { _inverseSquare = value; }
+    float get_falloff_at(const Vector3 &global_position) const;
     float get_space_min_sensitivity() const { return _spaceMinSensitivity; }
     void set_space_min_sensitivity(float value) { _spaceMinSensitivity = std::max(0.0f, value); }
 };

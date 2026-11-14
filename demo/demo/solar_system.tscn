@@ -147,7 +147,7 @@ shader_parameter/band_contrast = 0.3
 shader_parameter/turbulence = 0.5
 shader_parameter/storms = 0.25
 shader_parameter/seed = 9
-shader_parameter/limb_darkening = 0.95
+shader_parameter/limb_darkening = 1.25
 shader_parameter/great_spot = Vector4(-0.3, 2.4, 0.22, 0.9)
 shader_parameter/great_spot_color = Color(0.1, 0.18, 0.45, 1)
 
@@ -185,6 +185,7 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1684048.3, 19448558, 3491300
 [node name="Light" type="JarBodyLight" parent="Sun" unique_id=1659315502 node_paths=PackedStringArray("sun")]
 sun = NodePath("../../SunLight")
 space_min_sensitivity = 150.0
+inverse_square = true
 
 [node name="PlanetOrbit" type="JarBodyOrbit" parent="Sun" unique_id=318843216]
 radius = 40000000.0
@@ -351,7 +352,7 @@ axis = Vector3(0.023426, 0.87384, -0.485649)
 phase = 112.59
 
 [node name="Jupiter" type="JarCelestialBody" parent="Sun/JupiterOrbit"]
-radius = 2400000.0
+radius = 1200000.0
 surface_gravity = 24.0
 spin_period = 7200.0
 spin_axis = Vector3(0.05, 1, 0)
@@ -368,7 +369,7 @@ axis = Vector3(0.023426, 0.87384, -0.485649)
 phase = 125.59
 
 [node name="Saturn" type="JarCelestialBody" parent="Sun/SaturnOrbit"]
-radius = 2000000.0
+radius = 1000000.0
 surface_gravity = 10.0
 spin_period = 8000.0
 spin_axis = Vector3(0.35, 1, 0.2)
@@ -387,7 +388,7 @@ axis = Vector3(0.023426, 0.87384, -0.485649)
 phase = 137.59
 
 [node name="Neptune" type="JarCelestialBody" parent="Sun/NeptuneOrbit"]
-radius = 1100000.0
+radius = 600000.0
 surface_gravity = 11.0
 spin_period = 9000.0
 spin_axis = Vector3(-0.4, 1, 0.25)

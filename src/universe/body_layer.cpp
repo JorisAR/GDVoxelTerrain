@@ -294,13 +294,10 @@ void JarBodyLayer::apply_sun(const Ref<ShaderMaterial> &material)
 
 void JarBodyLayer::apply_star(const Ref<ShaderMaterial> &material, const Vector3 &at)
 {
-    material->set_shader_parameter("sun_direction", star_direction_at(at));
-    if (DirectionalLight3D *light = find_sun())
-    {
-        const Color base = light->has_meta(BaseColorMeta) ? Color(light->get_meta(BaseColorMeta)) : light->get_color();
-        const float energy = light->get_param(Light3D::PARAM_ENERGY);
-        material->set_shader_parameter("sun_color", Vector3(base.r, base.g, base.b) * energy);
-    }
+    Vector3 direction, color, ambient;
+    far_light(this, at, direction, color, ambient);
+    material->set_shader_parameter("sun_direction", direction);
+    material->set_shader_parameter("sun_color", color);
 }
 
 Vector3 JarBodyLayer::star_direction_at(const Vector3 &global_position)
@@ -331,12 +328,16 @@ void JarBodyLayer::far_light(Node *context, const Vector3 &at, Vector3 &directio
         if (const auto *light = Object::cast_to<DirectionalLight3D>(stars[0]))
         {
             direction = light->get_global_basis().get_column(2).normalized();
+            float falloff = 1.0f;
             if (light->has_meta(StarLayerMeta))
                 if (const auto *layer = Object::cast_to<JarBodyLight>(ObjectDB::get_instance(uint64_t(light->get_meta(StarLayerMeta)))))
+                {
                     direction = layer->get_direction_at(at);
-            const Color base = light->has_meta(BaseColorMeta) ? Color(light->get_meta(BaseColorMeta)) : light->get_color();
+                    falloff = layer->get_falloff_at(at);
+                }
+            const Color base = light->has_meta(BaseColorMeta) ? Color(light->get_meta(BaseColorMeta)) : light->get_color() ;
             const float energy = light->get_param(Light3D::PARAM_ENERGY);
-            color = Vector3(base.r, base.g, base.b) * energy;
+            color = Vector3(base.r, base.g, base.b) * energy * falloff;
         }
     if (Viewport *viewport = context->get_viewport())
         if (const Ref<World3D> world = viewport->find_world_3d(); world.is_valid() && world->get_environment().is_valid())
@@ -384,6 +385,10 @@ void JarBodyLight::_bind_methods()
     ClassDB::bind_method(D_METHOD("set_energy", "value"), &JarBodyLight::set_energy);
     ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "energy", PROPERTY_HINT_RANGE, "0,2,0.001,or_greater"), "set_energy",
                  "get_energy");
+    ClassDB::bind_method(D_METHOD("get_inverse_square"), &JarBodyLight::get_inverse_square);
+    ClassDB::bind_method(D_METHOD("set_inverse_square", "value"), &JarBodyLight::set_inverse_square);
+    ADD_PROPERTY(PropertyInfo(Variant::BOOL, "inverse_square"), "set_inverse_square", "get_inverse_square");
+    ClassDB::bind_method(D_METHOD("get_falloff_at", "global_position"), &JarBodyLight::get_falloff_at);
     ClassDB::bind_method(D_METHOD("get_space_min_sensitivity"), &JarBodyLight::get_space_min_sensitivity);
     ClassDB::bind_method(D_METHOD("set_space_min_sensitivity", "value"), &JarBodyLight::set_space_min_sensitivity);
     ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "space_min_sensitivity", PROPERTY_HINT_RANGE, "0,800,1,or_greater"),
@@ -392,6 +397,20 @@ void JarBodyLight::_bind_methods()
     ClassDB::bind_method(D_METHOD("get_direction_at", "global_position"), &JarBodyLight::get_direction_at);
     ClassDB::bind_method(D_METHOD("get_angular_diameter_at", "global_position"),
                          &JarBodyLight::get_angular_diameter_at);
+}
+
+float JarBodyLight::get_falloff_at(const Vector3 &global_position) const
+{
+    const JarCelestialBody *body = get_body();
+    Viewport *viewport = is_inside_tree() ? get_viewport() : nullptr;
+    const Camera3D *camera = viewport ? viewport->get_camera_3d() : nullptr;
+    if (!_inverseSquare || body == nullptr || camera == nullptr)
+        return 1.0f;
+    const float here = (camera->get_global_position() - body->get_center()).length();
+    const float there = (global_position - body->get_center()).length();
+    if (there <= 1.0f)
+        return 1.0f;
+    return std::clamp((here * here) / (there * there), 0.005f, 20.0f);
 }
 
 Vector3 JarBodyLight::get_direction_at(const Vector3 &global_position) const
