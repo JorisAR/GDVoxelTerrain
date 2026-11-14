@@ -3,7 +3,10 @@ shader_type spatial;
 // colors, broken up by turbulence that moves with the zonal winds, with
 // streaks, a few oval storms, darker poles and limb darkening; lit by the
 // star, with the shadow of its rings (JarBodyRings on the same body).
-// Everything is noise in this shader, nothing is baked.
+// The bands come from a band map JarBodyGasGiant makes at startup (on a
+// thread, from band_count, turbulence, storms and seed): r belts, g accent,
+// b white ovals, a festoons. Each latitude turns at its own speed (jets), so
+// the bands slide past each other. Until the map is there, plain noise bands.
 render_mode unshaded, cull_disabled, shadows_disabled, fog_disabled;
 
 #include "res://addons/jar_voxel_terrain/nodes/rings/rings_common.gdshaderinc"
@@ -13,6 +16,8 @@ uniform vec3 spin_axis = vec3(0.0, 1.0, 0.0); // in body space
 uniform vec3 spin_axis_world = vec3(0.0, 1.0, 0.0);
 uniform float flattening = 0.0; // the shell is squashed along the spin axis
 uniform bool has_rings = false;
+uniform samplerCube band_map : filter_linear_mipmap;
+uniform bool bands_ready = false;
 
 group_uniforms bands;
 uniform vec3 color_light : source_color = vec3(0.80, 0.72, 0.55);
@@ -107,6 +112,16 @@ void fragment() {
 		float accent = smoothstep(0.55, 1.0, fbm(vec3(band_lat * 20.0, 3.1, 0.0), 0.0));
 		vec3 color = mix(color_light, color_dark, (bands * 0.5 + 0.5) * band_contrast);
 		color = mix(color, color_accent, accent * 0.5);
+		if (bands_ready) {
+			// Turned by its latitude's jet, then looked up.
+			vec3 m_dir = axis * lat + (east * cos(lon + drift) + north * sin(lon + drift)) * r;
+			float texel = 2.0 / 512.0;
+			vec4 m = textureLod(band_map, m_dir, max(0.0, log2(pixel / texel)));
+			color = mix(color_light, color_dark, clamp(m.r * band_contrast * 1.6, 0.0, 1.0));
+			color = mix(color, color_accent, m.g * 0.75);
+			color = mix(color, color_polar * 0.75, m.a * 0.7);
+			color = mix(color, color_light * 1.08, m.b * 0.9);
+		}
 		// Streaks: fine detail along the winds.
 		float streak = fbm(vec3(flow.x * 4.0, lat * 160.0, flow.z * 4.0), pixel * 80.0);
 		color *= 0.9 + 0.2 * streak;

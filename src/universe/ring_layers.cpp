@@ -1,4 +1,5 @@
 #include "ring_layers.h"
+#include "cloud_noise.h"
 #include <cmath>
 #include <godot_cpp/classes/array_mesh.hpp>
 #include <godot_cpp/classes/image.hpp>
@@ -371,6 +372,27 @@ void JarBodyGasGiant::update(const JarCelestialBody &body)
     material->set_shader_parameter("world_to_body", body.get_global_basis().orthonormalized().transposed());
     material->set_shader_parameter("spin_axis", body.get_global_basis().orthonormalized().transposed().xform(spin_axis(body)));
     apply_star(material, frame.center);
+    // The band map: on a thread (the frame would stall), again when the
+    // material's band settings change; plain bands until it is there.
+    {
+        const auto param = [&](const char *name, float fallback) {
+            const Variant v = material->get_shader_parameter(name);
+            return v.get_type() == Variant::NIL ? fallback : float(v);
+        };
+        const Vector4 key(param("band_count", 14.0f), param("turbulence", 0.6f), param("storms", 0.4f), param("seed", 3.0f));
+        const Vector3 pole = body.get_global_basis().orthonormalized().transposed().xform(axis);
+        if (!_bandJob.valid() && key != _bandKey)
+        {
+            _bandKey = key;
+            _bandJob = std::async(std::launch::async, [key, pole] {
+                return CloudNoise::band_faces(int(key.w), pole, key.x, key.y, key.z);
+            });
+        }
+        if (_bandJob.valid() && _bandJob.wait_for(std::chrono::seconds(0)) == std::future_status::ready)
+            _bands = CloudNoise::weather_texture(_bandJob.get());
+        material->set_shader_parameter("band_map", _bands);
+        material->set_shader_parameter("bands_ready", _bands.is_valid());
+    }
     auto *rings = Object::cast_to<JarBodyRings>(ObjectDB::get_instance(_rings));
     material->set_shader_parameter("has_rings", rings != nullptr && rings->is_visible_in_tree());
     if (rings)

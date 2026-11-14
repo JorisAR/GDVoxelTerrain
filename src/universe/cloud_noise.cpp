@@ -395,3 +395,152 @@ Ref<Cubemap> CloudNoise::weather_texture(const WeatherFaces &faces, int size)
     cubemap->create_from_images(images);
     return cubemap;
 }
+
+// ------------------------------------------------------------------- bands
+
+CloudNoise::WeatherFaces CloudNoise::band_faces(int seed, const Vector3 &poleIn, float bandCount, float turbulence,
+                                                float storms, int size)
+{
+    const glm::vec3 pole = glm::normalize(glm::vec3(poleIn.x, poleIn.y, poleIn.z));
+    const uint32_t s = uint32_t(seed) * 2246822519u + 13u;
+    // The layout: zones and belts of uneven widths (wider near the equator),
+    // each with its own darkness, some faded, some coloured.
+    const int zones = std::max(4, int(std::round(bandCount)));
+    std::vector<float> zoneEdges(static_cast<size_t>(zones) + 1);
+    std::vector<float> zoneDark(static_cast<size_t>(zones)), zoneAccent(static_cast<size_t>(zones));
+    {
+        std::vector<float> widths(static_cast<size_t>(zones));
+        float total = 0.0f;
+        for (int i = 0; i < zones; ++i)
+        {
+            const float mid = (float(i) + 0.5f) / float(zones) * 2.0f - 1.0f;
+            widths[i] = (0.55f + 0.9f * unit(hash(i, 1, 0, s))) * (1.0f + 0.6f * (1.0f - std::abs(mid)));
+            total += widths[i];
+        }
+        float at = -1.0f;
+        for (int i = 0; i < zones; ++i)
+        {
+            zoneEdges[i] = at;
+            at += 2.0f * widths[i] / total;
+            const bool belt = (i % 2) == 1;
+            const float strength = 0.35f + 0.65f * unit(hash(i, 2, 0, s));
+            const bool faded = unit(hash(i, 3, 0, s)) < 0.18f;
+            zoneDark[i] = belt ? (faded ? 0.3f : strength) : 0.12f * unit(hash(i, 4, 0, s));
+            zoneAccent[i] = belt && unit(hash(i, 5, 0, s)) < 0.45f ? 0.4f + 0.6f * unit(hash(i, 6, 0, s)) : 0.0f;
+        }
+        zoneEdges[zones] = 1.0f;
+    }
+    // Eddies along the band zoneEdges (they curl the zoneEdges), and chains of white
+    // ovals at a few of them.
+    std::vector<Vortex> vortices;
+    const glm::vec3 helper = std::abs(pole.y) < 0.9f ? glm::vec3(0, 1, 0) : glm::vec3(1, 0, 0);
+    const glm::vec3 east0 = glm::normalize(glm::cross(helper, pole));
+    const glm::vec3 north0 = glm::cross(pole, east0);
+    const auto place = [&](float lat, float lon) {
+        const float r = std::sqrt(std::max(1.0f - lat * lat, 0.0f));
+        return glm::normalize(pole * lat + (east0 * std::cos(lon) + north0 * std::sin(lon)) * r);
+    };
+    const int eddies = int(40.0f * turbulence);
+    for (int k = 0; k < eddies; ++k)
+    {
+        const int edge = 1 + int(unit(hash(k, 7, 0, s)) * float(zones - 1));
+        Vortex v;
+        v.center = place(std::clamp(zoneEdges[std::min(edge, zones - 1)], -0.95f, 0.95f), 6.2831853f * unit(hash(k, 8, 0, s)));
+        v.radius = 0.03f + 0.05f * unit(hash(k, 9, 0, s));
+        v.strength = (unit(hash(k, 10, 0, s)) < 0.5f ? -1.0f : 1.0f) * (1.5f + 2.5f * unit(hash(k, 11, 0, s)));
+        v.cover = 0.0f;
+        vortices.push_back(v);
+    }
+    std::vector<Vortex> ovals;
+    const int chains = 1 + int(storms * 3.0f);
+    for (int c = 0; c < chains; ++c)
+    {
+        const int edge = 1 + int(unit(hash(c, 12, 0, s)) * float(zones - 1));
+        const float lat = std::clamp(zoneEdges[std::min(edge, zones - 1)] + 0.01f, -0.85f, 0.85f);
+        const int count = 3 + int(unit(hash(c, 13, 0, s)) * 6.0f * storms);
+        const float start = 6.2831853f * unit(hash(c, 14, 0, s));
+        for (int k = 0; k < count; ++k)
+        {
+            Vortex v;
+            v.center = place(lat, start + float(k) * (0.35f + 0.25f * unit(hash(c, k, 15, s))));
+            v.radius = 0.018f + 0.02f * unit(hash(c, k, 16, s));
+            v.strength = 2.0f;
+            v.cover = 1.0f;
+            ovals.push_back(v);
+        }
+    }
+    WeatherFaces faces(6, std::vector<uint8_t>(size_t(size) * size * 4));
+    const int threads = std::max(1, std::min(int(std::thread::hardware_concurrency()), 16));
+    std::vector<std::thread> workers;
+    for (int t = 0; t < threads; ++t)
+        workers.emplace_back([&, t] {
+            for (int row = t; row < 6 * size; row += threads)
+            {
+                const int face = row / size, y = row % size;
+                uint8_t *out = faces[face].data() + size_t(y) * size * 4;
+                for (int x = 0; x < size; ++x)
+                {
+                    const glm::vec3 d = face_direction(face, x, y, size);
+                    glm::vec3 q = d;
+                    for (const Vortex &v : vortices)
+                    {
+                        const float angle = std::acos(std::clamp(glm::dot(q, v.center), -1.0f, 1.0f));
+                        if (angle > 3.0f * v.radius)
+                            continue;
+                        const float k = angle / v.radius;
+                        q = rotate_about(q, v.center, v.strength * std::exp(-k * k));
+                    }
+                    float oval = 0.0f;
+                    for (const Vortex &v : ovals)
+                    {
+                        const glm::vec3 off = d - v.center;
+                        const float ns = glm::dot(off, pole);
+                        const float ew = glm::length(off - pole * ns);
+                        const float k = std::sqrt(ew * ew * 0.45f + ns * ns * 1.6f) / v.radius;
+                        oval = std::max(oval, 1.0f - smooth(0.6f, 1.0f, k));
+                    }
+                    // Drawn out east to west: the pole-ward part counts more.
+                    const glm::vec3 sheared = glm::normalize(q + pole * glm::dot(q, pole) * 5.0f) * 0.98f;
+                    const float lat = glm::dot(q, pole);
+                    const float warp = (sphere_fbm(sheared, 6, 5, s + 21) - 0.5f) * 0.07f * turbulence +
+                                       (sphere_fbm(sheared, 24, 4, s + 31) - 0.5f) * 0.025f * turbulence;
+                    const float wl = std::clamp(lat + warp, -1.0f, 0.9999f);
+                    int zone = 0;
+                    while (zone + 1 < zones && zoneEdges[zone + 1] <= wl)
+                        ++zone;
+                    // Soft zoneEdges between neighbours.
+                    const float lo = zoneEdges[zone], hi = zoneEdges[zone + 1];
+                    const float width = std::max(hi - lo, 1e-4f);
+                    const float u = (wl - lo) / width;
+                    const float soft = 0.18f;
+                    float darkness = zoneDark[zone];
+                    float tone = zoneAccent[zone];
+                    if (u < soft && zone > 0)
+                    {
+                        const float m = smooth(-soft, soft, u);
+                        darkness = zoneDark[zone - 1] + (darkness - zoneDark[zone - 1]) * m;
+                        tone = zoneAccent[zone - 1] + (tone - zoneAccent[zone - 1]) * m;
+                    }
+                    else if (u > 1.0f - soft && zone + 1 < zones)
+                    {
+                        const float m = smooth(1.0f - soft, 1.0f + soft, u);
+                        darkness = darkness + (zoneDark[zone + 1] - darkness) * m;
+                        tone = tone + (zoneAccent[zone + 1] - tone) * m;
+                    }
+                    // Texture inside the bands: sheared filaments.
+                    const float filaments = sphere_fbm(sheared, 48, 4, s + 41);
+                    darkness = std::clamp(darkness + (filaments - 0.5f) * 0.35f * turbulence, 0.0f, 1.0f);
+                    // Festoons: zoneDark blue-grey streamers just off the equator.
+                    const float equator = gauss(wl, 0.07f, 0.05f) + gauss(wl, -0.07f, 0.05f);
+                    const float festoon = equator * smooth(0.62f, 0.75f, sphere_fbm(sheared, 30, 3, s + 51));
+                    out[x * 4 + 0] = to_byte(darkness);
+                    out[x * 4 + 1] = to_byte(tone);
+                    out[x * 4 + 2] = to_byte(oval);
+                    out[x * 4 + 3] = to_byte(festoon);
+                }
+            }
+        });
+    for (std::thread &w : workers)
+        w.join();
+    return faces;
+}

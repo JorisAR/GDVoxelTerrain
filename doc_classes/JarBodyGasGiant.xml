@@ -4,6 +4,7 @@
 		The visible cloud deck of a gas giant.
 	</brief_description>
 	<description>
+		Its cloud bands come from a band map made in C++ at startup (a cube map, on a thread, no baked assets) from the material's band_count, turbulence, storms and seed: a randomized layout of belts and zones of uneven widths, their edges warped by sheared turbulence and curled by eddies, filaments inside the bands, chains of white ovals and dark festoons near the equator. Each latitude turns at its own speed, so the bands slide past each other.
 		A sphere at the body's sea level (its radius, for a body without terrain) with latitude bands, turbulence moving with the zonal winds, streaks, oval storms, bluish poles, limb darkening and the shadow of a [JarBodyRings] on the same body. All noise in the shader: nothing is baked. Colors, band count, turbulence and storms are set on [member material].
 		Beyond the camera's far plane it is drawn in scaled space (see [JarBodyLayer]).
 	</description>

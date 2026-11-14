@@ -35,6 +35,14 @@ Ref<Cubemap> weather(int seed, const Vector3 &pole, int size = 512);
 using WeatherFaces = std::vector<std::vector<uint8_t>>;
 WeatherFaces weather_faces(int seed, const Vector3 &pole, int size = 512);
 Ref<Cubemap> weather_texture(const WeatherFaces &faces, int size = 512);
+
+// A gas giant's cloud bands as a cube map (same layout, any thread; made
+// into a texture with weather_texture): r how dark (belts vs zones), g how
+// much of the accent color, b white ovals, a dark festoons. A randomized band
+// layout with uneven widths, its edges warped by sheared turbulence and
+// curled by eddies, filaments inside the bands, chains of white ovals.
+WeatherFaces band_faces(int seed, const Vector3 &pole, float band_count, float turbulence, float storms,
+                        int size = 512);
 } // namespace CloudNoise
 
 #endif // JAR_CLOUD_NOISE_H
