@@ -5,7 +5,7 @@
 #include "celestial_body.h"
 #include "voxel_universe.h"
 #include <algorithm>
-#include <future>
+#include "cloud_noise.h"
 #include <godot_cpp/classes/camera3d.hpp>
 #include <godot_cpp/classes/directional_light3d.hpp>
 #include <godot_cpp/classes/image_texture.hpp>
@@ -255,7 +255,7 @@ class JarBodyClouds : public JarBodyLayer
     Ref<Texture> _noise;
     int _seed = 1;
     Ref<Texture> _weather; // CloudNoise::weather, made once the pole is known
-    std::future<std::vector<std::vector<uint8_t>>> _weatherJob; // its texels, on a thread
+    CloudNoise::FacesJob _weatherJob; // its texels, on a thread
     int _weatherSeed = -1;
     Vector3 _weatherPole;
 

@@ -2,7 +2,7 @@
 #define JAR_RING_LAYERS_H
 
 #include "body_layer.h"
-#include <future>
+#include "cloud_noise.h"
 #include <godot_cpp/classes/gradient.hpp>
 #include <godot_cpp/classes/image_texture.hpp>
 
@@ -91,7 +91,7 @@ class JarBodyGasGiant : public JarBodyLayer
     // The band map (CloudNoise::band_faces), made on a thread from the
     // material's band_count, turbulence, storms and seed.
     Ref<Texture> _bands;
-    std::future<std::vector<std::vector<uint8_t>>> _bandJob;
+    CloudNoise::FacesJob _bandJob;
     Vector4 _bandKey{-1, -1, -1, -1};
 
   protected:

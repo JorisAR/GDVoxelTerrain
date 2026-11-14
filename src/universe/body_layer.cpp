@@ -1091,15 +1091,15 @@ void JarBodyClouds::update(const JarCelestialBody &body)
     // seed or pole.
     // Its texels on a thread (half a second on all cores; the frame would
     // stall), the texture when they are done; no clouds until then.
-    if (frame.radial && !_weatherJob.valid() && (_weatherSeed != _seed || !_weatherPole.is_equal_approx(pole)))
+    if (frame.radial && !_weatherJob.running() && (_weatherSeed != _seed || !_weatherPole.is_equal_approx(pole)))
     {
         _weatherSeed = _seed;
         _weatherPole = pole;
         const int seed = _seed;
-        _weatherJob = std::async(std::launch::async, [seed, pole] { return CloudNoise::weather_faces(seed, pole); });
+        _weatherJob.start([seed, pole] { return CloudNoise::weather_faces(seed, pole); });
     }
-    if (_weatherJob.valid() && _weatherJob.wait_for(std::chrono::seconds(0)) == std::future_status::ready)
-        _weather = CloudNoise::weather_texture(_weatherJob.get());
+    if (_weatherJob.ready())
+        _weather = CloudNoise::weather_texture(_weatherJob.take());
     material->set_shader_parameter("weather_map", _weather);
     material->set_shader_parameter("weather_ready", !frame.radial || _weather.is_valid());
     // The sun: in scaled space the star's own light here; else the scene's

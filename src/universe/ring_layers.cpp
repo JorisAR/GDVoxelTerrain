@@ -381,15 +381,15 @@ void JarBodyGasGiant::update(const JarCelestialBody &body)
         };
         const Vector4 key(param("band_count", 14.0f), param("turbulence", 0.6f), param("storms", 0.4f), param("seed", 3.0f));
         const Vector3 pole = body.get_global_basis().orthonormalized().transposed().xform(axis);
-        if (!_bandJob.valid() && key != _bandKey)
+        if (!_bandJob.running() && key != _bandKey)
         {
             _bandKey = key;
-            _bandJob = std::async(std::launch::async, [key, pole] {
+            _bandJob.start([key, pole] {
                 return CloudNoise::band_faces(int(key.w), pole, key.x, key.y, key.z);
             });
         }
-        if (_bandJob.valid() && _bandJob.wait_for(std::chrono::seconds(0)) == std::future_status::ready)
-            _bands = CloudNoise::weather_texture(_bandJob.get());
+        if (_bandJob.ready())
+            _bands = CloudNoise::weather_texture(_bandJob.take());
         material->set_shader_parameter("band_map", _bands);
         material->set_shader_parameter("bands_ready", _bands.is_valid());
     }
