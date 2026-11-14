@@ -312,6 +312,12 @@ collision_mask = 3
 reflects = NodePath("../../../../../Light")
 sun = NodePath("../../../../../../MoonLight")
 
+[node name="Asteroids" type="JarBodyAsteroids" parent="Sun"]
+inner_radius = 95000000.0
+outer_radius = 112000000.0
+thickness = 1500000.0
+axis = Vector3(0.023426, 0.87384, -0.485649)
+
 [node name="MarsOrbit" type="JarBodyOrbit" parent="Sun"]
 radius = 75000000.0
 period = 3500000.0

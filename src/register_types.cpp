@@ -32,6 +32,7 @@
 #include "body_orbit.h"
 #include "body_layer.h"
 #include "ring_layers.h"
+#include "asteroid_belt.h"
 #include "lens_flare.h"
 #include "voxel_stats.h"
 #include <godot_cpp/classes/engine.hpp>
@@ -95,6 +96,7 @@ void initialize_jar_voxel_terrain_module(ModuleInitializationLevel p_level)
         GDREGISTER_CLASS(JarBodyClouds);
         GDREGISTER_CLASS(JarBodyRings);
         GDREGISTER_CLASS(JarBodyGasGiant);
+        GDREGISTER_CLASS(JarBodyAsteroids);
     GDREGISTER_CLASS(JarBodyLight);
     GDREGISTER_CLASS(JarLensFlare);
         JarVoxelUniverse::register_settings();
