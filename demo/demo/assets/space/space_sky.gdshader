@@ -37,6 +37,9 @@ uniform float jar_sun_size = 0.0;
 // Set by JarBodyAtmosphere: how bright the sky is around the camera. Stars and
 // the galaxy fade out against a bright sky (as the eye's adaptation would).
 uniform float jar_daylight = 0.0;
+// Set by JarBodyLight: in sunlit space exposure is held lower (planets would
+// burn out); the stars and the galaxy are this much brighter to make up for it.
+uniform float jar_star_boost = 1.0;
 
 float hash13(vec3 p) {
 	p = fract(p * 0.1031);
@@ -88,7 +91,7 @@ void sky() {
 	// Galactic band: brighter near the plane, broken up by noise.
 	float band = 1.0 - abs(dot(dir, normalize(galaxy_normal)));
 	float clouds = value_noise(dir * 6.0) * 0.6 + value_noise(dir * 17.0) * 0.4;
-	float night = exp(-jar_daylight * star_daylight_fade);
+	float night = exp(-jar_daylight * star_daylight_fade) * jar_star_boost;
 	color += galaxy_color * galaxy_brightness * pow(band, 6.0) * (0.4 + clouds) * night;
 	// Three layers: few bright stars, many faint ones.
 	color += star_layer(dir, 90.0, star_brightness) * night;

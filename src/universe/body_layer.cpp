@@ -270,7 +270,13 @@ void JarBodyLayer::apply_sun(const Ref<ShaderMaterial> &material)
 {
     if (DirectionalLight3D *light = find_sun())
     {
-        material->set_shader_parameter("sun_direction", light->get_global_basis().get_column(2).normalized());
+        // The exact direction to the star from the camera: the light itself is
+        // re-aimed in steps (shadow edges would crawl), and skies and haze
+        // following those steps flickered as the planet turned.
+        Viewport *viewport = is_inside_tree() ? get_viewport() : nullptr;
+        const Camera3D *camera = viewport ? viewport->get_camera_3d() : nullptr;
+        material->set_shader_parameter("sun_direction", camera ? star_direction_at(camera->get_global_position())
+                                                                : light->get_global_basis().get_column(2).normalized());
         const Color c = light->get_color();
         material->set_shader_parameter("sun_color", Vector3(c.r, c.g, c.b));
     }
@@ -581,6 +587,9 @@ void JarBodyLight::apply_space_exposure(Camera3D *camera, const Vector3 &at, con
     const float sensitivity = base + (std::max(base, _spaceMinSensitivity) - base) * space;
     if (std::abs(attributes->get_auto_exposure_min_sensitivity() - sensitivity) > 0.5f)
         attributes->set_auto_exposure_min_sensitivity(sensitivity);
+    // The stars get back what the lower exposure took from them: the sky
+    // looks as it does at night (a shader sky reads jar_star_boost).
+    set_sky_parameter(camera->get_viewport(), "jar_star_boost", base > 0.0f ? sensitivity / base : 1.0f);
 }
 
 // ---------------------------------------------------------------- JarBodyWater

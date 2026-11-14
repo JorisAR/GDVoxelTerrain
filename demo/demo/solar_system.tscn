@@ -313,10 +313,10 @@ reflects = NodePath("../../../../../Light")
 sun = NodePath("../../../../../../MoonLight")
 
 [node name="MarsOrbit" type="JarBodyOrbit" parent="Sun"]
-radius = 50000000.0
+radius = 75000000.0
 period = 3500000.0
 axis = Vector3(0.023426, 0.87384, -0.485649)
-phase = 102.59
+phase = 99.59
 
 [node name="Mars" type="JarCelestialBody" parent="Sun/MarsOrbit"]
 surface_gravity = 3.7
@@ -346,10 +346,10 @@ ground_albedo = Color(0.45, 0.28, 0.18, 1)
 sunset_strength = 2.0
 
 [node name="JupiterOrbit" type="JarBodyOrbit" parent="Sun"]
-radius = 75000000.0
+radius = 130000000.0
 period = 12000000.0
 axis = Vector3(0.023426, 0.87384, -0.485649)
-phase = 112.59
+phase = 97.59
 
 [node name="Jupiter" type="JarCelestialBody" parent="Sun/JupiterOrbit"]
 radius = 1200000.0
@@ -363,10 +363,10 @@ material = SubResource("JupiterMaterial")
 flattening = 0.065
 
 [node name="SaturnOrbit" type="JarBodyOrbit" parent="Sun"]
-radius = 100000000.0
+radius = 205000000.0
 period = 30000000.0
 axis = Vector3(0.023426, 0.87384, -0.485649)
-phase = 125.59
+phase = 101.59
 
 [node name="Saturn" type="JarCelestialBody" parent="Sun/SaturnOrbit"]
 radius = 1000000.0
@@ -382,10 +382,10 @@ flattening = 0.1
 [node name="Rings" type="JarBodyRings" parent="Sun/SaturnOrbit/Saturn"]
 
 [node name="NeptuneOrbit" type="JarBodyOrbit" parent="Sun"]
-radius = 125000000.0
+radius = 305000000.0
 period = 90000000.0
 axis = Vector3(0.023426, 0.87384, -0.485649)
-phase = 137.59
+phase = 99.59
 
 [node name="Neptune" type="JarCelestialBody" parent="Sun/NeptuneOrbit"]
 radius = 600000.0
@@ -406,7 +406,8 @@ ringlets = 0.3
 opacity = 0.35
 
 [node name="Player" parent="." unique_id=184981125 instance=ExtResource("14_player")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -454712.8, 387522.0, -59561.6)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -598552.2, 24583.2, 40065.0)
+max_fly_speed = 3000000.0
 
 [node name="WorldEnvironment" type="WorldEnvironment" parent="." unique_id=1854622839]
 environment = SubResource("Environment")
