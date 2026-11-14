@@ -168,33 +168,6 @@ glm::vec3 StitchedSurfaceNets::onto_surface(const glm::vec3 &vertex, const std::
     return from_cell(rel + offset, lo);
 }
 
-// Whether a feature vertex that left its cell is still on the surface: the
-// cell's sample nearest to it, extended along its plane, must agree. On a
-// real edge or corner every face near it passes through the point; on an
-// edge's line beyond its end, the face that ends it does not.
-bool StitchedSurfaceNets::escaped_point_valid(const glm::vec3 &point, const std::vector<int> &neighbours,
-                                              const glm::vec3 &base, const glm::vec3 &cellMin,
-                                              const glm::vec3 &cellMax, const glm::vec3 &slack, float cellSize)
-{
-    if (!glm::any(glm::lessThan(point, cellMin - slack)) && !glm::any(glm::greaterThan(point, cellMax + slack)))
-        return true; // in the cell after all
-    float nearest = std::numeric_limits<float>::max();
-    float predicted = 0.0f;
-    for (int i = 0; i < 8; ++i)
-    {
-        VoxelOctreeNode *n = _meshChunk.nodes[neighbours[i]];
-        const glm::vec3 corner = n->_center - base;
-        const float d2 = glm::dot(corner - point, corner - point);
-        if (d2 >= nearest)
-            continue;
-        nearest = d2;
-        const glm::vec3 normal = gradient_at(neighbours[i]);
-        const float d = n->get_value() * _distanceScale[neighbours[i]];
-        predicted = d + glm::dot(normal, point - corner);
-    }
-    return std::abs(predicted) < 0.1f * cellSize;
-}
-
 glm::vec3 StitchedSurfaceNets::place_dual_contouring_vertex(const std::vector<int> &neighbours,
                                                              glm::vec3 &averageNormal, uint16_t edgeMask)
 {
@@ -295,28 +268,9 @@ glm::vec3 StitchedSurfaceNets::place_dual_contouring_vertex(const std::vector<in
     // Try the full feature first (corner), then simpler ones (edge, plane):
     // a corner or edge outside the cell belongs to a neighbouring cell, and
     // this cell's vertex then lies on the remaining edge or face.
-    const glm::vec3 slack(cellSize * 0.01f);
-    // A sharp edge or corner may lie beyond this cell (the surface crosses
-    // it, but its feature passes a neighbour whose samples all agree in sign,
-    // so no vertex there can reach it): clamping the vertex into its cell
-    // notched every feature not aligned with the grid. Vertices of real
-    // features (normals that disagree) may leave their cell by up to
-    // FeatureEscape cells, as in "Dual Contouring of Signed Distance Data"
-    // (Carrera et al. 2026), who found the same. Only with exact normals (all
-    // samples edited): with normals estimated by finite differences (the
-    // procedural terrain) escaped vertices fold faces over, the weakness that
-    // paper also reports.
-    bool exactNormals = true;
-    for (int i = 0; i < 8; ++i)
-        exactNormals = exactNormals && _meshChunk.nodes[neighbours[i]]->has_normal();
-    constexpr float FeatureEscape = 1.5f;
-    constexpr float SharpEscape = 0.8f; // as SharpAgreement below
-    const glm::vec3 escape(cellSize * FeatureEscape);
+    const glm::vec3 tolerance(cellSize * 0.01f);
     for (int rank = qef.rank(_featureThreshold); rank >= 1; --rank)
     {
-        const bool feature = exactNormals && rank >= 2 && minAgreement < SharpEscape;
-        const glm::vec3 tolLo = feature ? escape : slack, tolHi = tolLo;
-        const glm::vec3 tolerance = slack;
         if (rank == 1 && planes.count >= 2)
         {
             // Two surfaces meet near this cell, but not inside it (no edge or
@@ -342,15 +296,7 @@ glm::vec3 StitchedSurfaceNets::place_dual_contouring_vertex(const std::vector<in
                 return from_cell(glm::clamp(bestPoint, cellMin, cellMax), base);
         }
         Qef::Solution solution = qef.solve_rank(rank, _featureThreshold);
-        bool fits = Qef::fit_into(solution, target, cellMin - tolLo, cellMax + tolHi);
-        if (fits && feature && !escaped_point_valid(solution.point, neighbours, base, cellMin, cellMax, slack, cellSize))
-        {
-            // Out of the cell but not on the surface (an edge's line runs on
-            // past where the edge ends): as if it had to stay in the cell.
-            solution = qef.solve_rank(rank, _featureThreshold);
-            fits = Qef::fit_into(solution, target, cellMin - slack, cellMax + slack);
-        }
-        if (fits)
+        if (Qef::fit_into(solution, target, cellMin - tolerance, cellMax + tolerance))
         {
             // An edge or corner solution where the normals really disagree is a
             // sharp feature (not just curvature).
@@ -363,7 +309,7 @@ glm::vec3 StitchedSurfaceNets::place_dual_contouring_vertex(const std::vector<in
                 for (int c = 0; c < planes.count; ++c)
                     _lastPlanes.normals[c] = glm::normalize(planes.normals[c]);
             }
-            return from_cell(glm::clamp(solution.point, cellMin - tolLo, cellMax + tolHi), base);
+            return from_cell(glm::clamp(solution.point, cellMin, cellMax), base);
         }
     }
     return glm::vec3(std::numeric_limits<float>::quiet_NaN());
