@@ -39,6 +39,7 @@ const char *UpSharpness = "jar_voxel_terrain/gravity/up_sharpness";
 const char *SpaceGravity = "jar_voxel_terrain/gravity/drive_space_gravity";
 const char *FrameSwitching = "jar_voxel_terrain/universe/frame_switching";
 const char *AdaptCamera = "jar_voxel_terrain/universe/adapt_camera_clip";
+const char *MaxNear = "jar_voxel_terrain/universe/max_camera_near";
 // The reach of the gravity area: the whole system (meters).
 constexpr real_t GravityAreaRadius = 1.0e8;
 
@@ -98,6 +99,7 @@ void JarVoxelUniverse::register_settings()
     add_setting(SpaceGravity, true, Variant::BOOL);
     add_setting(FrameSwitching, true, Variant::BOOL);
     add_setting(AdaptCamera, true, Variant::BOOL);
+    add_setting(MaxNear, 0.25, Variant::FLOAT, PROPERTY_HINT_RANGE, "0.001,100,0.001,or_greater,suffix:m");
     FloatingOrigin::register_settings();
 }
 
@@ -352,8 +354,9 @@ void JarVoxelUniverse::shift_origin_if_far(Node *context, double time)
 // A planet seen from orbit needs a far plane of thousands of kilometers, but
 // Godot's culling breaks down (everything is culled) once far / near passes
 // about 2e7. So near grows with the camera's altitude above the nearest body
-// (from the camera's own near plane on the ground) and far is 1e7 times
-// near: 5 cm / 500 km on the ground, 2 m / 20000 km 1000 km up.
+// (from the camera's own near plane on the ground) up to a small cap, and far
+// is 1e7 times near: 5 cm / 500 km on the ground, 25 cm / 2500 km in space
+// (farther bodies are drawn scaled, see compute_far_views).
 void JarVoxelUniverse::adapt_camera(Node *context)
 {
     Viewport *viewport = context->is_inside_tree() ? context->get_viewport() : nullptr;
@@ -384,7 +387,13 @@ void JarVoxelUniverse::adapt_camera(Node *context)
             const float ground = sdf->distance(glm::vec3(local.x, local.y, local.z));
             altitude = std::min(altitude, std::max(ground, 0.0f));
         }
-    const float near = std::clamp(altitude * 0.002f, ownNear, 1.0e4f);
+    // Capped low (max_camera_near): anything beyond ScaledFrom of the far
+    // plane is drawn in scaled space anyway, so far only has to hold the
+    // nearest body whole while it is not scaled (its near side within
+    // ScaledFrom, its far side 2 view radii further: about 3 radii).
+    const float needed = nearest ? 3.0f * nearest->get_view_radius() / 1.0e7f : 0.0f;
+    const float cap = std::max({float(setting(MaxNear, 0.25)), needed, ownNear});
+    const float near = std::clamp(altitude * 0.002f, ownNear, cap);
     if (camera->get_near() != near)
         camera->set_near(near);
     if (camera->get_far() != near * 1.0e7f)

@@ -450,7 +450,7 @@ func _test_rings() -> void:
 	_check("rings: C ring faint", rings.get_opacity_at(1.3) < 0.3, str(rings.get_opacity_at(1.3)))
 	_check("rings: nothing outside", rings.get_opacity_at(1.1) == 0.0 and rings.get_opacity_at(2.5) == 0.0)
 	# Close by, no scaling.
-	camera.global_position = giant.get_center() + Vector3(0, 0, -3.0e6)
+	camera.global_position = giant.get_center() + Vector3(0, 0, -2.0e6)
 	await _frames(2)
 	await get_tree().process_frame
 	var near_scale: float = (rings.get_child(0, true) as Node3D).global_basis.get_scale().x

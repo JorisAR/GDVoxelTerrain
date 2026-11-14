@@ -133,7 +133,11 @@ func _physics_process(delta: float) -> void:
 	elif gravity.length_squared() > 1e-6:
 		up_direction = -gravity.normalized()
 	# Turn slowly where gravity is weak (between bodies), not at all without it.
-	_align_to(up_direction, delta * clampf(pull.length() / 2.0, 0.0, 1.0))
+	# Flying free (above every body's surface frame) it keeps its orientation:
+	# at thousands of km/s, "up" sweeps around fast and following it would
+	# steer the flight off its target.
+	if not (flying and _frame == null and JarVoxelUniverse.has_bodies()):
+		_align_to(up_direction, delta * clampf(pull.length() / 2.0, 0.0, 1.0))
 
 	if not _spawned:
 		_spawned = _try_spawn()
