@@ -128,6 +128,8 @@ class StitchedSurfaceNets
     // untouched cells of at least ProjectCells voxels; depends on the cell
     // alone, so every chunk with the cell moves it alike.
     static constexpr float ProjectCells = 4.0f;
+    bool escaped_point_valid(const glm::vec3 &point, const std::vector<int> &neighbours, const glm::vec3 &base,
+                             const glm::vec3 &cellMin, const glm::vec3 &cellMax, const glm::vec3 &slack, float cellSize);
     glm::vec3 onto_surface(const glm::vec3 &vertex, const std::vector<int> &neighbours, const glm::vec3 &normal) const;
     // Returns NaN if no dual contouring position fits the cell. `normal` gets the
     // average surface normal of the cell's samples (exact, for shading).

@@ -43,6 +43,27 @@ func _ready() -> void:
 	_check("dc box corner vertex", corner_err < 0.02, "error %.3f" % corner_err)
 	_check("dc no spikes above apex", _highest_vertex_near(Vector3(0.3, 0, 0.3), 3.0) < apex + 0.02)
 
+	# A box turned off the grid: its edges and corners pass through cells
+	# whose samples all agree in sign, so vertices must leave their cell to
+	# reach them (clamped, every edge came out notched by up to 0.6 voxels).
+	var turned := Basis.from_euler(Vector3(0.5, 0.7, 0.3))
+	var turned_center := Vector3(-12.3, ground + 9.4, 0.2)
+	camera.position = turned_center + Vector3(0, 9, 0)
+	volume.force_update_lod()
+	var cube := JarBoxSdf.new()
+	cube.extent = Vector3.ONE * 4.0
+	volume.edit(cube, JarVoxelVolume.SDF_OPERATION_UNION, Transform3D(turned, turned_center))
+	await _settle()
+	var worst_corner := 0.0
+	for sx: float in [-1.0, 1.0]:
+		for sy: float in [-1.0, 1.0]:
+			for sz: float in [-1.0, 1.0]:
+				var corner := turned_center + turned * (Vector3(sx, sy, sz) * 4.0)
+				# Only corners in the air (the lower ones may be buried).
+				if corner.y > ground + 1.0:
+					worst_corner = maxf(worst_corner, _corner_error(corner))
+	_check("dc turned box corners exact", worst_corner < 0.05, "worst corner vertex %.3f m off" % worst_corner)
+
 	# Region meshes (voxel blocks through the chunk mesher, in tiles): a ball
 	# floating above the ground, spanning several tiles, meshes closed.
 	var ball := JarSphereSdf.new()
