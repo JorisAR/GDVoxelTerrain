@@ -71,11 +71,11 @@ albedo = Color(0.18, 0.18, 0.19, 1)
 roughness = 0.8
 
 [sub_resource type="ShaderMaterial" id="CloudMaterial"]
-render_priority = 50
+render_priority = 110
 shader = ExtResource("30_clouds")
 shader_parameter/coverage = 0.5
 shader_parameter/weather_size = 40000.0
-shader_parameter/cloud_size = 3000.0
+shader_parameter/cloud_size = 10000.0
 shader_parameter/density = 0.02
 shader_parameter/max_distance = 160000.0
 

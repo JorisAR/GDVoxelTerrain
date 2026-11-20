@@ -100,7 +100,9 @@ void main() {
 				vec2 hist_uv = prev_uv * vec2(full) / (2.0 * vec2(low));
 				vec4 h = textureLod(history, hist_uv, 0.0);
 				h = clamp(h, lo, hi);
-				result = mix(h, current, p.quality.z);
+				// Far away clouds barely move on screen: more frames, less noise.
+				float meters = d / p.center_scale.w;
+				result = mix(h, current, p.quality.z * mix(1.0, 0.4, smoothstep(20000.0, 300000.0, meters)));
 			}
 		}
 	}

@@ -120,6 +120,7 @@ struct Weather {
 	float sheet; // how sheet-like
 	float warp; // the regions' offset of single clouds, in cloud sizes
 	float spread; // coverage variation lost to averaging (unresolved regions)
+	float cell; // the large shape octave (groups of clouds), -1: not read yet
 };
 
 // The weather at world-orientation `x` (meters from the body's center).
@@ -129,6 +130,7 @@ Weather weather_at(vec3 x, float pixel) {
 	w.sheet = 0.2;
 	w.warp = 0.0;
 	w.spread = 0.0;
+	w.cell = -1.0;
 	float c;
 	vec3 q;
 	if (radial()) {
@@ -174,42 +176,58 @@ Weather weather_at(vec3 x, float pixel) {
 }
 
 // Height profile of the clouds (0..1 in the layer): heaped clouds rounded
-// at the base and reaching up to their tops; sheets low and flat.
-float profile_at(float h, Weather w) {
+// at the base and reaching up to their tops; sheets low and flat. `cell`
+// (0..1, large-scale noise): each group of clouds its own tops and base, so
+// dense weather is a ceiling of separate clouds, not one shell.
+float profile_at(float h, Weather w, float cell) {
 	// Sparse fair-weather clouds stay flat; dense ones tower up to the map's tops.
-	float tops = mix(0.3, 1.0, w.tops) * mix(0.35, 1.0, smoothstep(0.2, 0.8, w.coverage));
+	float tops = mix(0.3, 1.0, w.tops) * mix(0.35, 1.0, smoothstep(0.2, 0.8, w.coverage)) * mix(0.5, 1.15, cell);
+	float base = (1.0 - cell) * 0.12 * (1.0 - w.sheet);
 	// Narrowing steadily from a flat base to the top: domes, not columns.
-	float heaped = smoothstep(0.0, 0.07, h) * clamp(1.0 - pow(max(h / tops, 0.0), 1.6), 0.0, 1.0);
+	float heaped = smoothstep(base, base + 0.07, h) * clamp(1.0 - pow(max(h / tops, 0.0), 1.6), 0.0, 1.0);
 	float sheet = smoothstep(0.0, 0.06, h) * (1.0 - smoothstep(0.18, 0.32, h));
 	return mix(heaped, sheet, w.sheet);
 }
 
+// The second shape octave's coordinates: turned and scaled so that it never
+// repeats together with the first (no lattice from afar).
+const mat3 TURN = mat3(vec3(0.36, 0.48, -0.8), vec3(-0.8, 0.6, 0.0), vec3(0.48, 0.64, 0.6));
+
 // Density (extinction per meter) at world-orientation `x` (meters from the
 // body's center) in weather `w`; `pixel`: meters a pixel covers there.
 // `cheap` skips the erosion (light paths).
-float cloud_density_in(vec3 x, Weather w, float pixel, bool cheap) {
+float cloud_density_in(vec3 x, inout Weather w, float pixel, bool cheap) {
 	float h = layer_height(x);
 	if (h <= 0.0 || h >= 1.0)
 		return 0.0;
 	float c = w.coverage;
 	if (c < 0.01 && w.spread < 0.01)
 		return 0.0;
-	float profile = profile_at(h, w);
-	if (profile <= 0.0)
-		return 0.0;
 	float size = p.shape.z;
 	float density = p.shape2.y;
 	// Single clouds: resolved while a cloud (a quarter period) covers pixels.
 	float unresolved = smoothstep(-3.0, 0.0, log2(pixel / (size * 0.25)));
 	float shape = 0.0;
+	float profile = 0.0;
 	if (unresolved < 1.0) {
 		vec3 b = mat3(p.world_to_body) * x;
 		// Sheets: larger, softer shapes.
 		float period = size * (1.0 + w.sheet * 1.5);
 		vec3 s = (b - p.shape_offset.xyz) / period + w.warp * 0.35;
-		float n = textureLod(shape_noise, s, lod_for(pixel, period, SHAPE_TEXELS)).r;
+		float lod = lod_for(pixel, period, SHAPE_TEXELS);
+		// A second octave 2.7 times larger, turned: groups of clouds, their
+		// tops and bases (read once per view sample: light paths reuse it).
+		float cell = w.cell >= 0.0 ? w.cell : textureLod(shape_noise, TURN * s * 0.37 + vec3(0.17, 0.53, 0.71), max(lod - 1.43, 0.0)).r;
+		w.cell = cell;
+		profile = profile_at(h, w, cell);
+		if (profile <= 0.0 && unresolved <= 0.0)
+			return 0.0;
+		float n = textureLod(shape_noise, s, lod).r * 0.75 + cell * 0.25;
+		n = clamp(0.5 + (n - 0.5) * 1.2, 0.0, 1.0);
 		n = mix(n, 0.5 + (n - 0.5) * 0.6, w.sheet);
-		shape = clamp((n * profile - (1.0 - c)) / max(c, 0.05), 0.0, 1.0);
+		// Heaped clouds keep gaps even in dense weather (overcast is for sheets).
+		float cc = min(c, mix(0.86, 1.0, w.sheet));
+		shape = clamp((n * profile - (1.0 - cc)) / max(cc, 0.05), 0.0, 1.0);
 		if (shape > 0.0 && !cheap && p.shape2.x > 0.0) {
 			float dsize = size * p.shape.w;
 			float dlod = lod_for(pixel, dsize, DETAIL_TEXELS);
@@ -224,11 +242,12 @@ float cloud_density_in(vec3 x, Weather w, float pixel, bool cheap) {
 	}
 	shape *= density;
 	if (unresolved > 0.0) {
-		// As opaque through the layer as the covered fraction of the pixel.
+		// As opaque through the layer as the covered fraction of the pixel
+		// (with the tops and bases of an average group of clouds).
 		float spread = w.spread + 0.04;
 		float fraction = smoothstep(0.22 - spread, 0.7 + spread, c);
 		float column = -log(1.0 - 0.96 * fraction);
-		float fog = column / ((cloud_top() - cloud_bottom()) * 0.45) * profile;
+		float fog = column / ((cloud_top() - cloud_bottom()) * 0.45) * profile_at(h, w, 0.6);
 		shape = mix(shape, fog, unresolved);
 	}
 	return shape;
@@ -296,8 +315,9 @@ void main() {
 	float view_scale = p.center_scale.w;
 	vec3 o = (p.camera[3].xyz - p.center_scale.xyz) / view_scale;
 	float scene_end = scene >= FAR ? FAR : scene / view_scale;
-	// Meters per pixel per meter of distance (at full resolution).
-	float pixel_angle = 2.0 * abs(p.inv_projection[1][1]) / float(full.y);
+	// Meters per traced pixel per meter of distance (half resolution: the
+	// detail chosen for full resolution pixels shimmers far away).
+	float pixel_angle = 4.0 * abs(p.inv_projection[1][1]) / float(full.y);
 
 	// Up to two pieces of the ray inside the layer.
 	vec2 seg_a = vec2(1.0, -1.0);

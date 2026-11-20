@@ -1038,7 +1038,7 @@ Ref<ShaderMaterial> JarBodyClouds::get_active_material()
     if (_material.is_valid())
         return _materialCopy.of(_material); // never the user's own (see JarMaterialCopy)
     if (_defaultMaterial.is_null())
-        _defaultMaterial = make_material(CloudShader, 50); // after water, before the atmosphere (which hazes them)
+        _defaultMaterial = make_material(CloudShader, 110); // after water and the atmosphere (they haze themselves)
     return _defaultMaterial;
 }
 
@@ -1262,6 +1262,28 @@ void JarBodyClouds::update(const JarCelestialBody &body)
         _depthBuffer->set_texture_rd_rid(out.depth);
         _outputGeneration = out.generation;
     }
+    // The air between the camera and the clouds: the atmosphere's own values
+    // (drawn after it, the clouds haze themselves as far as they are).
+    auto *atmosphere = Object::cast_to<JarBodyAtmosphere>(ObjectDB::get_instance(_atmosphere));
+    if (atmosphere == nullptr || !atmosphere->is_inside_tree())
+    {
+        const TypedArray<Node> found = body.find_children("*", "JarBodyAtmosphere", true, false);
+        atmosphere = found.is_empty() ? nullptr : Object::cast_to<JarBodyAtmosphere>(found[0]);
+        _atmosphere = atmosphere ? atmosphere->get_instance_id() : 0;
+    }
+    bool hazed = false;
+    if (atmosphere && atmosphere->is_visible_in_tree())
+    {
+        const Ref<ShaderMaterial> air = atmosphere->get_active_material();
+        hazed = air.is_valid() && air->get_shader_parameter("transmittance_lut").get_type() == Variant::OBJECT;
+        if (hazed)
+            for (const char *name : {"planet_center", "planet_radius", "atmosphere_radius", "sun_direction", "sun_color",
+                                     "rayleigh_scattering", "rayleigh_scale_height", "mie_scattering", "mie_scale_height",
+                                     "mie_absorption", "mie_anisotropy", "ozone_absorption", "ozone_center",
+                                     "ozone_half_width", "transmittance_lut", "multiscattering_lut", "sun_intensity"})
+                material->set_shader_parameter(name, param(air, name));
+    }
+    material->set_shader_parameter("has_atmosphere", hazed);
     material->set_shader_parameter("cloud_color_buffer", _colorBuffer);
     material->set_shader_parameter("cloud_depth_buffer", _depthBuffer);
     material->set_shader_parameter("cloud_ready", _outputGeneration != 0 && _volumes.ready() && weatherReady);

@@ -263,6 +263,7 @@ class JarBodyClouds : public JarBodyLayer
     double _time = 0.0; // seconds of wind and drift
     float _viewScale = 1.0f;
     Basis _worldToBody;
+    uint64_t _atmosphere = 0; // instance id of the body's JarBodyAtmosphere
     int _seed = 1;
     Ref<Texture> _weather; // CloudNoise::weather, made once the pole is known
     CloudNoise::FacesJob _weatherJob; // its texels, on a thread
