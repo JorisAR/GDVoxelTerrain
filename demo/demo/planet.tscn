@@ -89,6 +89,11 @@ auto_exposure_scale = 0.15
 auto_exposure_speed = 2.0
 auto_exposure_min_sensitivity = 50.0
 
+[sub_resource type="JarCloudsEffect" id="JarCloudsEffect_dtodn"]
+
+[sub_resource type="Compositor" id="Compositor_qie65"]
+compositor_effects = Array[CompositorEffect]([SubResource("JarCloudsEffect_dtodn")])
+
 [node name="PlanetDemo" type="Node3D" unique_id=700940484]
 
 [node name="Sun" type="JarCelestialBody" parent="." unique_id=1203398541]
@@ -97,8 +102,8 @@ surface_gravity = 30.0
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -168404.83, 1944855.8, 3491300)
 
 [node name="Light" type="JarBodyLight" parent="Sun" unique_id=1659315502 node_paths=PackedStringArray("sun")]
-sun = NodePath("../../SunLight")
 space_min_sensitivity = 100.0
+sun = NodePath("../../SunLight")
 
 [node name="PlanetOrbit" type="JarBodyOrbit" parent="Sun" unique_id=318843216]
 radius = 4000000.0
@@ -125,7 +130,66 @@ lod_automatic_update_distance = 16.0
 editor_preview_min_lod = 5
 population_biome_map = ExtResource("17_biomes")
 
-[node name="Population" parent="Sun/PlanetOrbit/Planet/JarVoxelVolume" instance=ExtResource("18_population")]
+[node name="Population" parent="Sun/PlanetOrbit/Planet/JarVoxelVolume" unique_id=1774679658 instance=ExtResource("18_population")]
+
+[node name="Rock" parent="Sun/PlanetOrbit/Planet/JarVoxelVolume/Population" index="0"]
+"biomes/Temperate forest" = 0.0
+"biomes/Alpine tundra" = 0.0
+"biomes/Dry steppe" = 0.0
+
+[node name="Pine" parent="Sun/PlanetOrbit/Planet/JarVoxelVolume/Population" index="1"]
+"biomes/Alpine tundra" = 0.0
+"biomes/Dry steppe" = 0.0
+
+[node name="BroadleafLarge" parent="Sun/PlanetOrbit/Planet/JarVoxelVolume/Population" index="2"]
+"biomes/Alpine tundra" = 0.0
+"biomes/Dry steppe" = 0.0
+
+[node name="Broadleaf" parent="Sun/PlanetOrbit/Planet/JarVoxelVolume/Population" index="3"]
+"biomes/Alpine tundra" = 0.0
+"biomes/Dry steppe" = 0.0
+
+[node name="Birch" parent="Sun/PlanetOrbit/Planet/JarVoxelVolume/Population" index="4"]
+"biomes/Alpine tundra" = 0.0
+"biomes/Dry steppe" = 0.0
+
+[node name="Bush" parent="Sun/PlanetOrbit/Planet/JarVoxelVolume/Population" index="5"]
+"biomes/Alpine tundra" = 0.0
+
+[node name="PineSparse" parent="Sun/PlanetOrbit/Planet/JarVoxelVolume/Population" index="6"]
+"biomes/Temperate forest" = 0.0
+"biomes/Dry steppe" = 0.0
+
+[node name="RockField" parent="Sun/PlanetOrbit/Planet/JarVoxelVolume/Population" index="7"]
+"biomes/Temperate forest" = 0.0
+"biomes/Dry steppe" = 0.0
+
+[node name="BroadleafSavanna" parent="Sun/PlanetOrbit/Planet/JarVoxelVolume/Population" index="8"]
+"biomes/Temperate forest" = 0.0
+"biomes/Alpine tundra" = 0.0
+
+[node name="Grass" parent="Sun/PlanetOrbit/Planet/JarVoxelVolume/Population" index="9"]
+"biomes/Alpine tundra" = 0.0
+
+[node name="GrassTall" parent="Sun/PlanetOrbit/Planet/JarVoxelVolume/Population" index="10"]
+"biomes/Alpine tundra" = 0.0
+"biomes/Dry steppe" = 0.0
+
+[node name="Poppies" parent="Sun/PlanetOrbit/Planet/JarVoxelVolume/Population" index="11"]
+"biomes/Alpine tundra" = 0.0
+"biomes/Dry steppe" = 0.0
+
+[node name="PoppiesOrange" parent="Sun/PlanetOrbit/Planet/JarVoxelVolume/Population" index="12"]
+"biomes/Alpine tundra" = 0.0
+"biomes/Dry steppe" = 0.0
+
+[node name="GroundElder" parent="Sun/PlanetOrbit/Planet/JarVoxelVolume/Population" index="13"]
+"biomes/Alpine tundra" = 0.0
+"biomes/Dry steppe" = 0.0
+
+[node name="Lupine" parent="Sun/PlanetOrbit/Planet/JarVoxelVolume/Population" index="14"]
+"biomes/Alpine tundra" = 0.0
+"biomes/Dry steppe" = 0.0
 
 [node name="Debris" type="JarVoxelDebris" parent="Sun/PlanetOrbit/Planet/JarVoxelVolume" unique_id=1288236388]
 collision_layer = 3
@@ -179,12 +243,14 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 8246.8, 9839.2, 10547.6)
 [node name="WorldEnvironment" type="WorldEnvironment" parent="." unique_id=1854622839]
 environment = SubResource("Environment")
 camera_attributes = SubResource("Exposure")
+compositor = SubResource("Compositor_qie65")
 
 [node name="SunLight" type="DirectionalLight3D" parent="." unique_id=705585350]
 transform = Transform3D(0.9987146, 0.024603227, -0.04431396, 0, 0.8742882, 0.48540714, 0.050685756, -0.4847832, 0.8731645, 0, 0, 0)
 light_energy = 1.4
 shadow_enabled = true
 directional_shadow_max_distance = 400.0
+metadata/jar_star_layer = 1601636997997
 
 [node name="MoonLight" type="DirectionalLight3D" parent="." unique_id=412907551]
 transform = Transform3D(-0.20412448, 0.37763318, 0.9031758, 0, 0.9226012, -0.38575527, -0.97894496, -0.078742094, -0.18832548, 0, 0, 0)

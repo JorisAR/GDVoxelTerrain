@@ -1,18 +1,18 @@
-[gd_scene format=3]
+[gd_scene format=3 uid="uid://br5q72hbubw7w"]
 
 [ext_resource type="PackedScene" uid="uid://c7kqgl1k10x14" path="res://addons/jar_voxel_terrain/src/chunk.tscn" id="1_chunk"]
-[ext_resource type="Shader" path="res://addons/jar_voxel_terrain/nodes/clouds/clouds.gdshader" id="30_clouds"]
 [ext_resource type="JarTerrainSdf" uid="uid://cks8y51ikg4ew" path="res://demo/giant/giant_terrain.tres" id="2_terrain"]
 [ext_resource type="Material" path="res://demo/giant/giant_material.tres" id="3_material"]
 [ext_resource type="JarCraterSdf" path="res://demo/giant/giant_moon_craters.tres" id="12_moon"]
 [ext_resource type="Material" path="res://demo/planet/moon_material.tres" id="13_moon_material"]
 [ext_resource type="PackedScene" uid="uid://cupyeuv1xe20s" path="res://demo/player/player.tscn" id="14_player"]
 [ext_resource type="Material" uid="uid://55tbedv6qxva" path="res://demo/assets/space/space_sky.tres" id="15_sky"]
-[ext_resource type="JarClimateBiomeMap" path="res://demo/giant/giant_biomes.tres" id="17_biomes"]
+[ext_resource type="JarClimateBiomeMap" uid="uid://b5wb1fksgm0ro" path="res://demo/giant/giant_biomes.tres" id="17_biomes"]
 [ext_resource type="PackedScene" path="res://demo/planet/planet_population.tscn" id="18_population"]
+[ext_resource type="Shader" uid="uid://cnmeevyi4je6e" path="res://addons/jar_voxel_terrain/nodes/clouds/clouds.gdshader" id="30_clouds"]
 [ext_resource type="JarCraterSdf" path="res://demo/system/mars_craters.tres" id="40_mars"]
 [ext_resource type="Material" path="res://demo/system/mars_material.tres" id="41_mars_material"]
-[ext_resource type="Shader" path="res://addons/jar_voxel_terrain/nodes/rings/gas_giant.gdshader" id="42_giant"]
+[ext_resource type="Shader" uid="uid://pxpmio4p20ae" path="res://addons/jar_voxel_terrain/nodes/rings/gas_giant.gdshader" id="42_giant"]
 
 [sub_resource type="JarTerrainMaterial" id="Grass"]
 albedo = Color(0.25, 0.35, 0.15, 1)
@@ -64,6 +64,53 @@ albedo = Color(0.6, 0.54, 0.3, 1)
 roughness = 0.95
 variation = 0.3
 
+[sub_resource type="ShaderMaterial" id="CloudMaterial"]
+render_priority = 110
+shader = ExtResource("30_clouds")
+shader_parameter/planet_center = Vector3(0, 0, 0)
+shader_parameter/planet_radius = 1000.0
+shader_parameter/atmosphere_radius = 1250.0
+shader_parameter/sun_direction = Vector3(0, 1, 0)
+shader_parameter/sun_color = Vector3(1, 1, 1)
+shader_parameter/rayleigh_scattering = Vector3(0, 0, 0)
+shader_parameter/rayleigh_scale_height = 100.0
+shader_parameter/mie_scattering = 0.0
+shader_parameter/mie_scale_height = 40.0
+shader_parameter/mie_absorption = 0.11
+shader_parameter/mie_anisotropy = 0.7
+shader_parameter/ozone_absorption = Vector3(0, 0, 0)
+shader_parameter/ozone_center = 90.0
+shader_parameter/ozone_half_width = 40.0
+shader_parameter/cloud_ready = false
+shader_parameter/has_atmosphere = false
+shader_parameter/sun_intensity = 16.0
+shader_parameter/coverage = 0.5
+shader_parameter/weather_strength = 1.0
+shader_parameter/weather_size = 40000.0
+shader_parameter/region_size = 0.0
+shader_parameter/region_strength = 0.3
+shader_parameter/cloud_size = 10000.0
+shader_parameter/detail_scale = 0.12
+shader_parameter/erosion = 0.4
+shader_parameter/density = 0.02
+shader_parameter/faint_cutoff = 0.2
+shader_parameter/wind = Vector3(6, 0, 2)
+shader_parameter/weather_drift = 0.02
+shader_parameter/evolution = 3.0
+shader_parameter/zonal_wind = 0.3
+shader_parameter/cloud_color = Color(1, 1, 1, 1)
+shader_parameter/brightness = 1.0
+shader_parameter/sky_light = Color(0.38, 0.5, 0.75, 1)
+shader_parameter/sky_strength = 0.25
+shader_parameter/forward = 0.6
+shader_parameter/powder = 0.5
+shader_parameter/night_ambient = 0.35
+shader_parameter/steps = 64
+shader_parameter/light_steps = 4
+shader_parameter/max_distance = 160000.0
+shader_parameter/history_blend = 0.12
+shader_parameter/haze_steps = 8
+
 [sub_resource type="JarTerrainMaterial" id="Regolith"]
 albedo = Color(0.3, 0.29, 0.28, 1)
 roughness = 0.95
@@ -73,15 +120,6 @@ variation = 0.3
 albedo = Color(0.18, 0.18, 0.19, 1)
 roughness = 0.8
 
-[sub_resource type="ShaderMaterial" id="CloudMaterial"]
-render_priority = 50
-shader = ExtResource("30_clouds")
-shader_parameter/coverage = 0.5
-shader_parameter/weather_size = 40000.0
-shader_parameter/cloud_size = 3000.0
-shader_parameter/density = 0.02
-shader_parameter/max_distance = 160000.0
-
 [sub_resource type="JarTerrainMaterial" id="MarsDust"]
 albedo = Color(0.55, 0.32, 0.19, 1)
 roughness = 0.95
@@ -89,18 +127,15 @@ variation = 0.35
 
 [sub_resource type="JarTerrainMaterial" id="MarsRock"]
 albedo = Color(0.34, 0.22, 0.16, 1)
-roughness = 0.85
 variation = 0.3
 
 [sub_resource type="JarTerrainMaterial" id="MarsSand"]
 albedo = Color(0.66, 0.42, 0.26, 1)
 roughness = 0.95
-variation = 0.25
 
 [sub_resource type="JarTerrainMaterial" id="MarsBasalt"]
 albedo = Color(0.22, 0.17, 0.15, 1)
 roughness = 0.8
-variation = 0.25
 
 [sub_resource type="JarTerrainMaterial" id="MarsFrost"]
 albedo = Color(0.86, 0.84, 0.82, 1)
@@ -108,7 +143,21 @@ roughness = 0.6
 variation = 0.1
 
 [sub_resource type="ShaderMaterial" id="JupiterMaterial"]
+render_priority = 0
 shader = ExtResource("42_giant")
+shader_parameter/planet_center = Vector3(0, 0, 0)
+shader_parameter/planet_radius = 1.0
+shader_parameter/ring_normal = Vector3(0, 1, 0)
+shader_parameter/ring_inner = 1.24
+shader_parameter/ring_outer = 2.33
+shader_parameter/sun_direction = Vector3(0, 1, 0)
+shader_parameter/sun_color = Vector3(1, 1, 1)
+shader_parameter/world_to_body = Basis(1, 0, 0, 0, 1, 0, 0, 0, 1)
+shader_parameter/spin_axis = Vector3(0, 1, 0)
+shader_parameter/spin_axis_world = Vector3(0, 1, 0)
+shader_parameter/flattening = 0.0
+shader_parameter/has_rings = false
+shader_parameter/bands_ready = false
 shader_parameter/color_light = Color(0.84, 0.76, 0.62, 1)
 shader_parameter/color_dark = Color(0.52, 0.34, 0.22, 1)
 shader_parameter/color_accent = Color(0.78, 0.47, 0.28, 1)
@@ -122,22 +171,59 @@ shader_parameter/seed = 5
 shader_parameter/wind_speed = 0.03
 shader_parameter/great_spot = Vector4(-0.38, 1.2, 0.18, 1)
 shader_parameter/great_spot_color = Color(0.74, 0.36, 0.22, 1)
+shader_parameter/brightness = 1.0
+shader_parameter/limb_darkening = 1.15
+shader_parameter/ambient_light = Vector3(0.004, 0.004, 0.005)
 
 [sub_resource type="ShaderMaterial" id="SaturnMaterial"]
+render_priority = 0
 shader = ExtResource("42_giant")
+shader_parameter/planet_center = Vector3(0, 0, 0)
+shader_parameter/planet_radius = 1.0
+shader_parameter/ring_normal = Vector3(0, 1, 0)
+shader_parameter/ring_inner = 1.24
+shader_parameter/ring_outer = 2.33
+shader_parameter/sun_direction = Vector3(0, 1, 0)
+shader_parameter/sun_color = Vector3(1, 1, 1)
+shader_parameter/world_to_body = Basis(1, 0, 0, 0, 1, 0, 0, 0, 1)
+shader_parameter/spin_axis = Vector3(0, 1, 0)
+shader_parameter/spin_axis_world = Vector3(0, 1, 0)
+shader_parameter/flattening = 0.0
+shader_parameter/has_rings = false
+shader_parameter/bands_ready = false
 shader_parameter/color_light = Color(0.86, 0.79, 0.6, 1)
 shader_parameter/color_dark = Color(0.7, 0.6, 0.42, 1)
 shader_parameter/color_accent = Color(0.8, 0.68, 0.48, 1)
 shader_parameter/color_polar = Color(0.6, 0.6, 0.56, 1)
-shader_parameter/polar_latitude = 0.9
 shader_parameter/band_count = 14.0
 shader_parameter/band_contrast = 0.35
 shader_parameter/turbulence = 0.4
+shader_parameter/polar_latitude = 0.9
 shader_parameter/storms = 0.2
 shader_parameter/seed = 3
+shader_parameter/wind_speed = 0.02
+shader_parameter/great_spot = Vector4(-0.38, 1, 0.16, 0)
+shader_parameter/great_spot_color = Color(0.75, 0.38, 0.24, 1)
+shader_parameter/brightness = 1.0
+shader_parameter/limb_darkening = 1.15
+shader_parameter/ambient_light = Vector3(0.004, 0.004, 0.005)
 
 [sub_resource type="ShaderMaterial" id="NeptuneMaterial"]
+render_priority = 0
 shader = ExtResource("42_giant")
+shader_parameter/planet_center = Vector3(0, 0, 0)
+shader_parameter/planet_radius = 1.0
+shader_parameter/ring_normal = Vector3(0, 1, 0)
+shader_parameter/ring_inner = 1.24
+shader_parameter/ring_outer = 2.33
+shader_parameter/sun_direction = Vector3(0, 1, 0)
+shader_parameter/sun_color = Vector3(1, 1, 1)
+shader_parameter/world_to_body = Basis(1, 0, 0, 0, 1, 0, 0, 0, 1)
+shader_parameter/spin_axis = Vector3(0, 1, 0)
+shader_parameter/spin_axis_world = Vector3(0, 1, 0)
+shader_parameter/flattening = 0.0
+shader_parameter/has_rings = false
+shader_parameter/bands_ready = false
 shader_parameter/color_light = Color(0.36, 0.55, 0.9, 1)
 shader_parameter/color_dark = Color(0.16, 0.3, 0.72, 1)
 shader_parameter/color_accent = Color(0.3, 0.46, 0.85, 1)
@@ -145,11 +231,15 @@ shader_parameter/color_polar = Color(0.22, 0.36, 0.76, 1)
 shader_parameter/band_count = 8.0
 shader_parameter/band_contrast = 0.3
 shader_parameter/turbulence = 0.5
+shader_parameter/polar_latitude = 0.82
 shader_parameter/storms = 0.25
 shader_parameter/seed = 9
-shader_parameter/limb_darkening = 1.25
+shader_parameter/wind_speed = 0.02
 shader_parameter/great_spot = Vector4(-0.3, 2.4, 0.22, 0.9)
 shader_parameter/great_spot_color = Color(0.1, 0.18, 0.45, 1)
+shader_parameter/brightness = 1.0
+shader_parameter/limb_darkening = 1.25
+shader_parameter/ambient_light = Vector3(0.004, 0.004, 0.005)
 
 [sub_resource type="Gradient" id="NeptuneRings"]
 offsets = PackedFloat32Array(0, 0.1, 0.11, 0.515, 0.526, 0.537, 0.68, 0.69, 0.927, 0.937, 0.947, 1)
@@ -175,6 +265,11 @@ auto_exposure_scale = 0.22
 auto_exposure_speed = 2.0
 auto_exposure_min_sensitivity = 50.0
 
+[sub_resource type="JarCloudsEffect" id="JarCloudsEffect_fc25f"]
+
+[sub_resource type="Compositor" id="Compositor_ksmme"]
+compositor_effects = Array[CompositorEffect]([SubResource("JarCloudsEffect_fc25f")])
+
 [node name="SolarSystemDemo" type="Node3D" unique_id=700940484]
 
 [node name="Sun" type="JarCelestialBody" parent="." unique_id=1203398541]
@@ -183,9 +278,9 @@ surface_gravity = 30.0
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1684048.3, 19448558, 34913000)
 
 [node name="Light" type="JarBodyLight" parent="Sun" unique_id=1659315502 node_paths=PackedStringArray("sun")]
-sun = NodePath("../../SunLight")
-space_min_sensitivity = 150.0
 inverse_square = true
+space_min_sensitivity = 150.0
+sun = NodePath("../../SunLight")
 
 [node name="PlanetOrbit" type="JarBodyOrbit" parent="Sun" unique_id=318843216]
 radius = 40000000.0
@@ -214,56 +309,94 @@ population_biome_map = ExtResource("17_biomes")
 
 [node name="Population" parent="Sun/PlanetOrbit/Planet/JarVoxelVolume" unique_id=1207783817 instance=ExtResource("18_population")]
 
+[node name="Rock" parent="Sun/PlanetOrbit/Planet/JarVoxelVolume/Population" index="0"]
+"biomes/Temperate forest" = 0.0
+"biomes/Alpine tundra" = 0.0
+"biomes/Dry steppe" = 0.0
+"biomes/Polar ice" = 0.0
+"biomes/Hot desert" = 0.0
+
 [node name="Pine" parent="Sun/PlanetOrbit/Planet/JarVoxelVolume/Population" index="1"]
 "biomes/Alpine tundra" = 0.0
 "biomes/Dry steppe" = 0.0
+"biomes/Polar ice" = 0.0
+"biomes/Hot desert" = 0.0
 
 [node name="BroadleafLarge" parent="Sun/PlanetOrbit/Planet/JarVoxelVolume/Population" index="2"]
 "biomes/Alpine tundra" = 0.0
 "biomes/Dry steppe" = 0.0
+"biomes/Polar ice" = 0.0
+"biomes/Hot desert" = 0.0
 
 [node name="Broadleaf" parent="Sun/PlanetOrbit/Planet/JarVoxelVolume/Population" index="3"]
 "biomes/Alpine tundra" = 0.0
 "biomes/Dry steppe" = 0.0
+"biomes/Polar ice" = 0.0
+"biomes/Hot desert" = 0.0
 
 [node name="Birch" parent="Sun/PlanetOrbit/Planet/JarVoxelVolume/Population" index="4"]
 "biomes/Alpine tundra" = 0.0
 "biomes/Dry steppe" = 0.0
+"biomes/Polar ice" = 0.0
+"biomes/Hot desert" = 0.0
 
 [node name="Bush" parent="Sun/PlanetOrbit/Planet/JarVoxelVolume/Population" index="5"]
 "biomes/Alpine tundra" = 0.0
+"biomes/Polar ice" = 0.0
+"biomes/Hot desert" = 0.0
 
 [node name="PineSparse" parent="Sun/PlanetOrbit/Planet/JarVoxelVolume/Population" index="6"]
 "biomes/Temperate forest" = 0.0
 "biomes/Dry steppe" = 0.0
+"biomes/Polar ice" = 0.0
+"biomes/Hot desert" = 0.0
 
 [node name="RockField" parent="Sun/PlanetOrbit/Planet/JarVoxelVolume/Population" index="7"]
 "biomes/Temperate forest" = 0.0
 "biomes/Dry steppe" = 0.0
+"biomes/Polar ice" = 0.0
+"biomes/Hot desert" = 0.0
 
 [node name="BroadleafSavanna" parent="Sun/PlanetOrbit/Planet/JarVoxelVolume/Population" index="8"]
 "biomes/Temperate forest" = 0.0
 "biomes/Alpine tundra" = 0.0
+"biomes/Polar ice" = 0.0
+"biomes/Hot desert" = 0.0
+
+[node name="Grass" parent="Sun/PlanetOrbit/Planet/JarVoxelVolume/Population" index="9"]
+"biomes/Alpine tundra" = 0.0
+"biomes/Polar ice" = 0.0
+"biomes/Hot desert" = 0.0
 
 [node name="GrassTall" parent="Sun/PlanetOrbit/Planet/JarVoxelVolume/Population" index="10"]
 "biomes/Alpine tundra" = 0.0
 "biomes/Dry steppe" = 0.0
+"biomes/Polar ice" = 0.0
+"biomes/Hot desert" = 0.0
 
 [node name="Poppies" parent="Sun/PlanetOrbit/Planet/JarVoxelVolume/Population" index="11"]
 "biomes/Alpine tundra" = 0.0
 "biomes/Dry steppe" = 0.0
+"biomes/Polar ice" = 0.0
+"biomes/Hot desert" = 0.0
 
 [node name="PoppiesOrange" parent="Sun/PlanetOrbit/Planet/JarVoxelVolume/Population" index="12"]
 "biomes/Alpine tundra" = 0.0
 "biomes/Dry steppe" = 0.0
+"biomes/Polar ice" = 0.0
+"biomes/Hot desert" = 0.0
 
 [node name="GroundElder" parent="Sun/PlanetOrbit/Planet/JarVoxelVolume/Population" index="13"]
 "biomes/Alpine tundra" = 0.0
 "biomes/Dry steppe" = 0.0
+"biomes/Polar ice" = 0.0
+"biomes/Hot desert" = 0.0
 
 [node name="Lupine" parent="Sun/PlanetOrbit/Planet/JarVoxelVolume/Population" index="14"]
 "biomes/Alpine tundra" = 0.0
 "biomes/Dry steppe" = 0.0
+"biomes/Polar ice" = 0.0
+"biomes/Hot desert" = 0.0
 
 [node name="Debris" type="JarVoxelDebris" parent="Sun/PlanetOrbit/Planet/JarVoxelVolume" unique_id=1288236388]
 collision_layer = 3
@@ -275,7 +408,7 @@ collision_mask = 3
 thickness = 0.03
 
 [node name="Clouds" type="JarBodyClouds" parent="Sun/PlanetOrbit/Planet" unique_id=1226887604]
-altitude = 2500.0
+altitude = 3300.0
 thickness = 3000.0
 material = SubResource("CloudMaterial")
 
@@ -312,25 +445,26 @@ collision_mask = 3
 reflects = NodePath("../../../../../Light")
 sun = NodePath("../../../../../../MoonLight")
 
-[node name="Asteroids" type="JarBodyAsteroids" parent="Sun"]
+[node name="Asteroids" type="JarBodyAsteroids" parent="Sun" unique_id=1919447417]
 inner_radius = 95000000.0
 outer_radius = 112000000.0
-thickness = 1500000.0
 axis = Vector3(0.023426, 0.87384, -0.485649)
 
-[node name="MarsOrbit" type="JarBodyOrbit" parent="Sun"]
+[node name="MarsOrbit" type="JarBodyOrbit" parent="Sun" unique_id=1844634884]
 radius = 75000000.0
 period = 3500000.0
 axis = Vector3(0.023426, 0.87384, -0.485649)
 phase = 99.59
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -14175364, -16220114, -29869040)
+top_level = true
 
-[node name="Mars" type="JarCelestialBody" parent="Sun/MarsOrbit"]
+[node name="Mars" type="JarCelestialBody" parent="Sun/MarsOrbit" unique_id=1355527397]
 surface_gravity = 3.7
 spin_period = 1900.0
 spin_axis = Vector3(0.25, 1, 0.3)
 unique_name_in_owner = true
 
-[node name="JarVoxelVolume" type="JarVoxelVolume" parent="Sun/MarsOrbit/Mars"]
+[node name="JarVoxelVolume" type="JarVoxelVolume" parent="Sun/MarsOrbit/Mars" unique_id=879074759]
 extent = 712000.0
 chunk_scene = ExtResource("1_chunk")
 materials = Array[JarTerrainMaterial]([SubResource("MarsDust"), SubResource("MarsRock"), SubResource("MarsSand"), SubResource("MarsBasalt"), SubResource("MarsFrost")])
@@ -342,7 +476,7 @@ manifold = true
 lod_automatic_update_distance = 16.0
 editor_preview_min_lod = 5
 
-[node name="Atmosphere" type="JarBodyAtmosphere" parent="Sun/MarsOrbit/Mars"]
+[node name="Atmosphere" type="JarBodyAtmosphere" parent="Sun/MarsOrbit/Mars" unique_id=51989003]
 thickness = 0.03
 rayleigh_depth = Vector3(0.004, 0.006, 0.01)
 mie_depth = 0.05
@@ -351,60 +485,66 @@ ozone_depth = Vector3(0, 0, 0)
 ground_albedo = Color(0.45, 0.28, 0.18, 1)
 sunset_strength = 2.0
 
-[node name="JupiterOrbit" type="JarBodyOrbit" parent="Sun"]
+[node name="JupiterOrbit" type="JarBodyOrbit" parent="Sun" unique_id=403157346]
 radius = 130000000.0
 period = 12000000.0
 axis = Vector3(0.023426, 0.87384, -0.485649)
 phase = 97.59
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -18850168, -42798248, -77917224)
+top_level = true
 
-[node name="Jupiter" type="JarCelestialBody" parent="Sun/JupiterOrbit"]
+[node name="Jupiter" type="JarCelestialBody" parent="Sun/JupiterOrbit" unique_id=815186730]
 radius = 1200000.0
 surface_gravity = 24.0
 spin_period = 7200.0
 spin_axis = Vector3(0.05, 1, 0)
 unique_name_in_owner = true
 
-[node name="Surface" type="JarBodyGasGiant" parent="Sun/JupiterOrbit/Jupiter"]
+[node name="Surface" type="JarBodyGasGiant" parent="Sun/JupiterOrbit/Jupiter" unique_id=1876189905]
 material = SubResource("JupiterMaterial")
 flattening = 0.065
 
-[node name="SaturnOrbit" type="JarBodyOrbit" parent="Sun"]
+[node name="SaturnOrbit" type="JarBodyOrbit" parent="Sun" unique_id=1313070032]
 radius = 205000000.0
 period = 30000000.0
 axis = Vector3(0.023426, 0.87384, -0.485649)
 phase = 101.59
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -42858656, -77262970, -141088510)
+top_level = true
 
-[node name="Saturn" type="JarCelestialBody" parent="Sun/SaturnOrbit"]
+[node name="Saturn" type="JarCelestialBody" parent="Sun/SaturnOrbit" unique_id=1299955785]
 radius = 1000000.0
 surface_gravity = 10.0
 spin_period = 8000.0
 spin_axis = Vector3(0.35, 1, 0.2)
 unique_name_in_owner = true
 
-[node name="Surface" type="JarBodyGasGiant" parent="Sun/SaturnOrbit/Saturn"]
+[node name="Surface" type="JarBodyGasGiant" parent="Sun/SaturnOrbit/Saturn" unique_id=1908387038]
 material = SubResource("SaturnMaterial")
 flattening = 0.1
 
-[node name="Rings" type="JarBodyRings" parent="Sun/SaturnOrbit/Saturn"]
+[node name="Rings" type="JarBodyRings" parent="Sun/SaturnOrbit/Saturn" unique_id=664358490]
 
-[node name="NeptuneOrbit" type="JarBodyOrbit" parent="Sun"]
+[node name="NeptuneOrbit" type="JarBodyOrbit" parent="Sun" unique_id=351766592]
 radius = 305000000.0
 period = 90000000.0
 axis = Vector3(0.023426, 0.87384, -0.485649)
 phase = 99.59
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -52482064, -125604030, -228533980)
+top_level = true
 
-[node name="Neptune" type="JarCelestialBody" parent="Sun/NeptuneOrbit"]
+[node name="Neptune" type="JarCelestialBody" parent="Sun/NeptuneOrbit" unique_id=619867250]
 radius = 600000.0
 surface_gravity = 11.0
 spin_period = 9000.0
 spin_axis = Vector3(-0.4, 1, 0.25)
 unique_name_in_owner = true
 
-[node name="Surface" type="JarBodyGasGiant" parent="Sun/NeptuneOrbit/Neptune"]
+[node name="Surface" type="JarBodyGasGiant" parent="Sun/NeptuneOrbit/Neptune" unique_id=320836470]
 material = SubResource("NeptuneMaterial")
 flattening = 0.017
 
-[node name="Rings" type="JarBodyRings" parent="Sun/NeptuneOrbit/Neptune"]
+[node name="Rings" type="JarBodyRings" parent="Sun/NeptuneOrbit/Neptune" unique_id=159140777]
 inner_radius = 1.65
 outer_radius = 2.6
 profile = SubResource("NeptuneRings")
@@ -412,23 +552,25 @@ ringlets = 0.3
 opacity = 0.35
 
 [node name="Player" parent="." unique_id=184981125 instance=ExtResource("14_player")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -598552.2, 24583.2, 40065.0)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -598552.2, 24583.2, 40065)
 max_fly_speed = 3000000.0
 
 [node name="WorldEnvironment" type="WorldEnvironment" parent="." unique_id=1854622839]
 environment = SubResource("Environment")
 camera_attributes = SubResource("Exposure")
+compositor = SubResource("Compositor_ksmme")
 
 [node name="SunLight" type="DirectionalLight3D" parent="." unique_id=705585350]
-transform = Transform3D(0.9983561, 0.027698321, -0.050178517, 0, 0.87547714, 0.4832596, 0.057315618, -0.48246515, 0.874038, 0, 0, 0)
+transform = Transform3D(0.9995159, 0.015133624, -0.027183391, 0, 0.87372386, 0.48642233, 0.031112108, -0.48618686, 0.8733009, 0, 0, 0)
 light_energy = 1.4
 shadow_enabled = true
 directional_shadow_max_distance = 400.0
+metadata/jar_star_layer = 1609354517627
 
 [node name="MoonLight" type="DirectionalLight3D" parent="." unique_id=412907551]
-transform = Transform3D(-0.30952677, 0.4435238, 0.84111816, 0, 0.88455814, -0.46642986, -0.95089066, -0.14437252, -0.27379444, 0, 0, 0)
+transform = Transform3D(-0.019360706, 0.15217538, 0.9881638, 0, 0.988349, -0.15220392, -0.99981254, -0.0029467754, -0.019135136, 0, 0, 0)
 light_color = Color(0.72, 0.8, 1, 1)
-light_energy = 0.0504654
+light_energy = 0.03257971
 sky_mode = 1
 
 [node name="LensFlare" type="JarLensFlare" parent="." unique_id=1771092205]

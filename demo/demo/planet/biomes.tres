@@ -15,7 +15,7 @@ frequency = 0.0002
 fractal_octaves = 3
 
 [resource]
-biomes = Array[JarBiome]([ExtResource("1"), ExtResource("2"), ExtResource("3")])
 temperature_noise = SubResource("Temperature")
 moisture_noise = SubResource("Moisture")
 latitude_effect = 0.5
+biomes = Array[JarBiome]([ExtResource("1"), ExtResource("2"), ExtResource("3")])

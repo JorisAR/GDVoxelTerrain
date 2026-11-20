@@ -15,9 +15,9 @@ compatibility/default_parent_skeleton_in_mesh_instance_3d=true
 [application]
 
 config/name="VoxelTerrainDemo"
-run/main_scene="res://demo/planet.tscn"
+run/main_scene="uid://br5q72hbubw7w"
 config/features=PackedStringArray("4.7", "Forward Plus")
-config/icon="res://icon.svg"
+config/icon="uid://b0cxinoqk6se6"
 
 [display]
 
