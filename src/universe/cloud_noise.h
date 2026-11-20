@@ -12,15 +12,23 @@
 using namespace godot;
 
 // The 3D noise volumetric clouds are made of (JarBodyClouds), tileable in all
-// three directions so it repeats seamlessly:
-// - r: Perlin-Worley (billowy, connected blobs: the clouds' large shapes),
-// - g, b, a: Worley noise at 2, 4 and 8 times that frequency (puffs that
-//   erode the edges into cauliflower detail).
-// Made once per run on all cores, in a few tens of milliseconds, with mipmaps.
+// three directions so they repeat seamlessly, with mipmaps:
+// - shape (128^3, RG8): r Perlin-Worley (billowy, connected blobs, 4 across a
+//   period: single clouds), g smooth Perlin fbm from 2 cells a period (more
+//   and less cloud from region to region);
+// - detail (64^3, RGBA8): Worley fbm at 4 and 8 cells and Worley at 16 (puffs
+//   that erode the edges into cauliflower detail).
+// Made once per run on a thread using all cores; empty until they are done.
 namespace CloudNoise
 {
-constexpr int Size = 64;
-Ref<ImageTexture3D> texture();
+constexpr int ShapeSize = 128;
+constexpr int DetailSize = 64;
+struct Volumes
+{
+    Ref<ImageTexture3D> shape, detail;
+    bool ready() const { return shape.is_valid() && detail.is_valid(); }
+};
+Volumes volumes();
 
 // A planet's weather as a cube map (per direction from its center, in the
 // body's own space; `pole`: its spin axis there), made on all cores in a

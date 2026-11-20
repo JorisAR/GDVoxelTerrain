@@ -10,7 +10,10 @@
 #include "voxel_universe.h"
 #include <godot_cpp/classes/plane_mesh.hpp>
 #include <godot_cpp/classes/box_mesh.hpp>
+#include "cloud_effect.h"
 #include "cloud_noise.h"
+#include <cmath>
+#include <godot_cpp/classes/rendering_server.hpp>
 #include <godot_cpp/classes/resource_loader.hpp>
 #include <godot_cpp/classes/scene_tree.hpp>
 #include <godot_cpp/classes/shader.hpp>
@@ -282,20 +285,27 @@ void JarBodyLayer::apply_sun(const Ref<ShaderMaterial> &material)
     }
     // A moon's light, for shaders that use it (moon_direction, moon_color:
     // color times energy; black without a moon).
-    Color moon(0, 0, 0);
-    Vector3 moonDirection(0, 1, 0);
+    Vector3 moonDirection, moon;
+    moon_light(moonDirection, moon);
+    material->set_shader_parameter("moon_direction", moonDirection);
+    material->set_shader_parameter("moon_color", moon);
+}
+
+void JarBodyLayer::moon_light(Vector3 &direction, Vector3 &color)
+{
+    direction = Vector3(0, 1, 0);
+    color = Vector3();
     if (SceneTree *tree = get_tree())
     {
         const TypedArray<Node> moons = tree->get_nodes_in_group(JarBodyLight::MoonGroup);
         if (!moons.is_empty())
             if (const auto *light = Object::cast_to<DirectionalLight3D>(moons[0]); light && light->is_visible())
             {
-                moon = light->get_color() * light->get_param(Light3D::PARAM_ENERGY);
-                moonDirection = light->get_global_basis().get_column(2).normalized();
+                const Color c = light->get_color() * light->get_param(Light3D::PARAM_ENERGY);
+                color = Vector3(c.r, c.g, c.b);
+                direction = light->get_global_basis().get_column(2).normalized();
             }
     }
-    material->set_shader_parameter("moon_direction", moonDirection);
-    material->set_shader_parameter("moon_color", Vector3(moon.r, moon.g, moon.b));
 }
 
 void JarBodyLayer::apply_star(const Ref<ShaderMaterial> &material, const Vector3 &at)
@@ -1017,6 +1027,10 @@ void JarBodyClouds::_bind_methods()
     ADD_PROPERTY(PropertyInfo(Variant::OBJECT, "material", PROPERTY_HINT_RESOURCE_TYPE, "ShaderMaterial"),
                  "set_material", "get_material");
     ClassDB::bind_method(D_METHOD("get_active_material"), &JarBodyClouds::get_active_material);
+    ClassDB::bind_method(D_METHOD("get_shape_noise"), &JarBodyClouds::get_shape_noise);
+    ClassDB::bind_method(D_METHOD("get_detail_noise"), &JarBodyClouds::get_detail_noise);
+    ClassDB::bind_method(D_METHOD("get_view_scale"), &JarBodyClouds::get_view_scale);
+    ClassDB::bind_method(D_METHOD("get_world_to_body"), &JarBodyClouds::get_world_to_body);
 }
 
 Ref<ShaderMaterial> JarBodyClouds::get_active_material()
@@ -1039,19 +1053,79 @@ void JarBodyClouds::build()
 {
     _shell = add_shell();
     _shell->set_material_override(get_active_material());
-    _noise = CloudNoise::texture();
+    _volumes = CloudNoise::volumes();
+    _colorBuffer.instantiate();
+    _depthBuffer.instantiate();
+    _outputGeneration = 0;
 }
+
+void JarBodyClouds::_notification(int what)
+{
+    if (what == NOTIFICATION_EXIT_TREE && _shell != nullptr)
+    {
+        // The material's textures go first: they are views of the effect's.
+        if (_colorBuffer.is_valid())
+            _colorBuffer->set_texture_rd_rid(RID());
+        if (_depthBuffer.is_valid())
+            _depthBuffer->set_texture_rd_rid(RID());
+        _outputGeneration = 0;
+        get_active_material()->set_shader_parameter("cloud_ready", false);
+        JarCloudsEffect::remove(get_instance_id());
+    }
+}
+
+Variant JarBodyClouds::param(const Ref<ShaderMaterial> &material, const StringName &name) const
+{
+    Variant value = material->get_shader_parameter(name);
+    if (value.get_type() == Variant::NIL && material->get_shader().is_valid())
+        value = RenderingServer::get_singleton()->shader_get_parameter_default(material->get_shader()->get_rid(), name);
+    return value;
+}
+
+namespace
+{
+Vector3 to_vector(const Variant &v, const Vector3 &fallback)
+{
+    if (v.get_type() == Variant::COLOR)
+    {
+        const Color c = v;
+        return Vector3(c.r, c.g, c.b);
+    }
+    if (v.get_type() == Variant::VECTOR3)
+        return v;
+    return fallback;
+}
+
+float to_float(const Variant &v, float fallback)
+{
+    return v.get_type() == Variant::FLOAT || v.get_type() == Variant::INT ? float(v) : fallback;
+}
+
+// velocity * time (meters) wrapped into [0, period) per axis, in double precision.
+Vector3 wrapped(const Vector3 &velocity, double time, double period)
+{
+    Vector3 out;
+    for (int i = 0; i < 3; ++i)
+    {
+        const double v = double(velocity[i]) * time;
+        out[i] = float(period > 0.0 ? v - std::floor(v / period) * period : 0.0);
+    }
+    return out;
+}
+} // namespace
 
 void JarBodyClouds::update(const JarCelestialBody &body)
 {
     if (_shell == nullptr)
         return;
+    using namespace JarCloudPack;
     const JarCelestialBody::Frame frame = body.get_frame();
     const float bottom = frame.seaLevel + _altitude;
     const float top = bottom + _thickness;
     const Ref<ShaderMaterial> material = get_active_material();
     FarView view;
     const Vector3 at = eye(frame);
+    _time += get_process_delta_time();
     if (frame.radial)
     {
         body.extend_view_radius(top);
@@ -1064,11 +1138,10 @@ void JarBodyClouds::update(const JarCelestialBody &body)
             _shell->set_mesh(make_sphere(_shellRadius, 64, 32));
         }
         _shell->set_global_transform(Transform3D(Basis().scaled(Vector3(view.scale, view.scale, view.scale)), view.center));
-        material->set_shader_parameter("planet_center", view.center);
     }
     else
     {
-        // A box around the camera (the shader fades the slab out before its walls).
+        // A box around the camera (the trace fades the slab out before its walls).
         constexpr float Box = 200000.0f;
         if (_shellRadius != 0.0f)
         {
@@ -1079,23 +1152,16 @@ void JarBodyClouds::update(const JarCelestialBody &body)
             _shell->set_mesh(box);
         }
         _shell->set_global_transform(Transform3D(Basis(), at));
-        material->set_shader_parameter("planet_center", frame.center);
+        view.center = frame.center;
     }
-    material->set_shader_parameter("cloud_bottom", bottom);
-    material->set_shader_parameter("cloud_top", top);
-    material->set_shader_parameter("ground_level", frame.seaLevel);
-    material->set_shader_parameter("up_axis", frame.axis);
-    material->set_shader_parameter("radial", frame.radial);
-    material->set_shader_parameter("view_scale", view.scale);
-    material->set_shader_parameter("cloud_noise", _noise);
+    _viewScale = view.scale;
     // Clouds and wind move with the body when it turns in the scene.
     const Basis toBody = body.get_global_basis().orthonormalized().transposed();
-    material->set_shader_parameter("world_to_body", toBody);
+    _worldToBody = toBody;
     Vector3 axis = body.get_spin_axis();
     if (const auto *carrier = Object::cast_to<Node3D>(body.get_parent()); carrier && axis.length_squared() > 1e-12f)
         axis = carrier->get_global_basis().xform(axis);
     const Vector3 pole = axis.length_squared() > 1e-12f ? toBody.xform(axis).normalized() : Vector3(0, 1, 0);
-    material->set_shader_parameter("spin_axis", pole);
     // The weather map: once (a fraction of a second), again only for another
     // seed or pole.
     // Its texels on a thread (half a second on all cores; the frame would
@@ -1109,8 +1175,10 @@ void JarBodyClouds::update(const JarCelestialBody &body)
     }
     if (_weatherJob.ready())
         _weather = CloudNoise::weather_texture(_weatherJob.take());
-    material->set_shader_parameter("weather_map", _weather);
-    material->set_shader_parameter("weather_ready", !frame.radial || _weather.is_valid());
+    if (!_volumes.ready())
+        _volumes = CloudNoise::volumes();
+    const bool weatherReady = !frame.radial || _weather.is_valid();
+
     // The sun: in scaled space the star's own light here; else the scene's
     // light (reddened by the air the camera is in), with its energy.
     Vector3 direction, color, floor;
@@ -1123,11 +1191,79 @@ void JarBodyClouds::update(const JarCelestialBody &body)
             const Color c = light->get_color() * light->get_param(Light3D::PARAM_ENERGY);
             color = Vector3(c.r, c.g, c.b);
         }
-    material->set_shader_parameter("sun_direction", direction);
-    material->set_shader_parameter("sun_color", color);
-    material->set_shader_parameter("ambient_light", floor);
-    apply_sun(material); // the moon's light (moon_direction, moon_color)
-    material->set_shader_parameter("sun_direction", direction);
-    material->set_shader_parameter("sun_color", color);
+    Vector3 moonDirection, moon;
+    moon_light(moonDirection, moon);
+
+    // This frame's values for JarCloudsEffect.
+    JarCloudsEffect::Layer layer;
+    JarCloudParams &p = layer.params;
+    const float cloudSize = std::max(1.0f, to_float(param(material, "cloud_size"), 220.0f));
+    const float detailScale = std::max(0.01f, to_float(param(material, "detail_scale"), 0.18f));
+    const float weatherSize = std::max(1.0f, to_float(param(material, "weather_size"), 1500.0f));
+    float regionSize = to_float(param(material, "region_size"), 0.0f);
+    if (regionSize <= 0.0f)
+        regionSize = cloudSize * 6.0f;
+    const Vector3 wind = to_vector(param(material, "wind"), Vector3(6, 0, 2));
+    // The weather turns about the pole (radians per hour).
+    const double drift = std::fmod(_time / 3600.0 * to_float(param(material, "weather_drift"), 0.02f), Math_TAU);
+    put(p.world_to_body, toBody);
+    put(p.world_to_weather, Basis(pole, float(-drift)) * toBody);
+    put4(p.center_scale, view.center, view.scale);
+    p.layer[0] = bottom;
+    p.layer[1] = top;
+    p.layer[2] = frame.seaLevel;
+    p.layer[3] = to_float(param(material, "max_distance"), 60000.0f);
+    put4(p.up_radial, frame.axis, frame.radial ? 1.0f : 0.0f);
+    put4(p.pole, pole, 0.0f);
+    put4(p.sun_direction, direction.normalized(), 0.0f);
+    put4(p.sun_color, color, 0.0f);
+    put4(p.moon_direction, moonDirection, 0.0f);
+    put4(p.moon_color, moon, 0.0f);
+    put4(p.ambient_light, floor, 0.0f);
+    put4(p.cloud_color, to_vector(param(material, "cloud_color"), Vector3(1, 1, 1)) * to_float(param(material, "brightness"), 1.0f), 0.0f);
+    put4(p.sky_light, to_vector(param(material, "sky_light"), Vector3(0.38f, 0.5f, 0.75f)) * to_float(param(material, "sky_strength"), 0.25f), 0.0f);
+    p.shape[0] = to_float(param(material, "coverage"), 0.5f);
+    p.shape[1] = to_float(param(material, "weather_strength"), 1.0f);
+    p.shape[2] = cloudSize;
+    p.shape[3] = detailScale;
+    p.shape2[0] = to_float(param(material, "erosion"), 0.4f);
+    p.shape2[1] = to_float(param(material, "density"), 0.03f);
+    p.shape2[2] = regionSize;
+    p.shape2[3] = to_float(param(material, "region_strength"), 0.5f);
+    p.light[0] = to_float(param(material, "forward"), 0.6f);
+    p.light[1] = to_float(param(material, "powder"), 0.5f);
+    p.light[2] = weatherSize;
+    // Single clouds repeat every cloud_size, sheets every 2.5 of them: both
+    // repeat every 10 (the offset jumps there only in between).
+    put4(p.shape_offset, wrapped(wind, _time, double(cloudSize) * 10.0), weatherReady ? 1.0f : 0.0f);
+    put4(p.detail_offset, wrapped(wind, _time, double(cloudSize) * detailScale), 0.0f);
+    put4(p.flat_offset, wrapped(wind * 0.5f, _time, double(weatherSize)), 0.0f);
+    p.quality[0] = float(std::clamp(int(to_float(param(material, "steps"), 48.0f)), 4, 256));
+    p.quality[1] = float(std::clamp(int(to_float(param(material, "light_steps"), 4.0f)), 1, 8));
+    p.quality[2] = std::clamp(to_float(param(material, "history_blend"), 0.12f), 0.01f, 1.0f);
+    layer.shape = _volumes.shape.is_valid() ? _volumes.shape->get_rid() : RID();
+    layer.detail = _volumes.detail.is_valid() ? _volumes.detail->get_rid() : RID();
+    layer.weather = frame.radial && _weather.is_valid() ? _weather->get_rid() : RID();
+    layer.radial = frame.radial;
+    layer.shell_center = view.center;
+    layer.shell_radius = frame.radial ? _shellRadius * view.scale : 0.0f;
+    layer.center = view.center;
+    layer.scale = view.scale;
+    layer.body_to_world = toBody.transposed();
+    const uint64_t id = get_instance_id();
+    JarCloudsEffect::submit(id, layer);
+    JarCloudsEffect::ensure_attached(this);
+
+    // The effect's textures (made again for larger viewports).
+    const JarCloudsEffect::Outputs out = JarCloudsEffect::outputs(id);
+    if (out.generation != _outputGeneration && out.color.is_valid() && out.depth.is_valid())
+    {
+        _colorBuffer->set_texture_rd_rid(out.color);
+        _depthBuffer->set_texture_rd_rid(out.depth);
+        _outputGeneration = out.generation;
+    }
+    material->set_shader_parameter("cloud_color_buffer", _colorBuffer);
+    material->set_shader_parameter("cloud_depth_buffer", _depthBuffer);
+    material->set_shader_parameter("cloud_ready", _outputGeneration != 0 && _volumes.ready() && weatherReady);
 }
 

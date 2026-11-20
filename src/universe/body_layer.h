@@ -12,6 +12,7 @@
 #include <godot_cpp/classes/mesh_instance3d.hpp>
 #include <godot_cpp/classes/node3d.hpp>
 #include <godot_cpp/classes/shader_material.hpp>
+#include <godot_cpp/classes/texture2drd.hpp>
 
 using namespace godot;
 
@@ -60,6 +61,8 @@ class JarBodyLayer : public Node3D
     Vector3 eye(const JarCelestialBody::Frame &frame) const;
     // Sun direction and color to `material` (sun_direction, sun_color).
     void apply_sun(const Ref<ShaderMaterial> &material);
+    // A moon's light (color times energy; black without one) and its direction.
+    void moon_light(Vector3 &direction, Vector3 &color);
     // The star's light at `at` above any air (sun_direction, sun_color: its
     // color above the atmosphere times its energy), for bodies far away.
     void apply_star(const Ref<ShaderMaterial> &material, const Vector3 &at);
@@ -236,10 +239,12 @@ class JarBodyAtmosphere : public JarBodyLayer
 
 // Volumetric clouds between `altitude` and `altitude + thickness` meters above
 // the body's sea level (a spherical shell, or a slab on a flat body), ray
-// marched per pixel through 3D noise (CloudNoise, made at startup, no
-// baking). Coverage, weather, shape, wind and lighting are set on `material`
-// (clouds.gdshader). The same clouds at every distance: from orbit their
-// detail averages out instead of switching to another look.
+// marched through 3D noise (CloudNoise, made at startup, no baking) by
+// JarCloudsEffect, at half resolution and accumulated over frames. Coverage,
+// weather, shape, wind and lighting are set on `material` (clouds.gdshader,
+// which also puts the result on screen). One model at every distance: from
+// orbit the detail smaller than a pixel averages out instead of switching to
+// another look.
 class JarBodyClouds : public JarBodyLayer
 {
     GDCLASS(JarBodyClouds, JarBodyLayer);
@@ -252,20 +257,35 @@ class JarBodyClouds : public JarBodyLayer
     Ref<ShaderMaterial> _defaultMaterial;
     MeshInstance3D *_shell = nullptr;
     float _shellRadius = -1.0f; // when a sphere; 0 when a box (flat)
-    Ref<Texture> _noise;
+    CloudNoise::Volumes _volumes;
+    Ref<Texture2DRD> _colorBuffer, _depthBuffer; // JarCloudsEffect's result
+    uint64_t _outputGeneration = 0;
+    double _time = 0.0; // seconds of wind and drift
+    float _viewScale = 1.0f;
+    Basis _worldToBody;
     int _seed = 1;
     Ref<Texture> _weather; // CloudNoise::weather, made once the pole is known
     CloudNoise::FacesJob _weatherJob; // its texels, on a thread
     int _weatherSeed = -1;
     Vector3 _weatherPole;
 
+    Variant param(const Ref<ShaderMaterial> &material, const StringName &name) const;
+
   protected:
     static void _bind_methods();
+    void _notification(int what);
     void build() override;
     void update(const JarCelestialBody &body) override;
 
   public:
     Ref<ShaderMaterial> get_active_material();
+    // The noise volumes in use (null until made, a fraction of a second).
+    Ref<Texture> get_shape_noise() const { return _volumes.shape; }
+    Ref<Texture> get_detail_noise() const { return _volumes.detail; }
+    // How much smaller the clouds are drawn (scaled space; 1 near).
+    float get_view_scale() const { return _viewScale; }
+    // From the scene's orientation to the body's, as the clouds turn with it.
+    Basis get_world_to_body() const { return _worldToBody; }
 
     float get_altitude() const { return _altitude; }
     void set_altitude(float value) { _altitude = value; }

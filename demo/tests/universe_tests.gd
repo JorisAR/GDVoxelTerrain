@@ -377,8 +377,7 @@ func _test_rotating_frame() -> void:
 	_check("not rotating: body turns", not planet.global_basis.is_equal_approx(ground.basis))
 	_check("not rotating: sky stands still", env.environment.sky_rotation.is_equal_approx(sky))
 	_check("not rotating: sun stands still", sun.global_basis.is_equal_approx(light))
-	var material: ShaderMaterial = clouds.get_active_material()
-	var to_body: Basis = material.get_shader_parameter("world_to_body")
+	var to_body: Basis = clouds.get_world_to_body()
 	_check("clouds turn with the body", to_body.is_equal_approx(planet.global_basis.orthonormalized().transposed()))
 
 	# From the planet's center: switching to a turning frame aligns the scene
@@ -727,17 +726,18 @@ func _test_far_terrain() -> void:
 	var planet_material: ShaderMaterial = scene.get_node("%Planet/JarVoxelVolume").get_runtime_material()
 	var planet_scale = planet_material.get_shader_parameter("jar_view_scale")
 	_check("far terrain: the ground under the camera as it is", planet_scale == null or planet_scale == 1.0, str(planet_scale))
-	var clouds: ShaderMaterial = (scene.get_node("%Planet/Clouds") as JarBodyClouds).get_active_material()
-	var noise = clouds.get_shader_parameter("cloud_noise")
-	_check("clouds: 3D noise made", noise is Texture3D and (noise as Texture3D).get_depth() == 64)
-	_check("clouds: a layer above the ground", clouds.get_shader_parameter("cloud_top") > clouds.get_shader_parameter("cloud_bottom") and clouds.get_shader_parameter("cloud_bottom") > clouds.get_shader_parameter("ground_level"))
-	_check("clouds: the planet's own as they are", clouds.get_shader_parameter("view_scale") == 1.0)
-	# The weather map is made on a thread: it arrives within a few frames.
 	var layer: JarBodyClouds = scene.get_node("%Planet/Clouds")
+	_check("clouds: the planet's own as they are", layer.get_view_scale() == 1.0)
+	# The weather map and the noise volumes are made on threads: they arrive
+	# within a few frames.
 	var waited := Time.get_ticks_msec()
-	while layer.get_weather() == null and Time.get_ticks_msec() - waited < 10000:
+	while (layer.get_weather() == null or layer.get_shape_noise() == null) and Time.get_ticks_msec() - waited < 10000:
 		await get_tree().process_frame
-	_check("clouds: weather map made", layer.get_weather() is Cubemap and clouds.get_shader_parameter("weather_ready") == true, "after %d ms" % (Time.get_ticks_msec() - waited))
+	_check("clouds: weather map made", layer.get_weather() is Cubemap, "after %d ms" % (Time.get_ticks_msec() - waited))
+	var noise = layer.get_shape_noise()
+	_check("clouds: 3D noise made", noise is Texture3D and (noise as Texture3D).get_depth() == 128 and (layer.get_detail_noise() as Texture3D).get_depth() == 64)
+	var effects: Array = (scene.get_node("WorldEnvironment") as WorldEnvironment).compositor.compositor_effects if (scene.get_node("WorldEnvironment") as WorldEnvironment).compositor else []
+	_check("clouds: their compositor effect added", effects.any(func(e): return e is JarCloudsEffect))
 	for shader in ["res://addons/jar_voxel_terrain/nodes/clouds/clouds.gdshader", "res://addons/jar_voxel_terrain/src/shaders/terrain_weights.gdshader", "res://addons/jar_voxel_terrain/src/shaders/terrain_split.gdshader", "res://addons/jar_voxel_terrain/src/shaders/terrain_indexed.gdshader", "res://addons/jar_voxel_terrain/nodes/water/water.gdshader"]:
 		_check("compiles " + shader.get_file(), (load(shader) as Shader).get_shader_uniform_list().size() > 5)
 	scene.queue_free()

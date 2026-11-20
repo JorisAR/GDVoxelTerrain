@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="JarCloudsEffect" inherits="CompositorEffect" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
+	<brief_description>
+		Ray marches the clouds of every [JarBodyClouds].
+	</brief_description>
+	<description>
+		A compositor effect that draws the clouds of every [JarBodyClouds] before the transparent pass: [code]clouds_trace.glsl[/code] marches one pixel of each 2x2 block per frame (a different one each frame, with jittered steps), only where the layer may cover the screen, and [code]clouds_resolve.glsl[/code] accumulates them over frames: last frame's result reprojected through the body's own space (so turning planets, scaled space and floating origin shifts hold still), clamped to what this frame's neighbors allow (no ghosts). Each layer's material then puts the result on screen at full resolution, in order with the water and the atmosphere.
+		Put one in the [Compositor] of the scene's [WorldEnvironment] or camera. A [JarBodyClouds] adds one there if there is none; all of them share the same work, so a second one does nothing. Each viewport keeps its own history.
+	</description>
+	<tutorials>
+	</tutorials>
+	<methods>
+		<method name="get_gpu_msec" qualifiers="static">
+			<return type="float" />
+			<description>
+				GPU time of the clouds in a recent frame, in milliseconds (all layers and viewports; a frame or two late).
+			</description>
+		</method>
+	</methods>
+</class>

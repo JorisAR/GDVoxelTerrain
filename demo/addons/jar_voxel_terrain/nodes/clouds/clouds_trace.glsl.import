@@ -1,0 +1,14 @@
+[remap]
+
+importer="glsl"
+type="RDShaderFile"
+uid="uid://dc57tinqjkho2"
+path="res://.godot/imported/clouds_trace.glsl-e884c73927027253cd3ebfd6dd81c9b9.res"
+
+[deps]
+
+source_file="res://addons/jar_voxel_terrain/nodes/clouds/clouds_trace.glsl"
+dest_files=["res://.godot/imported/clouds_trace.glsl-e884c73927027253cd3ebfd6dd81c9b9.res"]
+
+[params]
+

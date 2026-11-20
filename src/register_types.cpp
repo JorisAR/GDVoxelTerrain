@@ -31,6 +31,7 @@
 #include "celestial_body.h"
 #include "body_orbit.h"
 #include "body_layer.h"
+#include "cloud_effect.h"
 #include "ring_layers.h"
 #include "asteroid_belt.h"
 #include "lens_flare.h"
@@ -93,6 +94,7 @@ void initialize_jar_voxel_terrain_module(ModuleInitializationLevel p_level)
         GDREGISTER_ABSTRACT_CLASS(JarBodyLayer);
         GDREGISTER_CLASS(JarBodyWater);
         GDREGISTER_CLASS(JarBodyAtmosphere);
+        GDREGISTER_CLASS(JarCloudsEffect);
         GDREGISTER_CLASS(JarBodyClouds);
         GDREGISTER_CLASS(JarBodyRings);
         GDREGISTER_CLASS(JarBodyGasGiant);
