@@ -515,18 +515,24 @@ void JarCloudsEffect::_render_callback(int32_t p_effect_callback_type, RenderDat
         if (!view.params.is_valid())
             view.params = rd->uniform_buffer_create(sizeof(JarCloudParams));
         const String suffix = String::num_uint64(id);
+        // History (ping-pong): the clouds, and where each ray ended.
         const StringName names[2] = {StringName(String("history_a_") + suffix), StringName(String("history_b_") + suffix)};
+        const StringName ends[2] = {StringName(String("end_a_") + suffix), StringName(String("end_b_") + suffix)};
         bool history = view.has_previous;
-        for (const StringName &name : names)
-            if (!buffers->has_texture(Context, name))
-            {
-                buffers->create_texture(Context, name, RD::DATA_FORMAT_R16G16B16A16_SFLOAT,
-                                        RD::TEXTURE_USAGE_SAMPLING_BIT | RD::TEXTURE_USAGE_STORAGE_BIT, RD::TEXTURE_SAMPLES_1,
-                                        low, 1, 1, true, false);
-                history = false;
-            }
+        for (int i = 0; i < 4; ++i)
+        {
+            const StringName &name = i < 2 ? names[i] : ends[i - 2];
+            if (buffers->has_texture(Context, name))
+                continue;
+            buffers->create_texture(Context, name, i < 2 ? RD::DATA_FORMAT_R16G16B16A16_SFLOAT : RD::DATA_FORMAT_R32_SFLOAT,
+                                    RD::TEXTURE_USAGE_SAMPLING_BIT | RD::TEXTURE_USAGE_STORAGE_BIT, RD::TEXTURE_SAMPLES_1,
+                                    low, 1, 1, true, false);
+            history = false;
+        }
         const RID history_read = buffers->get_texture(Context, names[view.frame & 1]);
         const RID history_write = buffers->get_texture(Context, names[(view.frame + 1) & 1]);
+        const RID end_read = buffers->get_texture(Context, ends[view.frame & 1]);
+        const RID end_write = buffers->get_texture(Context, ends[(view.frame + 1) & 1]);
 
         JarCloudParams params = layer.params;
         put(params.inv_projection, projection.inverse());
@@ -590,6 +596,8 @@ void JarCloudsEffect::_render_callback(int32_t p_effect_callback_type, RenderDat
             uniforms.push_back(uniform(RD::UNIFORM_TYPE_SAMPLER_WITH_TEXTURE, 2, r.nearest_clamp, state.current_depth));
             uniforms.push_back(uniform(RD::UNIFORM_TYPE_SAMPLER_WITH_TEXTURE, 3, r.linear_clamp, history_read));
             uniforms.push_back(uniform(RD::UNIFORM_TYPE_IMAGE, 4, history_write));
+            uniforms.push_back(uniform(RD::UNIFORM_TYPE_SAMPLER_WITH_TEXTURE, 6, r.nearest_clamp, end_read));
+            uniforms.push_back(uniform(RD::UNIFORM_TYPE_IMAGE, 7, end_write));
             uniforms.push_back(uniform(RD::UNIFORM_TYPE_IMAGE, 5, state.out_color));
             const RID set = UniformSetCacheRD::get_cache(r.resolve_shader, 0, uniforms);
             const int64_t list = rd->compute_list_begin();

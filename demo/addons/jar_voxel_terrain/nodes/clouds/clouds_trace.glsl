@@ -205,14 +205,17 @@ Weather weather_at(vec3 x, float pixel) {
 // Height profile of the clouds (0..1 in the layer): heaped clouds rounded
 // at the base and reaching up to their tops; sheets low and flat. `cell`
 // (0..1, large-scale noise): each group of clouds its own tops and base, so
-// dense weather is a ceiling of separate clouds, not one shell.
-float profile_at(float h, Weather w, float cell) {
+// dense weather is a ceiling of separate clouds, not one shell. `lump`
+// (0..1, the cloud's own noise): bases hang lower under dense cores, so
+// undersides have relief instead of one flat plane.
+float profile_at(float h, Weather w, float cell, float lump) {
 	// Sparse fair-weather clouds stay flat; dense ones tower up to the map's tops.
 	float tops = mix(0.3, 1.0, w.tops) * mix(0.35, 1.0, smoothstep(0.2, 0.8, w.coverage)) * mix(0.5, 1.15, cell);
-	float base = (1.0 - cell) * 0.12 * (1.0 - w.sheet);
-	// Narrowing steadily from a flat base to the top: domes, not columns.
+	float base = ((1.0 - cell) * 0.12 + (1.0 - lump) * 0.1) * (1.0 - 0.5 * w.sheet);
+	// Narrowing steadily from the base to the top: domes, not columns.
 	float heaped = smoothstep(base, base + 0.07, h) * clamp(1.0 - pow(max(h / tops, 0.0), 1.6), 0.0, 1.0);
-	float sheet = smoothstep(0.0, 0.06, h) * (1.0 - smoothstep(0.18, 0.32, h));
+	float sheet_base = (1.0 - lump) * 0.08;
+	float sheet = smoothstep(sheet_base, sheet_base + 0.06, h) * (1.0 - smoothstep(0.18, 0.32, h));
 	return mix(heaped, sheet, w.sheet);
 }
 
@@ -250,11 +253,11 @@ float cloud_density_in(vec3 x, inout Weather w, float pixel, bool cheap) {
 		// tops and bases (read once per view sample: light paths reuse it).
 		float cell = w.cell >= 0.0 ? w.cell : textureLod(shape_noise, TURN * s_cell * 0.37 + vec3(0.17, 0.53, 0.71), max(lod - 1.43, 0.0)).r;
 		w.cell = cell;
-		profile = profile_at(h, w, cell);
-		if (profile <= 0.0 && unresolved <= 0.0)
-			return 0.0;
 		float n = textureLod(shape_noise, s, lod).r * 0.75 + cell * 0.25;
 		n = clamp(0.5 + (n - 0.5) * 1.2, 0.0, 1.0);
+		profile = profile_at(h, w, cell, n);
+		if (profile <= 0.0 && unresolved <= 0.0)
+			return 0.0;
 		n = mix(n, 0.5 + (n - 0.5) * 0.6, w.sheet);
 		// Heaped clouds keep gaps even in dense weather (overcast is for sheets).
 		// The faint cutoff below drops thin material: the coverage is raised
@@ -282,7 +285,7 @@ float cloud_density_in(vec3 x, inout Weather w, float pixel, bool cheap) {
 		float spread = w.spread + 0.04;
 		float fraction = smoothstep(0.22 - spread + p.evolve.w * 0.4, 0.7 + spread, c);
 		float column = -log(1.0 - 0.96 * fraction);
-		float fog = column / ((cloud_top() - cloud_bottom()) * 0.45) * profile_at(h, w, 0.6);
+		float fog = column / ((cloud_top() - cloud_bottom()) * 0.45) * profile_at(h, w, 0.6, 0.6);
 		shape = mix(shape, fog, unresolved);
 	}
 	return shape;

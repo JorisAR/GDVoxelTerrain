@@ -4,6 +4,10 @@
 // half resolution, one pixel of each 2x2 block, jittered) over frames: last
 // frame's result, reprojected, clamped to what this frame's neighbors allow
 // (no ghosts where things changed), blended with this frame's.
+// Where the ray ended (the surface behind the clouds) is kept with the
+// history: where it changed (sky uncovered by a moving mountain, or covered)
+// the history is dropped, and only neighbors that end at the same surface
+// bound it. Otherwise the edge of terrain left a trail without clouds.
 // Reprojected through the body's own space: where the point seen is on the
 // body now, where that was drawn last frame. Turning planets, scaled space
 // and floating origin shifts follow.
@@ -48,6 +52,8 @@ layout(set = 0, binding = 2) uniform sampler2D current_depth;
 layout(set = 0, binding = 3) uniform sampler2D history;
 layout(rgba16f, set = 0, binding = 4) uniform restrict writeonly image2D history_next;
 layout(rgba16f, set = 0, binding = 5) uniform restrict writeonly image2D out_color;
+layout(set = 0, binding = 6) uniform sampler2D history_end;
+layout(r32f, set = 0, binding = 7) uniform restrict writeonly image2D history_end_next;
 
 const float FAR = 1e30;
 
@@ -60,6 +66,16 @@ vec4 current_at(ivec2 q) {
 	return in_rect(q) ? texelFetch(current_color, q, 0) : vec4(0.0);
 }
 
+float end_at(ivec2 q) {
+	q = clamp(q, ivec2(0), p.sizes.xy - 1);
+	return in_rect(q) ? texelFetch(current_depth, q, 0).y : FAR;
+}
+
+// Whether two ray ends are the same surface (the sky counts as one).
+bool same_end(float a, float b) {
+	return a >= FAR * 0.5 ? b >= FAR * 0.5 : (b < FAR * 0.5 && abs(a - b) < 0.12 * max(a, b));
+}
+
 void main() {
 	// The traced rectangle and a margin (beyond it nothing is drawn).
 	ivec2 low = p.sizes.xy;
@@ -68,18 +84,27 @@ void main() {
 		return;
 	vec4 current = current_at(lp);
 	vec4 result = current;
+	float end = end_at(lp);
 	if (p.detail_offset.w > 0.5 && in_rect(lp)) {
-		// This frame's neighbors: their mean and spread bound the history.
+		// This frame's neighbors that end at the same surface: their mean and
+		// spread bound the history.
 		vec4 m1 = vec4(0.0);
 		vec4 m2 = vec4(0.0);
+		float count = 0.0;
 		for (int y = -1; y <= 1; y++)
 			for (int x = -1; x <= 1; x++) {
-				vec4 c = current_at(lp + ivec2(x, y));
+				ivec2 q = lp + ivec2(x, y);
+				if (!same_end(end, end_at(q)))
+					continue;
+				vec4 c = current_at(q);
 				m1 += c;
 				m2 += c * c;
+				count += 1.0;
 			}
-		m1 /= 9.0;
-		vec4 sigma = sqrt(max(m2 / 9.0 - m1 * m1, vec4(0.0)));
+		m1 /= count;
+		vec4 sigma = sqrt(max(m2 / count - m1 * m1, vec4(0.0)));
+		// Without history: the neighbors' mean (one frame of one pixel is noisy).
+		result = m1;
 		vec4 lo = m1 - sigma * 1.25;
 		vec4 hi = m1 + sigma * 1.25;
 
@@ -100,14 +125,19 @@ void main() {
 			vec2 prev_uv = n * 0.5 + 0.5;
 			if (all(greaterThanEqual(prev_uv, vec2(0.0))) && all(lessThanEqual(prev_uv, vec2(1.0)))) {
 				vec2 hist_uv = prev_uv * vec2(full) / (2.0 * vec2(low));
-				vec4 h = textureLod(history, hist_uv, 0.0);
-				h = clamp(h, lo, hi);
-				// Far away clouds barely move on screen: more frames, less noise.
-				float meters = d / p.center_scale.w;
-				result = mix(h, current, p.quality.z * mix(1.0, 0.4, smoothstep(20000.0, 300000.0, meters)));
+				// Last frame's ray ended at another surface there: nothing to keep.
+				float before_end = texelFetch(history_end, clamp(ivec2(hist_uv * vec2(low)), ivec2(0), low - 1), 0).r;
+				if (same_end(end, before_end)) {
+					vec4 h = textureLod(history, hist_uv, 0.0);
+					h = clamp(h, lo, hi);
+					// Far away clouds barely move on screen: more frames, less noise.
+					float meters = d / p.center_scale.w;
+					result = mix(h, current, p.quality.z * mix(1.0, 0.4, smoothstep(20000.0, 300000.0, meters)));
+				}
 			}
 		}
 	}
 	imageStore(history_next, lp, result);
+	imageStore(history_end_next, lp, vec4(end));
 	imageStore(out_color, lp, result);
 }
