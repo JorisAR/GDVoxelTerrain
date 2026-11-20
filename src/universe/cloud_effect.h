@@ -42,6 +42,8 @@ struct alignas(16) JarCloudParams
     float detail_offset[4];
     float flat_offset[4];
     float quality[4];
+    float evolve[4];
+    float weather2[4];
     int32_t sizes[4];
     int32_t rect[4];
     int32_t frame[4];
@@ -105,7 +107,7 @@ class JarCloudsEffect : public CompositorEffect
     struct Layer
     {
         JarCloudParams params{};
-        RID shape, detail, weather; // RenderingServer textures
+        RID shape, detail, weather, weather_next; // RenderingServer textures
         bool radial = true;
         // Where the shell is drawn (render units): only pixels it may cover are traced.
         Vector3 shell_center;

@@ -267,19 +267,42 @@ struct Vortex
     float cover;    // extra coverage around it
 };
 
+// A direction turned about an axis and by an angle picked from `k`.
+glm::vec3 turned(const glm::vec3 &d, uint32_t k)
+{
+    const glm::vec3 axis = glm::normalize(glm::vec3(unit(hash(int(k), 1, 7, 99u)) - 0.5f, unit(hash(int(k), 2, 7, 99u)) - 0.5f,
+                                                    unit(hash(int(k), 3, 7, 99u)) - 0.5f) +
+                                          glm::vec3(1e-3f, 0.0f, 0.0f));
+    const float angle = 0.6f + 2.0f * unit(hash(int(k), 4, 7, 99u));
+    const float c = std::cos(angle), s = std::sin(angle);
+    return d * c + glm::cross(axis, d) * s + axis * glm::dot(axis, d) * (1.0f - c);
+}
+
 // fbm of the tileable gradient noise over a direction (the unit cube's
-// [-1, 1] mapped onto one period): `cells` cells across the planet.
+// [-1, 1] mapped onto one period): `cells` cells across the planet. Each
+// octave turned its own way: gradient noise is zero on its grid points, and
+// with thresholds that grid showed as a lattice of holes from space.
 float sphere_fbm(const glm::vec3 &d, int cells, int octaves, uint32_t seed)
 {
-    const glm::vec3 p = d * 0.5f + 0.5f;
     float v = 0.0f, a = 0.5f, total = 0.0f;
     for (int o = 0; o < octaves; ++o)
     {
+        const glm::vec3 p = turned(d, seed + uint32_t(o) * 31u) * 0.5f + 0.5f;
         v += a * gradient(p.x, p.y, p.z, cells << o, seed + uint32_t(o) * 17u);
         total += a;
         a *= 0.5f;
     }
     return v / total * 0.5f + 0.5f;
+}
+
+// Worley noise over a direction at two unrelated cell counts: cells of
+// uneven sizes, not a jittered grid.
+float sphere_cells(const glm::vec3 &d, int cells, uint32_t seed)
+{
+    const glm::vec3 a = d * 0.5f + 0.5f;
+    const glm::vec3 b = turned(d, seed) * 0.5f + 0.5f;
+    const int other = std::max(2, int(float(cells) * 0.68f));
+    return std::max(worley(a.x, a.y, a.z, cells, seed), worley(b.x, b.y, b.z, other, seed + 5u));
 }
 
 glm::vec3 rotate_about(const glm::vec3 &v, const glm::vec3 &axis, float angle)
@@ -372,8 +395,12 @@ CloudNoise::WeatherFaces CloudNoise::weather_faces(int seed, const Vector3 &pole
                 for (int x = 0; x < size; ++x)
                 {
                     const glm::vec3 d = face_direction(face, x, y, size);
+                    // Warped a little by smooth noise: no feature sits on a grid.
+                    const glm::vec3 warp(sphere_fbm(d, 6, 3, s + 101) - 0.5f, sphere_fbm(d, 6, 3, s + 103) - 0.5f,
+                                         sphere_fbm(d, 6, 3, s + 107) - 0.5f);
+                    const glm::vec3 dw = glm::normalize(d + warp * 0.12f);
                     // Swirled by the vortices nearby.
-                    glm::vec3 q = d;
+                    glm::vec3 q = dw;
                     float vortexCover = 0.0f;
                     for (const Vortex &v : vortices)
                     {
@@ -396,10 +423,10 @@ CloudNoise::WeatherFaces CloudNoise::weather_faces(int seed, const Vector3 &pole
                     const float streaks = sphere_fbm(glm::normalize(q + pole * glm::dot(q, pole) * 3.0f) * 0.98f, 40, 4, s + 47);
                     // Fields of scattered heaped cloud (trade cumulus): cells of
                     // a few tens of kilometers, in clusters.
-                    const float popcorn = smooth(0.5f, 0.78f, worley(d.x * 0.5f + 0.5f, d.y * 0.5f + 0.5f, d.z * 0.5f + 0.5f, 240, s + 83)) *
-                                          smooth(0.42f, 0.62f, sphere_fbm(d, 24, 3, s + 89));
-                    const float patches = sphere_fbm(d, 7, 3, s + 59);
-                    const float cells = worley(d.x * 0.5f + 0.5f, d.y * 0.5f + 0.5f, d.z * 0.5f + 0.5f, 90, s + 71);
+                    const float popcorn = smooth(0.5f, 0.78f, sphere_cells(q, 240, s + 83)) *
+                                          smooth(0.42f, 0.62f, sphere_fbm(q, 24, 3, s + 89));
+                    const float patches = sphere_fbm(q, 7, 3, s + 59);
+                    const float cells = sphere_cells(q, 90, s + 71);
 
                     const float wItcz = gauss(zone, 0.0f, 0.12f);
                     const float wSub = gauss(zone, 0.4f, 0.14f);

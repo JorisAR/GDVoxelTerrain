@@ -504,6 +504,9 @@ void JarCloudsEffect::_render_callback(int32_t p_effect_callback_type, RenderDat
             continue;
         if (!weather.is_valid())
             weather = r.empty_cube;
+        RID weather_next = layer.weather_next.is_valid() ? RenderingServer::get_singleton()->texture_get_rd_texture(layer.weather_next) : RID();
+        if (!weather_next.is_valid())
+            weather_next = r.empty_cube;
         r.ensure_size(rd, id, state, low);
 
         // This camera's view of the layer.
@@ -572,6 +575,7 @@ void JarCloudsEffect::_render_callback(int32_t p_effect_callback_type, RenderDat
             uniforms.push_back(uniform(RD::UNIFORM_TYPE_SAMPLER_WITH_TEXTURE, 4, r.nearest_clamp, depth));
             uniforms.push_back(uniform(RD::UNIFORM_TYPE_IMAGE, 5, state.current_color));
             uniforms.push_back(uniform(RD::UNIFORM_TYPE_IMAGE, 6, state.current_depth));
+            uniforms.push_back(uniform(RD::UNIFORM_TYPE_SAMPLER_WITH_TEXTURE, 7, r.linear_clamp, weather_next));
             const RID set = UniformSetCacheRD::get_cache(r.trace_shader, 0, uniforms);
             const int64_t list = rd->compute_list_begin();
             rd->compute_list_bind_compute_pipeline(list, r.trace_pipeline);

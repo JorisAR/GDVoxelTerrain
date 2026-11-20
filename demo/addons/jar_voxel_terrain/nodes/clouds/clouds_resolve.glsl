@@ -31,11 +31,13 @@ layout(set = 0, binding = 0, std140) uniform Params {
 	vec4 sky_light; // times sky_strength
 	vec4 shape; // coverage, weather_strength, cloud_size, detail_scale
 	vec4 shape2; // erosion, density, region_size, region_strength
-	vec4 light; // forward, powder, weather_size (flat), -
+	vec4 light; // forward, powder, weather_size (flat), night ambient
 	vec4 shape_offset; // wind offset of single clouds (wrapped); w: weather ready
 	vec4 detail_offset; // and of the detail; w: history valid
 	vec4 flat_offset; // flat worlds: offset of the drifting weather
 	vec4 quality; // steps, light_steps, history blend, -
+	vec4 evolve; // meters the noise moved along the vertical: single clouds, groups, detail; faint cutoff
+	vec4 weather2; // blend towards the next weather map, zonal turn of this one and the next (radians), next ready
 	ivec4 sizes; // half resolution w, h; full w, h
 	ivec4 rect; // half resolution pixels drawn: min x, y, max x, y (exclusive)
 	ivec4 frame; // index, x and y of this frame's pixel in each 2x2 block, -

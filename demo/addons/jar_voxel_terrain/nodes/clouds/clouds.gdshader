@@ -40,7 +40,7 @@ uniform float weather_size = 1500.0;
 // their size in meters (0: 6 times cloud_size) and how much they change the
 // coverage.
 uniform float region_size = 0.0;
-uniform float region_strength : hint_range(0.0, 1.0) = 0.5;
+uniform float region_strength : hint_range(0.0, 1.0) = 0.3;
 // The period of the cloud noise in meters (4 single clouds across it).
 uniform float cloud_size = 1600.0;
 // Size of the eroded detail, relative to cloud_size, and how much it eats.
@@ -48,9 +48,19 @@ uniform float detail_scale : hint_range(0.02, 1.0) = 0.18;
 uniform float erosion : hint_range(0.0, 1.0) = 0.4;
 // How dense clouds are (extinction per meter inside a full cloud).
 uniform float density = 0.03;
+// Faint cloud (thin edges, sparse wisps) dropped: 0 keeps all of it. Faint
+// cloud is mostly noise on screen.
+uniform float faint_cutoff : hint_range(0.0, 0.9) = 0.2;
 uniform vec3 wind = vec3(6.0, 0.0, 2.0); // meters per second
 // The weather drifts around the planet: radians per hour about its axis.
 uniform float weather_drift = 0.02;
+// Clouds grow and dissolve in place: how fast the noise slides along the
+// vertical, in meters per second (0: shapes only drift with the wind).
+uniform float evolution = 3.0;
+// Each weather map (JarBodyClouds.weather_period) is drawn out by zonal
+// winds while it shows: radians per hour at the strongest (westward in the
+// tropics, eastward in the middle latitudes).
+uniform float zonal_wind = 0.3;
 group_uniforms light;
 uniform vec3 cloud_color : source_color = vec3(1.0);
 uniform float brightness = 1.0;
@@ -61,6 +71,8 @@ uniform float sky_strength : hint_range(0.0, 1.0) = 0.25;
 uniform float forward : hint_range(0.0, 0.95) = 0.6;
 // Darker edges on the side facing away from the sun.
 uniform float powder : hint_range(0.0, 1.0) = 0.5;
+// How much of the scene's starlight (its ambient floor) lights clouds at night.
+uniform float night_ambient : hint_range(0.0, 1.0) = 0.35;
 group_uniforms quality;
 // Most steps along a ray (fewer where a pixel covers more; frames add up).
 uniform int steps : hint_range(8, 160) = 48;

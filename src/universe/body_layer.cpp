@@ -1022,6 +1022,10 @@ void JarBodyClouds::_bind_methods()
     ClassDB::bind_method(D_METHOD("set_seed", "value"), &JarBodyClouds::set_seed);
     ADD_PROPERTY(PropertyInfo(Variant::INT, "seed"), "set_seed", "get_seed");
     ClassDB::bind_method(D_METHOD("get_weather"), &JarBodyClouds::get_weather);
+    ClassDB::bind_method(D_METHOD("get_weather_period"), &JarBodyClouds::get_weather_period);
+    ClassDB::bind_method(D_METHOD("set_weather_period", "value"), &JarBodyClouds::set_weather_period);
+    ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "weather_period", PROPERTY_HINT_RANGE, "0,3600,1,or_greater,suffix:s"),
+                 "set_weather_period", "get_weather_period");
     ClassDB::bind_method(D_METHOD("get_material"), &JarBodyClouds::get_material);
     ClassDB::bind_method(D_METHOD("set_material", "value"), &JarBodyClouds::set_material);
     ADD_PROPERTY(PropertyInfo(Variant::OBJECT, "material", PROPERTY_HINT_RESOURCE_TYPE, "ShaderMaterial"),
@@ -1166,15 +1170,51 @@ void JarBodyClouds::update(const JarCelestialBody &body)
     // seed or pole.
     // Its texels on a thread (half a second on all cores; the frame would
     // stall), the texture when they are done; no clouds until then.
-    if (frame.radial && !_weatherJob.running() && (_weatherSeed != _seed || !_weatherPole.is_equal_approx(pole)))
+    // With a weather_period, map k shows from k * period and the next one
+    // fades in over its last 40 percent: the weather changes, nothing jumps.
+    const double period = double(_weatherPeriod);
+    const int64_t k = period > 0.0 ? int64_t(std::floor(_time / period)) : 0;
+    if (frame.radial)
     {
-        _weatherSeed = _seed;
-        _weatherPole = pole;
-        const int seed = _seed;
-        _weatherJob.start([seed, pole] { return CloudNoise::weather_faces(seed, pole); });
+        if (_weatherSeed != _seed || !_weatherPole.is_equal_approx(pole))
+        {
+            // Other weather: made again (the old map shows until then).
+            _weatherSeed = _seed;
+            _weatherPole = pole;
+            _weatherIndex = NoMap;
+            _nextIndex = NoMap;
+            _weatherNext.unref();
+        }
+        if (_weatherIndex != k && _nextIndex == k && _weatherNext.is_valid())
+        {
+            _weather = _weatherNext;
+            _weatherIndex = k;
+            _weatherNext.unref();
+            _nextIndex = NoMap;
+        }
+        if (_weatherJob.ready())
+        {
+            const Ref<Texture> made = CloudNoise::weather_texture(_weatherJob.take());
+            if (_jobPole.is_equal_approx(pole) && _jobIndex == k && _weatherIndex != k)
+            {
+                _weather = made;
+                _weatherIndex = k;
+            }
+            else if (_jobPole.is_equal_approx(pole) && period > 0.0 && _jobIndex == k + 1)
+            {
+                _weatherNext = made;
+                _nextIndex = k + 1;
+            }
+        }
+        const int64_t wanted = _weatherIndex != k ? k : (period > 0.0 && _nextIndex != k + 1 ? k + 1 : NoMap);
+        if (wanted != NoMap && !_weatherJob.running())
+        {
+            _jobIndex = wanted;
+            _jobPole = pole;
+            const int seed = int(uint32_t(_seed) + uint32_t(wanted) * 7919u);
+            _weatherJob.start([seed, pole] { return CloudNoise::weather_faces(seed, pole); });
+        }
     }
-    if (_weatherJob.ready())
-        _weather = CloudNoise::weather_texture(_weatherJob.take());
     if (!_volumes.ready())
         _volumes = CloudNoise::volumes();
     const bool weatherReady = !frame.radial || _weather.is_valid();
@@ -1229,21 +1269,41 @@ void JarBodyClouds::update(const JarCelestialBody &body)
     p.shape2[0] = to_float(param(material, "erosion"), 0.4f);
     p.shape2[1] = to_float(param(material, "density"), 0.03f);
     p.shape2[2] = regionSize;
-    p.shape2[3] = to_float(param(material, "region_strength"), 0.5f);
+    p.shape2[3] = to_float(param(material, "region_strength"), 0.3f);
     p.light[0] = to_float(param(material, "forward"), 0.6f);
     p.light[1] = to_float(param(material, "powder"), 0.5f);
     p.light[2] = weatherSize;
+    p.light[3] = to_float(param(material, "night_ambient"), 0.35f);
     // Single clouds repeat every cloud_size, sheets every 2.5 of them: both
     // repeat every 10 (the offset jumps there only in between).
     put4(p.shape_offset, wrapped(wind, _time, double(cloudSize) * 10.0), weatherReady ? 1.0f : 0.0f);
     put4(p.detail_offset, wrapped(wind, _time, double(cloudSize) * detailScale), 0.0f);
     put4(p.flat_offset, wrapped(wind * 0.5f, _time, double(weatherSize)), 0.0f);
+    // Clouds growing and dissolving in place: the noise slides along the
+    // vertical (single clouds, groups slower, detail faster).
+    const double evolution = to_float(param(material, "evolution"), 3.0f);
+    const double wrap = 400000.0;
+    const auto slide = [&](double rate) { return float(std::fmod(evolution * rate * _time, wrap)); };
+    p.evolve[0] = slide(1.0);
+    p.evolve[1] = slide(0.5);
+    p.evolve[2] = slide(1.5);
+    p.evolve[3] = std::clamp(to_float(param(material, "faint_cutoff"), 0.2f), 0.0f, 0.9f);
+    // The next weather map's share, and how far the zonal winds drew each out.
+    const double zonal = to_float(param(material, "zonal_wind"), 0.3f) / 3600.0; // radians per second
+    const bool hasNext = period > 0.0 && _weatherNext.is_valid() && _nextIndex == k + 1;
+    const double f = period > 0.0 ? _time / period - double(k) : 0.0;
+    const double fadeIn = std::clamp((f - 0.6) / 0.4, 0.0, 1.0);
+    p.weather2[0] = hasNext ? float(fadeIn * fadeIn * (3.0 - 2.0 * fadeIn)) : 0.0f;
+    p.weather2[1] = period > 0.0 ? float(zonal * (_time - double(k) * period)) : 0.0f;
+    p.weather2[2] = period > 0.0 ? float(zonal * (_time - double(k + 1) * period)) : 0.0f;
+    p.weather2[3] = hasNext ? 1.0f : 0.0f;
     p.quality[0] = float(std::clamp(int(to_float(param(material, "steps"), 48.0f)), 4, 256));
     p.quality[1] = float(std::clamp(int(to_float(param(material, "light_steps"), 4.0f)), 1, 8));
     p.quality[2] = std::clamp(to_float(param(material, "history_blend"), 0.12f), 0.01f, 1.0f);
     layer.shape = _volumes.shape.is_valid() ? _volumes.shape->get_rid() : RID();
     layer.detail = _volumes.detail.is_valid() ? _volumes.detail->get_rid() : RID();
     layer.weather = frame.radial && _weather.is_valid() ? _weather->get_rid() : RID();
+    layer.weather_next = frame.radial && _weatherNext.is_valid() ? _weatherNext->get_rid() : RID();
     layer.radial = frame.radial;
     layer.shell_center = view.center;
     layer.shell_radius = frame.radial ? _shellRadius * view.scale : 0.0f;

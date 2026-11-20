@@ -44,11 +44,13 @@ layout(set = 0, binding = 0, std140) uniform Params {
 	vec4 sky_light; // times sky_strength
 	vec4 shape; // coverage, weather_strength, cloud_size, detail_scale
 	vec4 shape2; // erosion, density, region_size, region_strength
-	vec4 light; // forward, powder, weather_size (flat), -
+	vec4 light; // forward, powder, weather_size (flat), night ambient
 	vec4 shape_offset; // wind offset of single clouds (wrapped); w: weather ready
 	vec4 detail_offset; // and of the detail; w: history valid
 	vec4 flat_offset; // flat worlds: offset of the drifting weather
 	vec4 quality; // steps, light_steps, history blend, -
+	vec4 evolve; // meters the noise moved along the vertical: single clouds, groups, detail; faint cutoff
+	vec4 weather2; // blend towards the next weather map, zonal turn of this one and the next (radians), next ready
 	ivec4 sizes; // half resolution w, h; full w, h
 	ivec4 rect; // half resolution pixels drawn: min x, y, max x, y (exclusive)
 	ivec4 frame; // index, x and y of this frame's pixel in each 2x2 block, -
@@ -57,6 +59,7 @@ layout(set = 0, binding = 0, std140) uniform Params {
 layout(set = 0, binding = 1) uniform sampler3D shape_noise;
 layout(set = 0, binding = 2) uniform sampler3D detail_noise;
 layout(set = 0, binding = 3) uniform samplerCube weather_map;
+layout(set = 0, binding = 7) uniform samplerCube weather_next;
 layout(set = 0, binding = 4) uniform sampler2D depth_buffer;
 layout(rgba16f, set = 0, binding = 5) uniform restrict writeonly image2D out_color;
 layout(rg32f, set = 0, binding = 6) uniform restrict writeonly image2D out_depth;
@@ -104,6 +107,17 @@ float layer_height(vec3 x) {
 	return (h - cloud_bottom()) / (cloud_top() - cloud_bottom());
 }
 
+vec3 rotate_about(vec3 v, vec3 axis, float angle) {
+	float c = cos(angle);
+	float s = sin(angle);
+	return v * c + cross(axis, v) * s + axis * dot(axis, v) * (1.0 - c);
+}
+
+// Turns of noise coordinates, so that octaves never line up (gradient noise
+// is zero on its grid points: thresholded, a lone octave shows its grid).
+const mat3 TURN_A = mat3(vec3(0.82, 0.36, -0.44), vec3(-0.21, 0.91, 0.36), vec3(0.53, -0.21, 0.82));
+const mat3 TURN_B = mat3(vec3(0.36, -0.8, 0.48), vec3(0.48, 0.6, 0.64), vec3(-0.8, 0.0, 0.6));
+
 // Mip level for a texture of `texels` per `period` meters seen with `pixel`
 // meters a pixel.
 float lod_for(float pixel, float period, float texels) {
@@ -141,7 +155,17 @@ Weather weather_at(vec3 x, float pixel) {
 		q = mat3(p.world_to_weather) * x;
 		// A cube face is 2 radii across in its texels.
 		float texel = 2.0 * cloud_bottom() / WEATHER_TEXELS;
-		vec3 m = textureLod(weather_map, q, log2(max(pixel / texel, 1.0))).rgb;
+		float wlod = log2(max(pixel / texel, 1.0));
+		// Each weather map is drawn out by the zonal winds while it shows:
+		// westward in the tropics, eastward in the middle latitudes.
+		vec3 axis = p.pole.xyz;
+		vec3 dirq = normalize(q);
+		float band = -cos(4.0 * asin(clamp(dot(dirq, axis), -1.0, 1.0)));
+		vec3 m = textureLod(weather_map, rotate_about(dirq, axis, band * p.weather2.y), wlod).rgb;
+		if (p.weather2.w > 0.5 && p.weather2.x > 0.0) {
+			vec3 n = textureLod(weather_next, rotate_about(dirq, axis, band * p.weather2.z), wlod).rgb;
+			m = mix(m, n, p.weather2.x);
+		}
 		c = clamp(mix(p.shape.x, m.r + p.shape.x - 0.5, p.shape.y), 0.0, 1.0);
 		w.tops = m.g;
 		w.sheet = m.b;
@@ -159,9 +183,12 @@ Weather weather_at(vec3 x, float pixel) {
 	if (strength > 0.0 && c > 0.02) {
 		float size = p.shape2.z;
 		vec3 axis = radial() ? p.pole.xyz : p.up_radial.xyz;
-		vec3 r = q + axis * dot(q, axis) * 1.2;
+		vec3 r = q + axis * dot(q, axis) * 0.6;
 		float lod_a = lod_for(pixel, size, SHAPE_TEXELS);
-		float n = (textureLod(shape_noise, r / size, lod_a).g - 0.5) * 1.15;
+		// Two turned octaves at unrelated scales: no grid, no rows.
+		float a = textureLod(shape_noise, TURN_A * r / size, lod_a).g;
+		float b = textureLod(shape_noise, TURN_B * r / (size * 0.43) + vec3(0.31, 0.67, 0.13), lod_a + 1.22).g;
+		float n = ((a - 0.5) * 0.6 + (b - 0.5) * 0.4) * 1.5;
 		// Mipmaps average the noise out where it is smaller than a pixel: the
 		// variation that is lost, to widen the covered fraction instead.
 		float kept = 1.0 - smoothstep(3.5, 6.5, lod_a);
@@ -211,13 +238,17 @@ float cloud_density_in(vec3 x, inout Weather w, float pixel, bool cheap) {
 	float profile = 0.0;
 	if (unresolved < 1.0) {
 		vec3 b = mat3(p.world_to_body) * x;
+		// The noise slides along the vertical over time: clouds grow, boil and
+		// dissolve where they are instead of only drifting.
+		vec3 vertical = radial() ? normalize(b) : mat3(p.world_to_body) * p.up_radial.xyz;
 		// Sheets: larger, softer shapes.
 		float period = size * (1.0 + w.sheet * 1.5);
-		vec3 s = (b - p.shape_offset.xyz) / period + w.warp * 0.35;
+		vec3 s = (b - p.shape_offset.xyz + vertical * p.evolve.x) / period + w.warp * 0.35;
+		vec3 s_cell = (b - p.shape_offset.xyz + vertical * p.evolve.y) / period + w.warp * 0.35;
 		float lod = lod_for(pixel, period, SHAPE_TEXELS);
 		// A second octave 2.7 times larger, turned: groups of clouds, their
 		// tops and bases (read once per view sample: light paths reuse it).
-		float cell = w.cell >= 0.0 ? w.cell : textureLod(shape_noise, TURN * s * 0.37 + vec3(0.17, 0.53, 0.71), max(lod - 1.43, 0.0)).r;
+		float cell = w.cell >= 0.0 ? w.cell : textureLod(shape_noise, TURN * s_cell * 0.37 + vec3(0.17, 0.53, 0.71), max(lod - 1.43, 0.0)).r;
 		w.cell = cell;
 		profile = profile_at(h, w, cell);
 		if (profile <= 0.0 && unresolved <= 0.0)
@@ -226,26 +257,30 @@ float cloud_density_in(vec3 x, inout Weather w, float pixel, bool cheap) {
 		n = clamp(0.5 + (n - 0.5) * 1.2, 0.0, 1.0);
 		n = mix(n, 0.5 + (n - 0.5) * 0.6, w.sheet);
 		// Heaped clouds keep gaps even in dense weather (overcast is for sheets).
-		float cc = min(c, mix(0.86, 1.0, w.sheet));
+		// The faint cutoff below drops thin material: the coverage is raised
+		// to match, so clouds lose their wisps, not their size.
+		float cc = min(c / (1.0 - p.evolve.w * 0.9), mix(0.86, 1.0, w.sheet));
 		shape = clamp((n * profile - (1.0 - cc)) / max(cc, 0.05), 0.0, 1.0);
 		if (shape > 0.0 && !cheap && p.shape2.x > 0.0) {
 			float dsize = size * p.shape.w;
 			float dlod = lod_for(pixel, dsize, DETAIL_TEXELS);
 			if (dlod < 5.0) {
-				vec3 d = textureLod(detail_noise, (b - p.detail_offset.xyz) / dsize, dlod).rgb;
+				vec3 d = textureLod(detail_noise, (b - p.detail_offset.xyz + vertical * p.evolve.z) / dsize, dlod).rgb;
 				float fbm = d.x * 0.625 + d.y * 0.25 + d.z * 0.125;
 				// Wispy at the base, billowy above it.
 				float e = p.shape2.x * (1.0 - 0.6 * w.sheet) * mix(1.0 - fbm, fbm, smoothstep(0.04, 0.2, h)) * (1.0 - smoothstep(3.0, 5.0, dlod));
 				shape = clamp((shape - e * 0.5) / max(1.0 - e * 0.5, 1e-3), 0.0, 1.0);
 			}
 		}
+		// Faint wisps (thin edges, sparse puffs) dropped: they only add noise.
+		shape = clamp((shape - p.evolve.w) / max(1.0 - p.evolve.w, 1e-3), 0.0, 1.0);
 	}
 	shape *= density;
 	if (unresolved > 0.0) {
 		// As opaque through the layer as the covered fraction of the pixel
 		// (with the tops and bases of an average group of clouds).
 		float spread = w.spread + 0.04;
-		float fraction = smoothstep(0.22 - spread, 0.7 + spread, c);
+		float fraction = smoothstep(0.22 - spread + p.evolve.w * 0.4, 0.7 + spread, c);
 		float column = -log(1.0 - 0.96 * fraction);
 		float fog = column / ((cloud_top() - cloud_bottom()) * 0.45) * profile_at(h, w, 0.6);
 		shape = mix(shape, fog, unresolved);
@@ -253,8 +288,9 @@ float cloud_density_in(vec3 x, inout Weather w, float pixel, bool cheap) {
 	return shape;
 }
 
-// Optical depth of the cloud from `x` towards the sun, in the weather there
-// (the path is a few kilometers: the weather and regions barely change).
+// Optical depth of the cloud from `x` towards a light (the sun, the moon), in
+// the weather there (the path is a few kilometers: the weather and regions
+// barely change).
 float optical_depth_to_sun(vec3 x, Weather w, vec3 sun, float pixel) {
 	float thickness = cloud_top() - cloud_bottom();
 	float step_length = thickness * 0.06;
@@ -382,6 +418,10 @@ void main() {
 		// cloud); none looking towards the sun.
 		float powder_amount = p.light.y * (0.5 - 0.5 * cos_theta);
 		vec3 moon_dir = normalize(p.moon_direction.xyz);
+		float cos_moon = dot(dir, moon_dir);
+		float moon_phase0 = mix(hg(forward, cos_moon), hg(-0.3, cos_moon), 0.25) * 4.0 * PI;
+		float moon_phase1 = mix(hg(forward * 0.5, cos_moon), hg(-0.15, cos_moon), 0.25) * 4.0 * PI;
+		bool moonlit = dot(p.moon_color.rgb, vec3(1.0)) > 0.0;
 		// Steps: as many as the path needs for what a pixel resolves there
 		// (few from orbit), evenly spaced while they cover the path (thin low
 		// clouds need even steps); longer paths near the camera get the
@@ -426,8 +466,26 @@ void main() {
 				direct = p.sun_color.rgb * daylight * scatter;
 			}
 			float day = smoothstep(-0.25, 0.3, dot(up, sun));
-			vec3 ambient = (p.sky_light.rgb * p.sun_color.rgb * day + p.ambient_light.rgb) * mix(0.45, 1.0, h);
-			vec3 moon = p.moon_color.rgb * smoothstep(-0.1, 0.2, dot(up, moon_dir)) * mix(0.3, 1.0, h) * 0.6;
+			// Sky light by day; starlight at night (night_ambient of it).
+			vec3 ambient = (p.sky_light.rgb * p.sun_color.rgb * day + p.ambient_light.rgb * p.light.w) * mix(0.45, 1.0, h);
+			// Moonlight through the cloud as sunlight is, once the sun is down
+			// (one light path per sample): undersides and thick cores stay dark.
+			vec3 moon = vec3(0.0);
+			float moon_up = daylight_at(pos, up, moon_dir);
+			if (moonlit && moon_up > 0.0 && daylight >= 0.5) {
+				moon = p.moon_color.rgb * moon_up * mix(0.1, 0.6, h * h) * 0.5;
+			} else if (daylight < 0.5) {
+				// Night: one light path, towards the moon when it is up, else
+				// upwards (the starlit sky above): undersides and thick cores
+				// stay dark instead of glowing evenly.
+				bool by_moon = moonlit && moon_up > 0.0;
+				float od = optical_depth_to_sun(pos, w, by_moon ? moon_dir : up, pixel);
+				if (by_moon) {
+					float scatter = (exp(-od) * moon_phase0 + 0.5 * exp(-od * 0.25) * moon_phase1 + 0.25 * exp(-od * 0.0625)) / 1.75;
+					moon = p.moon_color.rgb * moon_up * scatter * (1.0 - daylight);
+				}
+				ambient *= mix(1.0, mix(0.15, 1.0, exp(-od * 0.35)), 1.0 - daylight * 2.0);
+			}
 			float step_transmittance = exp(-d * dt);
 			float added = transmittance * (1.0 - step_transmittance);
 			color += added * (direct + ambient + moon);

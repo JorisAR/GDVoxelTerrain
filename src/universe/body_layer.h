@@ -265,10 +265,17 @@ class JarBodyClouds : public JarBodyLayer
     Basis _worldToBody;
     uint64_t _atmosphere = 0; // instance id of the body's JarBodyAtmosphere
     int _seed = 1;
-    Ref<Texture> _weather; // CloudNoise::weather, made once the pole is known
-    CloudNoise::FacesJob _weatherJob; // its texels, on a thread
+    // Weather maps (CloudNoise::weather), made once the pole is known: the one
+    // shown and, with a weather_period, the next one it fades into. Map k
+    // shows from k * period; each is made from the seed and k.
+    static constexpr int64_t NoMap = INT64_MIN;
+    Ref<Texture> _weather, _weatherNext;
+    int64_t _weatherIndex = NoMap, _nextIndex = NoMap, _jobIndex = NoMap;
+    CloudNoise::FacesJob _weatherJob; // texels of map _jobIndex, on a thread
+    Vector3 _jobPole;
     int _weatherSeed = -1;
     Vector3 _weatherPole;
+    float _weatherPeriod = 600.0f;
 
     Variant param(const Ref<ShaderMaterial> &material, const StringName &name) const;
 
@@ -294,6 +301,10 @@ class JarBodyClouds : public JarBodyLayer
     void set_seed(int value) { _seed = value; }
     // The weather map in use (made at the first update; null on flat bodies).
     Ref<Texture> get_weather() const { return _weather; }
+    // Seconds each weather map shows before the next one (made from the seed
+    // and its number) has faded in over its last 40 percent; 0: one map.
+    float get_weather_period() const { return _weatherPeriod; }
+    void set_weather_period(float value) { _weatherPeriod = std::max(0.0f, value); }
     float get_thickness() const { return _thickness; }
     void set_thickness(float value) { _thickness = std::max(1.0f, value); }
     Ref<ShaderMaterial> get_material() const { return _material; }
